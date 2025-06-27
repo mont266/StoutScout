@@ -1,0 +1,203 @@
+
+import React, { useCallback, useMemo, useEffect, useRef } from 'react';
+import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
+import { Pub, Coordinates } from '../types';
+
+interface MapProps {
+  pubs: Pub[];
+  userLocation: Coordinates;
+  searchCenter: Coordinates;
+  searchRadius: number;
+  onSelectPub: (pubId: string | null) => void;
+  selectedPubId: string | null;
+  onPlacesFound: (places: google.maps.places.Place[]) => void;
+}
+
+const containerStyle = {
+  width: '100%',
+  height: '100%',
+};
+
+const mapStyles = [
+  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+  { featureType: "poi", elementType: "labels.icon", stylers: [{ "visibility": "off" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6b9a76" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#f3d19c" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
+  { featureType: "transit.station", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
+  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] },
+];
+
+const libraries: ('places' | 'marker')[] = ['places', 'marker'];
+
+const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound }) => {
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    // --- TEMPORARY DEVELOPMENT CHANGE ---
+    // The API key is hardcoded for development and testing purposes.
+    // IMPORTANT: This key should be replaced with an environment variable 
+    // (e.g., process.env.API_KEY) before deploying to production.
+    googleMapsApiKey: 'AIzaSyDOIwBb0UfqszI0ItiXtZF_8BSYXFveqn0',
+    libraries,
+  });
+
+  const mapRef = useRef<google.maps.Map | null>(null);
+
+  // Effect to pan the map to a selected pub, or to the user's live location
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (selectedPubId) {
+        const pub = pubs.find(p => p.id === selectedPubId);
+        if (pub) {
+            mapRef.current.panTo(pub.location);
+        }
+    } else {
+        mapRef.current.panTo(userLocation);
+    }
+  }, [selectedPubId, pubs, userLocation]);
+
+  // Effect to perform a new search for pubs when the searchCenter or searchRadius changes
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current) {
+      return;
+    }
+    
+    const search = async () => {
+      // The `fields` property is now required. We list the fields the app uses.
+      const request: google.maps.places.SearchNearbyRequest = {
+        fields: ['id', 'displayName', 'formattedAddress', 'location'],
+        locationRestriction: {
+          center: searchCenter,
+          radius: searchRadius,
+        },
+        includedTypes: ['bar'],
+        maxResultCount: 20,
+      };
+
+      try {
+        const { places } = await google.maps.places.Place.searchNearby(request);
+        onPlacesFound(places || []);
+      } catch (error) {
+        console.error('Places search failed:', error);
+        onPlacesFound([]);
+      }
+    };
+
+    search();
+
+  }, [searchCenter, searchRadius, isLoaded, onPlacesFound]);
+
+  const onLoad = useCallback(function callback(map: google.maps.Map) {
+    mapRef.current = map;
+  }, []);
+
+  const onUnmount = useCallback(function callback() {
+    mapRef.current = null;
+  }, []);
+  
+  const mapOptions = useMemo(() => ({
+    styles: mapStyles,
+    disableDefaultUI: true,
+    zoomControl: true,
+    clickableIcons: false,
+  }), []);
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center w-full h-full bg-red-900/50 text-white p-4 text-center">
+        Error loading maps. Please ensure your API key is correct and has the Maps JavaScript and Places APIs enabled.
+      </div>
+    );
+  }
+
+  return isLoaded ? (
+    <GoogleMap
+      mapContainerStyle={containerStyle}
+      center={userLocation}
+      zoom={14}
+      onLoad={onLoad}
+      onUnmount={onUnmount}
+      options={mapOptions}
+    >
+      <OverlayView
+        position={userLocation}
+        mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+      >
+        <div style={{ transform: 'translate(-50%, -50%)', zIndex: 100 }} title="Your Location">
+           <div className="w-4 h-4 rounded-full bg-[#4285F4] border-2 border-white shadow-md"></div>
+        </div>
+      </OverlayView>
+
+      {pubs.map((pub, index) => {
+        const isSelected = pub.id === selectedPubId;
+        const rank = index;
+
+        let fillColor = '#4B5563'; // Default gray
+        if (isSelected) {
+            fillColor = '#FBBF24'; // Selected Amber
+        } else if (rank === 0) {
+            fillColor = '#FFD700'; // Gold
+        } else if (rank === 1) {
+            fillColor = '#C0C0C0'; // Silver
+        } else if (rank === 2) {
+            fillColor = '#CD7F32'; // Bronze
+        }
+
+        let zIndex = 1;
+        if (isSelected) {
+            zIndex = 50;
+        } else if (rank < 3) {
+            zIndex = 10 - rank; // Gold=10, Silver=9, Bronze=8
+        }
+        
+        return (
+            <OverlayView
+              key={pub.id}
+              position={pub.location}
+              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            >
+                <div 
+                    style={{ zIndex, cursor: 'pointer' }}
+                    title={pub.name}
+                    onClick={() => onSelectPub(pub.id)}
+                >
+                    <div 
+                        className="w-10 h-10 relative flex items-center justify-center"
+                        style={{ transform: 'translate(-50%, -100%)' }}
+                    >
+                        <svg viewBox="0 0 24 24" fill={fillColor} stroke="#FFFFFF" strokeWidth="1" className="w-full h-full drop-shadow-lg">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/>
+                        </svg>
+                        <span 
+                            className="absolute text-lg"
+                            style={{ top: '16%' }}
+                        >
+                            🍺
+                        </span>
+                    </div>
+                </div>
+            </OverlayView>
+        );
+    })}
+    </GoogleMap>
+  ) : (
+    <div className="flex items-center justify-center w-full h-full">
+      <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-400"></div>
+    </div>
+  );
+};
+
+export default Map;

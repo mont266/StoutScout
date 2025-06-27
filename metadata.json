@@ -1,0 +1,8 @@
+{
+  "name": "StoutScout",
+  "description": "StoutScout helps you find and rate the best pints of stout based on price, quality, and your location.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "prompt": ""
+}
