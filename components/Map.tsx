@@ -45,11 +45,11 @@ const libraries: ('places' | 'marker')[] = ['places', 'marker'];
 const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound }) => {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    // --- TEMPORARY DEVELOPMENT CHANGE ---
-    // The API key is hardcoded for development and testing purposes.
-    // IMPORTANT: This key should be replaced with an environment variable 
-    // (e.g., process.env.API_KEY) before deploying to production.
-    googleMapsApiKey: 'AIzaSyDOIwBb0UfqszI0ItiXtZF_8BSYXFveqn0',
+    // IMPORTANT: The API key is now loaded from an environment variable.
+    // For local development, create a `.env` file in the root of your project
+    // and add the line: VITE_GOOGLE_MAPS_API_KEY=your_key_here
+    // For production (e.g., Netlify), set this environment variable in the build settings.
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string,
     libraries,
   });
 

@@ -1,17 +1,43 @@
-import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
-    return {
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      devOptions: {
+        enabled: true
       },
-      resolve: {
-        alias: {
-          '@': path.resolve(__dirname, '.'),
-        }
-      }
-    };
+      manifest: {
+        name: 'StoutScout',
+        short_name: 'StoutScout',
+        description: 'StoutScout helps you find and rate the best pints of stout based on price, quality, and your location.',
+        theme_color: '#fBBF24',
+        background_color: '#111827',
+        display: 'standalone',
+        start_url: '/',
+        icons: [
+          {
+            src: '/icons/icon-192x192.svg',
+            sizes: '192x192',
+            type: 'image/svg+xml',
+          },
+          {
+            src: '/icons/icon-512x512.svg',
+            sizes: '512x512',
+            type: 'image/svg+xml',
+          },
+          {
+            src: '/icons/maskable_icon.svg',
+            sizes: '192x192',
+            type: 'image/svg+xml',
+            purpose: 'maskable',
+          },
+        ],
+      },
+    }),
+  ],
 });
