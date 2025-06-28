@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Rating } from '../types';
 import StarRating from './StarRating';
@@ -8,6 +7,17 @@ interface RatingFormProps {
   onSubmit: (rating: Rating) => void;
   existingRating?: Rating;
 }
+
+// Labels to guide the user on price rating. Higher stars mean cheaper price.
+// The \n character is used to create a two-line label in the StarRating component.
+const priceLabels = [
+  'Very Expensive\n£10.00+',    // 1 star
+  'Expensive\n£8.50 - £9.99', // 2 stars
+  'Average\n£7.50 - £8.49',   // 3 stars
+  'Cheap\n£6.50 - £7.49',     // 4 stars
+  'Very Cheap\n< £6.50'        // 5 stars
+];
+
 
 const RatingForm: React.FC<RatingFormProps> = ({ onSubmit, existingRating }) => {
   const [price, setPrice] = useState(0);
@@ -36,19 +46,25 @@ const RatingForm: React.FC<RatingFormProps> = ({ onSubmit, existingRating }) => 
   const buttonText = existingRating ? 'Update Rating' : 'Submit Rating';
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 bg-gray-900/50 rounded-lg space-y-4">
+    <form onSubmit={handleSubmit} className="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg space-y-4">
       <div>
-        <label className="block text-gray-300 mb-2">Price Rating:</label>
-        <StarRating rating={price} onRatingChange={setPrice} interactive color="text-green-400" />
+        <label className="block text-gray-700 dark:text-gray-300 mb-2">Price Rating: (Higher is cheaper)</label>
+        <StarRating
+          rating={price}
+          onRatingChange={setPrice}
+          interactive
+          color="text-green-400"
+          labels={priceLabels}
+        />
       </div>
       <div>
-        <label className="block text-gray-300 mb-2">Quality Rating:</label>
+        <label className="block text-gray-700 dark:text-gray-300 mb-2">Quality Rating:</label>
         <StarRating rating={quality} onRatingChange={setQuality} interactive color="text-amber-400" />
       </div>
       <button
         type="submit"
         disabled={price === 0 || quality === 0}
-        className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+        className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
       >
         {buttonText}
       </button>

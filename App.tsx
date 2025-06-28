@@ -1,8 +1,7 @@
 
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Pub, Rating, FilterType, Coordinates, Settings, UserProfile, UserRating } from './types';
-import { DEFAULT_LOCATION, XP_PER_LEVEL, XP_PER_RATING } from './constants';
+import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants';
 import { loadRatings, saveRatings, loadSettings, saveSettings, loadUserProfile, saveUserProfile, loadUserRatings, saveUserRatings } from './storage';
 import MapComponent from './components/Map';
 import FilterControls from './components/FilterControls';
@@ -12,6 +11,7 @@ import Logo from './components/Logo';
 import SettingsModal from './components/SettingsModal';
 import ProfilePage from './components/ProfilePage';
 import XPPopup from './components/XPPopup';
+import LevelUpPopup from './components/LevelUpPopup';
 
 const App: React.FC = () => {
   const [googlePlaces, setGooglePlaces] = useState<google.maps.places.Place[]>([]);
@@ -32,19 +32,41 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile>(loadUserProfile);
   const [userRatings, setUserRatings] = useState<UserRating[]>(loadUserRatings);
 
-  const [xpPopupInfo, setXpPopupInfo] = useState<{key: number, amount: number} | null>(null);
+  const [reviewPopupInfo, setReviewPopupInfo] = useState<{key: number} | null>(null);
+  const [leveledUpInfo, setLeveledUpInfo] = useState<{key: number, newLevel: number} | null>(null);
 
 
-  // Effect to hide the XP popup after its animation finishes
+  // Effect to apply the theme to the root <html> element
   useEffect(() => {
-    if (xpPopupInfo) {
+    const root = window.document.documentElement;
+    if (settings.theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [settings.theme]);
+
+  // Effect to hide the Review popup after its animation finishes
+  useEffect(() => {
+    if (reviewPopupInfo) {
       const timer = setTimeout(() => {
-        setXpPopupInfo(null);
+        setReviewPopupInfo(null);
       }, 2000); // Must match the animation duration in index.html
 
       return () => clearTimeout(timer);
     }
-  }, [xpPopupInfo]);
+  }, [reviewPopupInfo]);
+  
+  // Effect to hide the Level Up popup after its animation finishes
+  useEffect(() => {
+    if (leveledUpInfo) {
+      const timer = setTimeout(() => {
+        setLeveledUpInfo(null);
+      }, 3000); // Must match the animation duration in index.html
+
+      return () => clearTimeout(timer);
+    }
+  }, [leveledUpInfo]);
 
   // This effect runs when places are found by the map OR when ratings are updated.
   // It combines the Google Place data with our stored ratings to create the definitive list of pubs.
@@ -185,7 +207,7 @@ const App: React.FC = () => {
         saveUserRatings(newUserRatings);
         return newUserRatings;
       });
-      // 3. No XP is awarded for updating a rating.
+      // 3. No level progression for updating a rating.
 
     } else {
       // --- ADD a new rating ---
@@ -206,25 +228,58 @@ const App: React.FC = () => {
           rating: newRating,
           timestamp: Date.now(),
       };
+
+      // 3. Update user ratings list and check for level-up
       setUserRatings(prevUserRatings => {
+          const oldLevel = Math.floor(prevUserRatings.length / REVIEWS_PER_LEVEL);
+          const newLevel = Math.floor((prevUserRatings.length + 1) / REVIEWS_PER_LEVEL);
+
+          if (newLevel > oldLevel) {
+            setLeveledUpInfo({ key: Date.now(), newLevel });
+          }
+
           const updatedRatings = [newUserRating, ...prevUserRatings];
           saveUserRatings(updatedRatings);
           return updatedRatings;
       });
 
-      // 3. Update user profile (XP and Level)
-      setUserProfile(prevProfile => {
-          const newXp = prevProfile.xp + XP_PER_RATING;
-          const newLevel = Math.floor(newXp / XP_PER_LEVEL);
-          const updatedProfile = { ...prevProfile, xp: newXp, level: newLevel };
-          saveUserProfile(updatedProfile);
-          return updatedProfile;
-      });
-
-      // 4. Trigger XP Popup
-      setXpPopupInfo({ key: Date.now(), amount: XP_PER_RATING });
+      // 4. Trigger Review Popup
+      setReviewPopupInfo({ key: Date.now() });
     }
   }, [userRatings]);
+
+  const handleForceReview = () => {
+    // This function mimics a user submitting a new review for developer testing.
+    
+    // 1. Create a fake user rating to add to the history.
+    const fakeUserRating: UserRating = {
+        pubId: `dev-forced-review-${Date.now()}`,
+        pubName: 'Developer Test Pint',
+        pubAddress: '123 Debug Lane, Cyberspace',
+        rating: { price: 3, quality: 4 }, // Arbitrary valid rating
+        timestamp: Date.now(),
+    };
+
+    // 2. Update the list of user ratings, which will also trigger
+    //    a check for leveling up. This uses the functional update form of setState.
+    setUserRatings(prevUserRatings => {
+        const oldLevel = Math.floor(prevUserRatings.length / REVIEWS_PER_LEVEL);
+        const newLevel = Math.floor((prevUserRatings.length + 1) / REVIEWS_PER_LEVEL);
+
+        // If the new review causes a level-up, trigger the celebration popup.
+        if (newLevel > oldLevel) {
+          setLeveledUpInfo({ key: Date.now(), newLevel });
+        }
+        
+        // Add the new fake rating to the list and save it to storage.
+        const updatedRatings = [fakeUserRating, ...prevUserRatings];
+        saveUserRatings(updatedRatings);
+        return updatedRatings;
+    });
+
+    // 3. Trigger the "+1 Review" confirmation popup.
+    setReviewPopupInfo({ key: Date.now() });
+  };
 
   const handleSelectPub = useCallback((pubId: string | null) => {
     setSelectedPubId(pubId);
@@ -247,15 +302,15 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto h-screen flex flex-col bg-gray-900 text-white font-sans antialiased">
+    <div className="w-full max-w-md mx-auto h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased">
       {currentView === 'map' ? (
         <>
-          <header className="p-2 bg-gray-800 shadow-lg z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <header className="p-2 bg-gray-50 dark:bg-gray-800 shadow-lg z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               {/* Left cell for the settings button */}
               <div className="flex justify-start">
                   <button
                       onClick={() => setIsSettingsOpen(true)}
-                      className="text-gray-300 hover:text-white transition-colors p-2 rounded-full hover:bg-gray-700"
+                      className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
                       aria-label="Open settings"
                   >
                       <i className="fas fa-cog fa-lg"></i>
@@ -269,7 +324,7 @@ const App: React.FC = () => {
               <div className="flex justify-end">
                   <button
                       onClick={() => setCurrentView('profile')}
-                      className="text-gray-300 hover:text-white transition-colors p-2 rounded-full hover:bg-gray-700"
+                      className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
                       aria-label="Open profile"
                   >
                       <i className="fas fa-user-circle fa-lg"></i>
@@ -278,7 +333,7 @@ const App: React.FC = () => {
           </header>
 
           {locationError && (
-            <div className="p-2 bg-red-800 text-white text-center text-sm" role="alert">
+            <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">
               {locationError}
             </div>
           )}
@@ -294,9 +349,10 @@ const App: React.FC = () => {
                     onSelectPub={handleSelectPub} 
                     selectedPubId={selectedPubId}
                     onPlacesFound={setGooglePlaces}
+                    theme={settings.theme}
                   />
               </div>
-              <div className={`flex-shrink-0 bg-gray-800 transition-all duration-300 ease-in-out ${isListExpanded ? 'max-h-[40%]' : 'max-h-14'}`}>
+              <div className={`flex-shrink-0 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out ${isListExpanded ? 'max-h-[40%]' : 'max-h-14'}`}>
                    <PubList
                       pubs={sortedPubs}
                       selectedPubId={selectedPubId}
@@ -328,6 +384,7 @@ const App: React.FC = () => {
             onClose={() => setIsSettingsOpen(false)}
             settings={settings}
             onSettingsChange={handleSettingsChange}
+            userProfile={userProfile}
           />
         </>
       ) : (
@@ -335,9 +392,12 @@ const App: React.FC = () => {
           userProfile={userProfile}
           userRatings={userRatings}
           onClose={() => setCurrentView('map')}
+          developerMode={settings.developerMode}
+          onForceReview={handleForceReview}
         />
       )}
-      {xpPopupInfo && <XPPopup key={xpPopupInfo.key} amount={xpPopupInfo.amount} />}
+      {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
+      {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
     </div>
   );
 };

@@ -1,4 +1,6 @@
 
+
+
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
 import { Pub, Coordinates } from '../types';
@@ -11,6 +13,7 @@ interface MapProps {
   onSelectPub: (pubId: string | null) => void;
   selectedPubId: string | null;
   onPlacesFound: (places: google.maps.places.Place[]) => void;
+  theme: 'light' | 'dark';
 }
 
 const containerStyle = {
@@ -18,7 +21,7 @@ const containerStyle = {
   height: '100%',
 };
 
-const mapStyles = [
+const mapStylesDark = [
   { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
   { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
@@ -40,17 +43,38 @@ const mapStyles = [
   { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] },
 ];
 
+const mapStylesLight = [
+  { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
+  { featureType: "administrative.land_parcel", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
+  { featureType: "poi", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#dadada" }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+  { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
+  { featureType: "transit.station", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9c9c9" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+];
+
+
 const libraries: ('places' | 'marker')[] = ['places', 'marker'];
 
-const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound }) => {
+const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme }) => {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    // IMPORTANT: The API key is now loaded from an environment variable.
-    // For local development, create a `.env` file in the root of your project
-    // and add the line: VITE_GOOGLE_MAPS_API_KEY=your_key_here
-    // For production (e.g., Netlify), set this environment variable in the build settings.
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string,
+    googleMapsApiKey: 'AIzaSyDOIwBb0UfqszI0ItiXtZF_8BSYXFveqn0',
     libraries,
+    version: 'beta',
   });
 
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -109,16 +133,16 @@ const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadiu
   }, []);
   
   const mapOptions = useMemo(() => ({
-    styles: mapStyles,
+    styles: theme === 'dark' ? mapStylesDark : mapStylesLight,
     disableDefaultUI: true,
     zoomControl: true,
     clickableIcons: false,
-  }), []);
+  }), [theme]);
 
   if (loadError) {
     return (
       <div className="flex items-center justify-center w-full h-full bg-red-900/50 text-white p-4 text-center">
-        Error loading maps. Please ensure your API key is correct and has the Maps JavaScript and Places APIs enabled.
+        Error loading maps. Please check your internet connection and ensure your API key is correct and has the Maps JavaScript and Places APIs enabled.
       </div>
     );
   }
@@ -137,17 +161,22 @@ const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadiu
         mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
       >
         <div style={{ transform: 'translate(-50%, -50%)', zIndex: 100 }} title="Your Location">
-           <div className="w-4 h-4 rounded-full bg-[#4285F4] border-2 border-white shadow-md"></div>
+           <div className="w-4 h-4 rounded-full bg-[#4285F4] border-2 border-gray-800 dark:border-white shadow-md"></div>
         </div>
       </OverlayView>
 
       {pubs.map((pub, index) => {
         const isSelected = pub.id === selectedPubId;
         const rank = index;
+        const strokeColor = theme === 'dark' ? '#FFFFFF' : '#1F2937'; // White for dark, Gray-800 for light
 
-        let fillColor = '#4B5563'; // Default gray
+        let fillColor = '#9CA3AF'; // Default gray-400
+        if (theme === 'dark') {
+            fillColor = '#4B5563'; // Default gray-600
+        }
+
         if (isSelected) {
-            fillColor = '#FBBF24'; // Selected Amber
+            fillColor = '#FBBF24'; // Selected Amber-400
         } else if (rank === 0) {
             fillColor = '#FFD700'; // Gold
         } else if (rank === 1) {
@@ -178,7 +207,7 @@ const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadiu
                         className="w-10 h-10 relative flex items-center justify-center"
                         style={{ transform: 'translate(-50%, -100%)' }}
                     >
-                        <svg viewBox="0 0 24 24" fill={fillColor} stroke="#FFFFFF" strokeWidth="1" className="w-full h-full drop-shadow-lg">
+                        <svg viewBox="0 0 24 24" fill={fillColor} stroke={strokeColor} strokeWidth="1" className="w-full h-full drop-shadow-lg">
                             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/>
                         </svg>
                         <span 

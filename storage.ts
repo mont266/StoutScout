@@ -17,7 +17,11 @@ export const loadSettings = (): Settings => {
       const parsed = JSON.parse(storedSettings);
       // Basic validation to ensure stored settings are not malformed
       if (parsed.unit && parsed.radius) {
-         return parsed;
+         return {
+           ...parsed,
+           theme: parsed.theme || 'dark',
+           developerMode: parsed.developerMode || false,
+         };
       }
     }
   } catch (e) {
@@ -27,6 +31,8 @@ export const loadSettings = (): Settings => {
   return {
     unit: 'mi',
     radius: DEFAULT_RADIUS_MI * MILES_TO_METERS,
+    theme: 'dark',
+    developerMode: false,
   };
 };
 
@@ -80,17 +86,19 @@ export const loadUserProfile = (): UserProfile => {
     const stored = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (typeof parsed.xp === 'number' && typeof parsed.level === 'number') {
-        return parsed;
-      }
+      const username = parsed.username || 'mont26';
+      // The user 'mont26' is always a beta tester.
+      // Other users might have the flag set from previous versions.
+      const isBetaTester = username === 'mont26' || parsed.isBetaTester === true;
+      return { username, isBetaTester };
     }
   } catch (e) {
     console.error("Failed to load user profile from localStorage", e);
   }
-  // Default profile
+  // Default profile for a new user.
   return {
-    xp: 0,
-    level: 0,
+    username: 'mont26',
+    isBetaTester: true,
   };
 };
 

@@ -1,5 +1,3 @@
-
-
 export interface Coordinates {
   lat: number;
   lng: number;
@@ -29,11 +27,13 @@ export type DistanceUnit = 'km' | 'mi';
 export interface Settings {
   unit: DistanceUnit;
   radius: number; // Stored in meters
+  theme: 'light' | 'dark';
+  developerMode: boolean;
 }
 
 export interface UserProfile {
-  xp: number;
-  level: number;
+  username: string;
+  isBetaTester: boolean;
 }
 
 export interface UserRating {
@@ -42,6 +42,12 @@ export interface UserRating {
   pubAddress?: string;
   rating: Rating;
   timestamp: number; // Unix timestamp
+}
+
+export interface Rank {
+  name: string;
+  icon: string;
+  minLevel: number;
 }
 
 

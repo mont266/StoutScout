@@ -1,8 +1,21 @@
-import { RANKS } from './constants';
+import { RANK_DETAILS } from './constants';
+import { Rank } from './types';
 
-export const getRank = (level: number): string => {
-  const rankIndex = Math.floor(level / 5);
-  return RANKS[Math.min(rankIndex, RANKS.length - 1)];
+/**
+ * Returns the full rank data object for a given level.
+ * It finds the highest rank achieved for the user's level.
+ * @param level The user's current level.
+ * @returns The full Rank object.
+ */
+export const getRankData = (level: number): Rank => {
+  // Iterate backwards to find the first rank the user has achieved
+  for (let i = RANK_DETAILS.length - 1; i >= 0; i--) {
+    if (level >= RANK_DETAILS[i].minLevel) {
+      return RANK_DETAILS[i];
+    }
+  }
+  // Fallback to the first rank if something goes wrong
+  return RANK_DETAILS[0];
 };
 
 /**

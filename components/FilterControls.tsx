@@ -15,7 +15,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({ currentFilter, onFilter
   ];
 
   return (
-    <div className="p-2 bg-gray-800 flex justify-around">
+    <div className="p-2 bg-gray-100 dark:bg-gray-800 flex justify-around">
       {filters.map(({ key, label, icon }) => (
         <button
           key={key}
@@ -23,7 +23,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({ currentFilter, onFilter
           className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center space-x-2 ${
             currentFilter === key
               ? 'bg-amber-500 text-black shadow-md'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
           <i className={`fas ${icon}`}></i>
