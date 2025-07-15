@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
 import { Pub, Coordinates } from '../types';
@@ -13,7 +10,7 @@ interface MapProps {
   searchRadius: number;
   onSelectPub: (pubId: string | null) => void;
   selectedPubId: string | null;
-  onPlacesFound: (places: google.maps.places.Place[]) => void;
+  onPlacesFound: (places: google.maps.places.Place[], wasCapped: boolean) => void;
   theme: 'light' | 'dark';
 }
 
@@ -114,10 +111,13 @@ const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadiu
 
       try {
         const { places } = await google.maps.places.Place.searchNearby(request);
-        onPlacesFound(places || []);
+        const results = places || [];
+        // The API is capped at 20 results. If we get 20, it's likely there are more.
+        const wasCapped = results.length === 20;
+        onPlacesFound(results, wasCapped);
       } catch (error) {
         console.error('Places search failed:', error);
-        onPlacesFound([]);
+        onPlacesFound([], false);
       }
     };
 
@@ -209,25 +209,15 @@ const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadiu
                         style={{ transform: 'translate(-50%, -100%)' }}
                     >
                         <svg viewBox="0 0 24 24" fill={fillColor} stroke={strokeColor} strokeWidth="1" className="w-full h-full drop-shadow-lg">
-                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/>
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
                         </svg>
-                        <span 
-                            className="absolute text-lg"
-                            style={{ top: '16%' }}
-                        >
-                            🍺
-                        </span>
                     </div>
                 </div>
             </OverlayView>
         );
-    })}
+      })}
     </GoogleMap>
-  ) : (
-    <div className="flex items-center justify-center w-full h-full">
-      <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-400"></div>
-    </div>
-  );
+  ) : null;
 };
 
 export default Map;

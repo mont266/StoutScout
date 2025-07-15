@@ -14,15 +14,14 @@ interface ProfilePageProps {
 }
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, userRatings, onClose, onLogout, developerMode, onForceReview }) => {
-    const { username } = userProfile;
+    const { username, level, xp } = userProfile;
     // Special check for our beta tester 'mont26' or anyone with the DB flag.
     const isBetaTester = userProfile.username === 'mont26' || userProfile.is_beta_tester;
     const totalReviews = userRatings.length;
     
-    const level = Math.floor(totalReviews / REVIEWS_PER_LEVEL);
     const rankData = getRankData(level);
-    const reviewsForCurrentLevel = totalReviews % REVIEWS_PER_LEVEL;
-    const progressPercentage = (reviewsForCurrentLevel / REVIEWS_PER_LEVEL) * 100;
+    const xpForCurrentLevel = xp % REVIEWS_PER_LEVEL;
+    const progressPercentage = (xpForCurrentLevel / REVIEWS_PER_LEVEL) * 100;
 
     const [isRankProgressionVisible, setIsRankProgressionVisible] = useState(false);
 
@@ -82,7 +81,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, userRatings, onC
                             ></div>
                         </div>
                         <p className="text-xs text-amber-600 dark:text-amber-300 mt-1 text-center">
-                            {reviewsForCurrentLevel} / {REVIEWS_PER_LEVEL} reviews to next level
+                            {xpForCurrentLevel} / {REVIEWS_PER_LEVEL} XP to next level
                         </p>
                     </div>
                 </div>
@@ -132,7 +131,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, userRatings, onC
                           onClick={onForceReview}
                           className="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
                         >
-                          Force "+1 Review" Popup
+                          Force +1 XP &amp; Level Up Check
                         </button>
                     </div>
                   </div>

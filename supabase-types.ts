@@ -1,3 +1,4 @@
+
 export type Json =
   | string
   | number
@@ -13,29 +14,25 @@ export interface Database {
         Row: {
           id: string
           is_beta_tester: boolean
-          updated_at: string | null
-          username: string | null
+          level: number
+          username: string
+          xp: number
         }
         Insert: {
           id: string
           is_beta_tester?: boolean
-          updated_at?: string | null
-          username: string | null
+          level?: number
+          username: string
+          xp?: number
         }
         Update: {
           id?: string
           is_beta_tester?: boolean
-          updated_at?: string | null
-          username?: string | null
+          level?: number
+          username?: string
+          xp?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_id_fkey"
-            columns: ["id"]
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       pubs: {
         Row: {

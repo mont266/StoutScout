@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useRef } from 'react';
 import { Pub, FilterType, Rating, Coordinates, DistanceUnit } from '../types';
 import StarRating from './StarRating';
@@ -14,9 +13,10 @@ interface PubListProps {
   distanceUnit: DistanceUnit;
   isExpanded: boolean;
   onToggle: () => void;
+  resultsAreCapped: boolean;
 }
 
-const PubList: React.FC<PubListProps> = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle }) => {
+const PubList: React.FC<PubListProps> = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped }) => {
   const selectedItemRef = useRef<HTMLLIElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -67,6 +67,12 @@ const PubList: React.FC<PubListProps> = ({ pubs, selectedPubId, onSelectPub, fil
 
       {isExpanded && (
         <div className="overflow-y-auto">
+          {resultsAreCapped && (
+            <div className="p-2 text-center text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-b border-gray-200 dark:border-gray-700">
+              <i className="fas fa-info-circle mr-1"></i>
+              Showing top 20 results. Reduce search radius in Settings to find more.
+            </div>
+          )}
           {pubs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 p-4">
                 <p>Searching for nearby pubs...</p>

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Pub, Rating, FilterType, Coordinates, Settings, UserProfile, UserRating } from './types';
@@ -33,6 +34,7 @@ const App: React.FC = () => {
   const [userLocation, setUserLocation] = useState<Coordinates>(DEFAULT_LOCATION);
   const [searchCenter, setSearchCenter] = useState<Coordinates>(DEFAULT_LOCATION);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [resultsAreCapped, setResultsAreCapped] = useState(false);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<Settings>(loadSettings);
@@ -48,6 +50,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     setLoading(true);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        setLoading(false);
+    });
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         setSession(session);
         setLoading(false);
@@ -110,19 +117,24 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (session) {
+    if (session?.user) {
       fetchAllRatings();
       fetchUserData(session.user.id);
     } else {
       // Clear user-specific data on logout
       setUserProfile(null);
       setUserRatings([]);
-      // We could clear allRatings, but keeping it provides data for logged-out users if we change the UX
+      setAllRatings(new Map());
     }
   }, [session]);
 
 
   // --- CORE APP LOGIC ---
+
+  const handlePlacesFound = (places: google.maps.places.Place[], capped: boolean) => {
+    setGooglePlaces(places);
+    setResultsAreCapped(capped);
+  };
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -173,7 +185,6 @@ const App: React.FC = () => {
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   const existingUserRatingForSelectedPub = useMemo(() => {
     if (!selectedPub) return undefined;
-    // The check now uses pubId, which matches the mapped Supabase data.
     return userRatings.find(r => r.pubId === selectedPub.id);
   }, [selectedPub, userRatings]);
 
@@ -238,7 +249,7 @@ const App: React.FC = () => {
   }, [pubs, filter, userLocation, getDistance]);
 
   const handleRatePub = useCallback(async (pubId: string, pubName: string, pubAddress: string, newRating: Rating) => {
-    if (!session || !selectedPub) return;
+    if (!session || !userProfile || !selectedPub) return;
 
     // 1. Upsert the pub into the 'pubs' table to ensure it exists.
     const { error: pubError } = await supabase.from('pubs').upsert({
@@ -271,30 +282,63 @@ const App: React.FC = () => {
         console.error('Error saving rating:', ratingError);
         return;
     }
-
-    // 3. On success, refetch all data to update the UI.
+    
+    // If updating, just refetch and finish
+    if (isUpdating) {
+        fetchAllRatings();
+        fetchUserData(session.user.id);
+        return;
+    }
+    
+    // 3. For new ratings, update user's profile (XP and Level)
+    const newXp = userProfile.xp + 1;
+    const oldLevel = userProfile.level;
+    const newLevel = Math.floor(newXp / REVIEWS_PER_LEVEL);
+    
+    const { error: profileUpdateError } = await supabase
+      .from('profiles')
+      .update({ xp: newXp, level: newLevel })
+      .eq('id', session.user.id);
+    
+    if (profileUpdateError) {
+        console.error('Failed to update user profile:', profileUpdateError);
+        // The rating was saved, but the profile wasn't updated.
+        // We'll still refetch to keep the UI consistent with what we can.
+    }
+    
+    // 4. On success, refetch all data to update the UI.
     fetchAllRatings(); // For average ratings
     fetchUserData(session.user.id); // For user's own rating history & level
 
-    // 4. Trigger popups for new (not updated) reviews
-    if (!isUpdating) {
-        const oldLevel = Math.floor(userRatings.length / REVIEWS_PER_LEVEL);
-        const newLevel = Math.floor((userRatings.length + 1) / REVIEWS_PER_LEVEL);
-        if (newLevel > oldLevel) {
-          setLeveledUpInfo({ key: Date.now(), newLevel });
-        }
-        setReviewPopupInfo({ key: Date.now() });
+    // 5. Trigger popups for new review
+    if (newLevel > oldLevel) {
+        setLeveledUpInfo({ key: Date.now(), newLevel });
     }
-  }, [session, userRatings, selectedPub]);
+    setReviewPopupInfo({ key: Date.now() });
+
+  }, [session, userRatings, selectedPub, userProfile]);
 
   const handleForceReview = async () => {
-    // This function can be adapted for Supabase if needed,
-    // e.g., by inserting a fake rating for the current user.
-    // For now, it remains a client-side simulation for UI testing.
-    console.log("Developer action: Force review popup");
+    if (!session || !userProfile) return;
+    console.log("Developer action: Force review popup and level up");
+    // Simulate a new review by directly updating the database
+    const newXp = userProfile.xp + 1;
+    const oldLevel = userProfile.level;
+    const newLevel = Math.floor(newXp / REVIEWS_PER_LEVEL);
+
+    await supabase
+        .from('profiles')
+        .update({ xp: newXp, level: newLevel })
+        .eq('id', session.user.id);
+
+    // Refetch data to reflect change
+    await fetchUserData(session.user.id);
+
+    // Trigger popups
+    if (newLevel > oldLevel) {
+        setLeveledUpInfo({ key: Date.now(), newLevel });
+    }
     setReviewPopupInfo({ key: Date.now() });
-    const currentLevel = userProfile ? Math.floor(userRatings.length / REVIEWS_PER_LEVEL) : 0;
-    setLeveledUpInfo({ key: Date.now(), newLevel: currentLevel + 1 });
   };
   
   const handleSelectPub = useCallback((pubId: string | null) => {
@@ -351,7 +395,7 @@ const App: React.FC = () => {
                     searchRadius={settings.radius}
                     onSelectPub={handleSelectPub} 
                     selectedPubId={selectedPubId}
-                    onPlacesFound={setGooglePlaces}
+                    onPlacesFound={handlePlacesFound}
                     theme={settings.theme}
                   />
               </div>
@@ -366,6 +410,7 @@ const App: React.FC = () => {
                       distanceUnit={settings.unit}
                       isExpanded={isListExpanded}
                       onToggle={handleToggleList}
+                      resultsAreCapped={resultsAreCapped}
                   />
               </div>
           </div>

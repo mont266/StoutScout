@@ -30,6 +30,8 @@ const AuthPage: React.FC = () => {
             const { error: profileError } = await supabase.from('profiles').insert({
                 id: data.user.id,
                 username: username,
+                xp: 0,
+                level: 0,
             });
             if (profileError) {
               // If profile creation fails, it's a tricky state.

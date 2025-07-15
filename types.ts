@@ -1,3 +1,4 @@
+
 export interface Coordinates {
   lat: number;
   lng: number;
@@ -36,7 +37,8 @@ export interface UserProfile {
   id: string;
   username: string;
   is_beta_tester: boolean;
-  updated_at?: string;
+  level: number;
+  xp: number;
 }
 
 // Kept signature the same, but will be populated by Supabase data.
