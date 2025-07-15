@@ -24,7 +24,7 @@ const App: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // App state
-  const [googlePlaces, setGooglePlaces] = useState<google.maps.places.Place[]>([]);
+  const [googlePlaces, setGooglePlaces] = useState<any[]>([]);
   const [pubs, setPubs] = useState<Pub[]>([]);
   const [allRatings, setAllRatings] = useState<Map<string, Rating[]>>(new Map());
   const [selectedPubId, setSelectedPubId] = useState<string | null>(null);
@@ -100,10 +100,10 @@ const App: React.FC = () => {
       setUserProfile(profileData);
     }
     
-    // Fetch user's ratings (without the join)
+    // Fetch user's ratings WITH a join to pubs for efficiency
     const { data: userRatingsData, error: userRatingsError } = await supabase
         .from('ratings')
-        .select('id, pub_id, price, quality, created_at')
+        .select('id, pub_id, price, quality, created_at, pubs(name, address)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -112,29 +112,15 @@ const App: React.FC = () => {
         return;
     }
 
-    if (!userRatingsData || userRatingsData.length === 0) {
+    if (!userRatingsData) {
         setUserRatings([]);
         return;
     }
 
-    // Get unique pub IDs from the ratings
-    const pubIds = [...new Set(userRatingsData.map(r => r.pub_id))];
-    
-    // Fetch the details for all the pubs that have been rated
-    const { data: pubsData, error: pubsError } = await supabase
-        .from('pubs')
-        .select('id, name, address')
-        .in('id', pubIds);
-
-    if (pubsError) {
-        console.error("Error fetching pub details for ratings:", pubsError);
-        // We can still proceed, but names/addresses will be unknown
-    }
-
-    const pubsMap = new Map(pubsData?.map(p => [p.id, p]) || []);
-
     const mappedUserRatings: UserRating[] = userRatingsData.map(r => {
-      const pubDetails = pubsMap.get(r.pub_id);
+      // The 'pubs' table is now nested. The generated type for it will be based on the selection.
+      // It can be null if the relationship doesn't resolve (e.g., a rating for a deleted pub).
+      const pubDetails = r.pubs as ({ name: string, address: string } | null);
       return {
           id: r.id,
           pubId: r.pub_id,
@@ -161,7 +147,7 @@ const App: React.FC = () => {
 
   // --- CORE APP LOGIC ---
 
-  const handlePlacesFound = (places: google.maps.places.Place[], capped: boolean) => {
+  const handlePlacesFound = (places: any[], capped: boolean) => {
     setGooglePlaces(places);
     setResultsAreCapped(capped);
   };

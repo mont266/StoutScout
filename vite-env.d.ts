@@ -1,4 +1,3 @@
-/// <reference types="@types/google.maps" />
 
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;

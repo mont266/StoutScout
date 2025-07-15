@@ -7,13 +7,7 @@
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
-    <!-- Tailwind CSS JIT CDN for live styling without a build step -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-      }
-    </script>
+    <link rel="stylesheet" href="/index.css" />
 
     <style>
       @keyframes xp-popup-animation {
@@ -60,32 +54,23 @@
       }
     </style>
     
-    <!-- Import map to tell the browser where to find modules like React -->
-    <script type="importmap">
+  <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom": "https://esm.sh/react-dom@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "@react-google-maps/api": "https://esm.sh/@react-google-maps/api@2.19.3?external=react,react-dom",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.8",
-    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
-    "react/": "https://esm.sh/react@18.2.0/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.9.0"
+    "@google/genai": "https://esm.sh/@google/genai@^1.9.0",
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.51.0",
+    "vite": "https://esm.sh/vite@^7.0.4",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.6.0",
+    "@react-google-maps/api": "https://esm.sh/@react-google-maps/api@^2.20.7"
   }
 }
 </script>
-    
-    <!-- Babel to transpile JSX/TSX code in the browser -->
-    <script src="https://unpkg.com/@babel/preset-typescript@7/dist/preset-typescript.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
 <link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-gray-50 dark:bg-gray-900">
     <div id="root"></div>
-    <!-- Load the main app script, telling Babel to transpile it as a module -->
-    <script type="text/babel" data-presets="react,typescript" data-type="module" src="./index.js"></script>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
