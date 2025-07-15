@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { FilterType } from './types.js';
 import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants.js';
@@ -85,7 +86,17 @@ const App = () => {
       setAllRatings(ratingsMap);
   };
   
-  const fetchUserData = async (currentSession) => {
+  const fetchUserData = async () => {
+    // Get the freshest session data directly before we use it.
+    // This can help avoid timing issues after login where the session from
+    // onAuthStateChange might not be fully propagated for RLS checks.
+    const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !currentSession) {
+      console.error("Could not get session to fetch user data.", sessionError);
+      return;
+    }
+
     const userId = currentSession.user.id;
 
     // Fetch Profile
@@ -157,7 +168,7 @@ const App = () => {
 
   useEffect(() => {
     if (session?.user) {
-      fetchUserData(session);
+      fetchUserData();
     } else {
       // Clear user-specific data on logout
       setUserProfile(null);
@@ -255,6 +266,7 @@ const App = () => {
       (position) => {
         const { latitude, longitude } = position.coords;
         setUserLocation({ lat: latitude, lng: longitude });
+        setSearchCenter({ lat: latitude, lng: longitude });
         setLocationError(null);
       },
       (error) => {
@@ -265,12 +277,6 @@ const App = () => {
     return () => navigator.geolocation.clearWatch(watcher);
   }, []);
 
-  useEffect(() => {
-    if (getDistance(userLocation, searchCenter) > 500) {
-      setSearchCenter(userLocation);
-    }
-  }, [userLocation, searchCenter, getDistance]);
-  
   const sortedPubs = useMemo(() => {
     return [...pubs].sort((a, b) => {
       switch (filter) {
@@ -323,7 +329,7 @@ const App = () => {
     // If updating, just refetch and finish
     if (isUpdating) {
         fetchAllRatings();
-        fetchUserData(session);
+        fetchUserData();
         return;
     }
     
@@ -345,7 +351,7 @@ const App = () => {
     
     // 4. On success, refetch all data to update the UI.
     fetchAllRatings(); // For average ratings
-    fetchUserData(session); // For user's own rating history & level
+    fetchUserData(); // For user's own rating history & level
 
     // 5. Trigger popups for new review
     if (newLevel > oldLevel) {
@@ -369,7 +375,7 @@ const App = () => {
         .eq('id', session.user.id);
 
     // Refetch data to reflect change
-    await fetchUserData(session);
+    await fetchUserData();
 
     // Trigger popups
     if (newLevel > oldLevel) {
