@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { FilterType } from './types.js';
 import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants.js';
@@ -84,19 +85,51 @@ const App = () => {
       setAllRatings(ratingsMap);
   };
   
-  const fetchUserData = async (userId) => {
+  const fetchUserData = async (currentSession) => {
+    const userId = currentSession.user.id;
+
     // Fetch Profile
-    const { data: profileData, error: profileError } = await supabase
+    let { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
     
-    if (profileError) {
+    // If profile not found, it's likely the first login after signup. Create it.
+    if (profileError && profileError.code === 'PGRST116') {
+      console.log('Profile not found for user, attempting to create one.');
+      const newUsername = currentSession.user.user_metadata?.username;
+
+      if (!newUsername) {
+        console.error("Fatal: Cannot create profile, username not found in user metadata on first login.", currentSession.user);
+        return;
+      }
+      
+      const { data: newProfile, error: createError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          username: newUsername,
+          xp: 0,
+          level: 0,
+        })
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error("Error creating profile after first login:", createError);
+        return;
+      }
+
+      console.log('Profile created successfully:', newProfile);
+      profileData = newProfile; // Use the newly created profile data
+    
+    } else if (profileError) {
       console.error("Error fetching profile:", profileError);
-    } else {
-      setUserProfile(profileData);
+      return; // Stop execution if there was another error
     }
+    
+    setUserProfile(profileData);
     
     // Fetch user's ratings (with join)
     const { data: userRatingsData, error: userRatingsError } = await supabase
@@ -124,7 +157,7 @@ const App = () => {
 
   useEffect(() => {
     if (session?.user) {
-      fetchUserData(session.user.id);
+      fetchUserData(session);
     } else {
       // Clear user-specific data on logout
       setUserProfile(null);
@@ -290,7 +323,7 @@ const App = () => {
     // If updating, just refetch and finish
     if (isUpdating) {
         fetchAllRatings();
-        fetchUserData(session.user.id);
+        fetchUserData(session);
         return;
     }
     
@@ -312,7 +345,7 @@ const App = () => {
     
     // 4. On success, refetch all data to update the UI.
     fetchAllRatings(); // For average ratings
-    fetchUserData(session.user.id); // For user's own rating history & level
+    fetchUserData(session); // For user's own rating history & level
 
     // 5. Trigger popups for new review
     if (newLevel > oldLevel) {
@@ -336,7 +369,7 @@ const App = () => {
         .eq('id', session.user.id);
 
     // Refetch data to reflect change
-    await fetchUserData(session.user.id);
+    await fetchUserData(session);
 
     // Trigger popups
     if (newLevel > oldLevel) {

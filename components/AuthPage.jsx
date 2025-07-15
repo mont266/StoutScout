@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.js';
 import Logo from './Logo.jsx';
@@ -9,6 +10,7 @@ const AuthPage = ({ onClose }) => {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [requiresConfirmation, setRequiresConfirmation] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -26,6 +28,7 @@ const AuthPage = ({ onClose }) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setRequiresConfirmation(false);
 
     try {
       if (isSignUp) {
@@ -35,35 +38,61 @@ const AuthPage = ({ onClose }) => {
           setLoading(false);
           return;
         }
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        // Insert profile after successful signup
-        if (data.user) {
-            const { error: profileError } = await supabase.from('profiles').insert({
-                id: data.user.id,
-                username: username,
-                xp: 0,
-                level: 0,
-            });
-            if (profileError) {
-              // If profile creation fails, it's a tricky state.
-              // For simplicity, we'll log the error. A real app might try to clean up the auth user.
-              console.error('Failed to create user profile:', profileError);
-              throw new Error('Could not create your profile. Please contact support.');
-            }
+        
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              username: username,
+            },
+          },
+        });
+
+        if (signUpError) throw signUpError;
+
+        // If signup is successful and requires email confirmation, show a message.
+        if (data.user && !data.session) {
+          setRequiresConfirmation(true);
         }
+        // If there is a session, onAuthStateChange in App.jsx will handle closing the modal.
       } else {
         // Sign In
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      // On success, the onAuthStateChange listener in App.jsx will close the modal.
+      // On successful sign in, the onAuthStateChange listener in App.jsx will close the modal.
     } catch (err) {
       setError(err.error_description || err.message);
     } finally {
       setLoading(false);
     }
   };
+  
+  // Render a confirmation message instead of the form if needed.
+  if (requiresConfirmation) {
+    return (
+      <div
+        className="fixed inset-0 bg-black bg-opacity-60 dark:bg-opacity-70 z-50 flex items-center justify-center p-4"
+        onClick={onClose}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="max-w-sm w-full bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl border-t-4 border-amber-400 text-center" onClick={e => e.stopPropagation()}>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Check your email</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            We've sent a confirmation link to <span className="font-bold">{email}</span>. Please click the link to complete your registration.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
