@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { FilterType } from './types.js';
 import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants.js';
@@ -22,6 +24,7 @@ const App = () => {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
 
   // App state
   const [googlePlaces, setGooglePlaces] = useState([]);
@@ -106,6 +109,11 @@ const App = () => {
     
     // If profile not found, it's the first login. Create it.
     if (profileError && profileError.code === 'PGRST116') {
+      if (isCreatingProfile) {
+        console.warn("Profile creation is already in progress. Aborting.");
+        return;
+      }
+
       console.log('Profile not found for user, attempting to create one.');
       const newUsername = currentSession.user.user_metadata?.username;
 
@@ -113,39 +121,33 @@ const App = () => {
         console.error("Fatal: Cannot create profile, username not found in user metadata on first login.", currentSession.user);
         return;
       }
-
-      // --- CRITICAL FIX ---
-      // Explicitly update the user's metadata before creating the profile.
-      // This helps prevent a race condition on the backend where the RLS policy for
-      // profile insertion fails because the user's auth data hasn't fully propagated yet.
-      console.log('First login detected. Explicitly updating user metadata before creating profile.');
-      const { error: updateUserError } = await supabase.auth.updateUser({
-        data: { username: newUsername, full_name: newUsername }
-      });
-      if (updateUserError) {
-        // This is not ideal, but we can still try to create the profile.
-        console.warn('Could not explicitly update user metadata. Proceeding with profile creation anyway.', updateUserError);
-      }
-      // --- END FIX ---
       
-      const { data: newProfile, error: createError } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          username: newUsername,
-          xp: 0,
-          level: 0,
-        })
-        .select()
-        .single();
-      
-      if (createError) {
-        console.error("Error creating profile after first login:", createError);
-        return;
-      }
+      setIsCreatingProfile(true); // Set flag to prevent re-entry
 
-      console.log('Profile created successfully:', newProfile);
-      profileData = newProfile;
+      try {
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            username: newUsername,
+            reviews: 0,
+            level: 1,
+          })
+          .select()
+          .single();
+        
+        if (createError) {
+          console.error("Error creating profile after first login:", createError);
+          // If creation fails, we just return. The user might need to refresh to try again.
+          // The isCreatingProfile flag will be reset in the finally block.
+          return;
+        }
+
+        console.log('Profile created successfully:', newProfile);
+        profileData = newProfile;
+      } finally {
+        setIsCreatingProfile(false); // ALWAYS reset the flag
+      }
     
     } else if (profileError) {
       console.error("Error fetching profile:", profileError);
@@ -338,34 +340,29 @@ const App = () => {
         return;
     }
     
-    // If updating, just refetch and finish
+    // If updating, just refetch and finish. No need to increment review count.
     if (isUpdating) {
         fetchAllRatings();
         fetchUserData();
         return;
     }
     
-    // 3. For new ratings, update user's profile (XP and Level)
-    const newXp = userProfile.xp + 1;
+    // 3. For new ratings, invoke an edge function to securely update the user's profile.
     const oldLevel = userProfile.level;
-    const newLevel = Math.floor(newXp / REVIEWS_PER_LEVEL);
+    const { data: profileUpdateData, error: functionError } = await supabase.functions.invoke('increment-review-count');
     
-    const { error: profileUpdateError } = await supabase
-      .from('profiles')
-      .update({ xp: newXp, level: newLevel })
-      .eq('id', session.user.id);
-    
-    if (profileUpdateError) {
-        console.error('Failed to update user profile:', profileUpdateError);
-        // The rating was saved, but the profile wasn't updated.
-        // We'll still refetch to keep the UI consistent with what we can.
+    if (functionError) {
+        console.error('Failed to update user profile via edge function:', functionError);
+        // The rating was saved, but the profile update failed.
+        // We'll still refetch all data to keep the UI consistent and show the new rating.
     }
     
-    // 4. On success, refetch all data to update the UI.
+    // 4. Refetch all data to update the UI.
     fetchAllRatings(); // For average ratings
-    fetchUserData(); // For user's own rating history & level
+    await fetchUserData(); // For user's own rating history & level
 
-    // 5. Trigger popups for new review
+    // 5. Trigger popups for new review.
+    const newLevel = profileUpdateData?.newLevel || oldLevel;
     if (newLevel > oldLevel) {
         setLeveledUpInfo({ key: Date.now(), newLevel });
     }
@@ -376,20 +373,21 @@ const App = () => {
   const handleForceReview = async () => {
     if (!session || !userProfile) return;
     console.log("Developer action: Force review popup and level up");
-    // Simulate a new review by directly updating the database
-    const newXp = userProfile.xp + 1;
-    const oldLevel = userProfile.level;
-    const newLevel = Math.floor(newXp / REVIEWS_PER_LEVEL);
 
-    await supabase
-        .from('profiles')
-        .update({ xp: newXp, level: newLevel })
-        .eq('id', session.user.id);
+    const oldLevel = userProfile.level;
+    // Invoke the secure edge function
+    const { data: profileUpdateData, error: functionError } = await supabase.functions.invoke('increment-review-count');
+
+    if (functionError) {
+        console.error("Developer action 'force review' failed:", functionError);
+        return; // Stop if the function call fails
+    }
 
     // Refetch data to reflect change
     await fetchUserData();
 
     // Trigger popups
+    const newLevel = profileUpdateData?.newLevel || oldLevel;
     if (newLevel > oldLevel) {
         setLeveledUpInfo({ key: Date.now(), newLevel });
     }

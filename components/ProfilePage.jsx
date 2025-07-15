@@ -4,14 +4,13 @@ import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
 import StarRating from './StarRating.jsx';
 
 const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMode, onForceReview }) => {
-    const { username, level, xp } = userProfile;
+    const { username, level, reviews } = userProfile;
     // Special check for our beta tester 'mont26' or anyone with the DB flag.
     const isBetaTester = userProfile.username === 'mont26' || userProfile.is_beta_tester;
-    const totalReviews = userRatings.length;
     
     const rankData = getRankData(level);
-    const xpForCurrentLevel = xp % REVIEWS_PER_LEVEL;
-    const progressPercentage = (xpForCurrentLevel / REVIEWS_PER_LEVEL) * 100;
+    const reviewsForCurrentLevel = reviews % REVIEWS_PER_LEVEL;
+    const progressPercentage = (reviewsForCurrentLevel / REVIEWS_PER_LEVEL) * 100;
 
     const [isRankProgressionVisible, setIsRankProgressionVisible] = useState(false);
 
@@ -53,8 +52,8 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMod
                         </div>
                         <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>
                         <div>
-                            <p className="font-bold text-gray-900 dark:text-white">{totalReviews}</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">{totalReviews === 1 ? 'Review' : 'Reviews'}</p>
+                            <p className="font-bold text-gray-900 dark:text-white">{reviews}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{reviews === 1 ? 'Review' : 'Reviews'}</p>
                         </div>
                     </div>
 
@@ -71,7 +70,7 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMod
                             ></div>
                         </div>
                         <p className="text-xs text-amber-600 dark:text-amber-300 mt-1 text-center">
-                            {xpForCurrentLevel} / {REVIEWS_PER_LEVEL} XP to next level
+                            {reviewsForCurrentLevel} / {REVIEWS_PER_LEVEL} Reviews to next level
                         </p>
                     </div>
                 </div>
@@ -121,7 +120,7 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMod
                           onClick={onForceReview}
                           className="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
                         >
-                          Force +1 XP &amp; Level Up Check
+                          Force +1 Review &amp; Level Up Check
                         </button>
                     </div>
                   </div>
