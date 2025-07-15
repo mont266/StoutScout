@@ -1,4 +1,4 @@
-
+// This file is now 'utils.js'
 import { RANK_DETAILS } from './constants.js';
 
 /**
@@ -46,7 +46,7 @@ export const formatLocationDisplay = (address) => {
   } else if (parts.length >= 2) {
       // General case for formats like "..., Town Postcode, Country"
       const townPart = parts[parts.length - 2];
-      const match = townPart.match(/^[a-zA-Z\\s-'.()]+/);
+      const match = townPart.match(/^[a-zA-Z\s-'.()]+/);
       town = match ? match[0].trim() : townPart;
   }
 
