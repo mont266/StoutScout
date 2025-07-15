@@ -4,7 +4,10 @@ import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
 import StarRating from './StarRating.jsx';
 
 const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMode, onForceReview }) => {
-    const { username, level, reviews } = userProfile;
+    const { username, level } = userProfile;
+    // Safely handle cases where reviews might be null or undefined for older profiles.
+    const reviews = userProfile.reviews || 0;
+
     // Special check for our beta tester 'mont26' or anyone with the DB flag.
     const isBetaTester = userProfile.username === 'mont26' || userProfile.is_beta_tester;
     
@@ -99,7 +102,7 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMod
                                     return (
                                         <li key={rankDetail.name} className={`flex justify-between items-center p-2 rounded-md transition-colors ${isCurrentRank ? 'bg-amber-500/10' : ''}`}>
                                             <div className="flex items-center space-x-3">
-                                                <i className={`fas ${rankDetail.icon} w-6 text-center text-lg ${isCurrentRank ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'}`}></i>
+                                                <i className={`fas ${rankDetail.icon} w-6 text-center text-lg ${isCurrentRank ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'}`}/>
                                                 <span className={`font-semibold ${isCurrentRank ? 'text-amber-500 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200'}`}>{rankDetail.name}</span>
                                             </div>
                                             <span className={`text-sm ${isCurrentRank ? 'text-amber-600 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>{levelRange}</span>

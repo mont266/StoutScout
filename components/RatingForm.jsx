@@ -4,11 +4,11 @@ import StarRating from './StarRating.jsx';
 // Labels to guide the user on price rating. Higher stars mean cheaper price.
 // The \n character is used to create a two-line label in the StarRating component.
 const priceLabels = [
-  'Very Expensive\n£10.00+',    // 1 star
-  'Expensive\n£8.50 - £9.99', // 2 stars
-  'Average\n£7.50 - £8.49',   // 3 stars
-  'Cheap\n£6.50 - £7.49',     // 4 stars
-  'Very Cheap\n< £6.50'        // 5 stars
+  'Very Expensive\n£8.50+',      // 1 star
+  'Expensive\n£7.50 - £8.49',   // 2 stars
+  'Average\n£6.50 - £7.49',     // 3 stars
+  'Cheap\n£5.50 - £6.49',       // 4 stars
+  'Very Cheap\n< £5.50'          // 5 stars
 ];
 
 
