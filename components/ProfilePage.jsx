@@ -1,3 +1,5 @@
+
+
 import React, { useState } from 'react';
 import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
@@ -131,7 +133,7 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMod
 
                 {/* Recent Ratings */}
                 <div className="mb-6">
-                    <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Your Recent Ratings</h3>
+                    <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Your Recent Ratings ({userRatings.length})</h3>
                     {userRatings.length > 0 ? (
                         <ul className="space-y-3">
                             {userRatings.slice(0, 10).map((r) => ( // Show latest 10

@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
+import { FilterType } from '../types.js';
 
 const containerStyle = {
   width: '100%',
@@ -54,7 +55,7 @@ const mapStylesLight = [
 
 const libraries = ['places', 'marker'];
 
-const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme }) => {
+const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme, filter }) => {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
@@ -127,6 +128,14 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
     clickableIcons: false,
   }), [theme]);
 
+  const top3RatedPubsInDistanceOrder = useMemo(() => {
+    if (filter !== FilterType.Distance) return [];
+    return pubs
+        .filter(p => p.ratings.length > 0)
+        .slice(0, 3)
+        .map(p => p.id);
+  }, [pubs, filter]);
+
   if (loadError) {
     return (
       <div className="flex items-center justify-center w-full h-full bg-red-900/50 text-white p-4 text-center">
@@ -155,29 +164,34 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
 
       {pubs.map((pub, index) => {
         const isSelected = pub.id === selectedPubId;
-        const rank = index;
         const strokeColor = theme === 'dark' ? '#FFFFFF' : '#1F2937'; // White for dark, Gray-800 for light
+        let fillColor = theme === 'dark' ? '#4B5563' : '#9CA3AF'; // Default gray
 
-        let fillColor = '#9CA3AF'; // Default gray-400
-        if (theme === 'dark') {
-            fillColor = '#4B5563'; // Default gray-600
+        let highlightRank = -1;
+        if (filter === FilterType.Distance) {
+            highlightRank = top3RatedPubsInDistanceOrder.indexOf(pub.id);
+        } else {
+            // For price and quality, the top 3 are the first in the sorted list.
+            if (index < 3) highlightRank = index;
         }
-
-        if (isSelected) {
-            fillColor = '#FBBF24'; // Selected Amber-400
-        } else if (rank === 0) {
+        
+        if (highlightRank === 0) {
             fillColor = '#FFD700'; // Gold
-        } else if (rank === 1) {
+        } else if (highlightRank === 1) {
             fillColor = '#C0C0C0'; // Silver
-        } else if (rank === 2) {
+        } else if (highlightRank === 2) {
             fillColor = '#CD7F32'; // Bronze
         }
 
+        if (isSelected) {
+            fillColor = '#FBBF24'; // Selected Amber-400 overrides highlight
+        }
+        
         let zIndex = 1;
         if (isSelected) {
             zIndex = 50;
-        } else if (rank < 3) {
-            zIndex = 10 - rank; // Gold=10, Silver=9, Bronze=8
+        } else if (highlightRank !== -1) {
+            zIndex = 10 - highlightRank; // Gold=10, Silver=9, Bronze=8
         }
         
         return (
@@ -198,6 +212,9 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
                         <svg viewBox="0 0 24 24" fill={fillColor} stroke={strokeColor} strokeWidth="1" className="w-full h-full drop-shadow-lg">
                             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
                         </svg>
+                        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-3">
+                           <i className="fas fa-beer text-base" style={{ color: strokeColor }}></i>
+                        </div>
                     </div>
                 </div>
             </OverlayView>

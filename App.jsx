@@ -1,7 +1,5 @@
 
 
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { FilterType } from './types.js';
 import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants.js';
@@ -95,7 +93,7 @@ const App = () => {
     
     if (sessionError || !currentSession) {
       console.error("Could not get session to fetch user data.", sessionError);
-      return;
+      return { profile: null, ratings: [] };
     }
 
     const userId = currentSession.user.id;
@@ -111,7 +109,7 @@ const App = () => {
     if (profileError && profileError.code === 'PGRST116') {
       if (isCreatingProfile) {
         console.warn("Profile creation is already in progress. Aborting.");
-        return;
+        return { profile: null, ratings: [] };
       }
 
       console.log('Profile not found for user, attempting to create one.');
@@ -119,7 +117,7 @@ const App = () => {
 
       if (!newUsername) {
         console.error("Fatal: Cannot create profile, username not found in user metadata on first login.", currentSession.user);
-        return;
+        return { profile: null, ratings: [] };
       }
       
       setIsCreatingProfile(true); // Set flag to prevent re-entry
@@ -138,9 +136,7 @@ const App = () => {
         
         if (createError) {
           console.error("Error creating profile after first login:", createError);
-          // If creation fails, we just return. The user might need to refresh to try again.
-          // The isCreatingProfile flag will be reset in the finally block.
-          return;
+          return { profile: null, ratings: [] };
         }
 
         console.log('Profile created successfully:', newProfile);
@@ -151,7 +147,7 @@ const App = () => {
     
     } else if (profileError) {
       console.error("Error fetching profile:", profileError);
-      return; // Stop execution if there was another error
+      return { profile: null, ratings: [] };
     }
     
     setUserProfile(profileData);
@@ -165,7 +161,7 @@ const App = () => {
 
     if (userRatingsError) {
         console.error("Error fetching user ratings:", userRatingsError);
-        return;
+        return { profile: profileData, ratings: [] };
     }
     
     const mappedUserRatings = (userRatingsData || []).map(r => ({
@@ -178,6 +174,7 @@ const App = () => {
     }));
 
     setUserRatings(mappedUserRatings);
+    return { profile: profileData, ratings: mappedUserRatings };
   };
 
   useEffect(() => {
@@ -348,23 +345,20 @@ const App = () => {
     }
     
     // 3. For new ratings, invoke an edge function to securely update the user's profile.
-    const oldLevel = userProfile.level;
-    const { data: profileUpdateData, error: functionError } = await supabase.functions.invoke('increment-review-count');
+    const oldProfile = userProfile;
+    const { error: functionError } = await supabase.functions.invoke('increment-review-count');
     
     if (functionError) {
         console.error('Failed to update user profile via edge function:', functionError);
-        // The rating was saved, but the profile update failed.
-        // We'll still refetch all data to keep the UI consistent and show the new rating.
     }
     
-    // 4. Refetch all data to update the UI.
+    // 4. Refetch all data to update the UI and get the new profile.
     fetchAllRatings(); // For average ratings
-    await fetchUserData(); // For user's own rating history & level
+    const { profile: newProfile } = await fetchUserData(); // For user's own rating history & level
 
-    // 5. Trigger popups for new review.
-    const newLevel = profileUpdateData?.newLevel || oldLevel;
-    if (newLevel > oldLevel) {
-        setLeveledUpInfo({ key: Date.now(), newLevel });
+    // 5. Trigger popups for new review, comparing old and new profiles.
+    if (newProfile && oldProfile && newProfile.level > oldProfile.level) {
+        setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
     }
     setReviewPopupInfo({ key: Date.now() });
 
@@ -374,22 +368,20 @@ const App = () => {
     if (!session || !userProfile) return;
     console.log("Developer action: Force review popup and level up");
 
-    const oldLevel = userProfile.level;
-    // Invoke the secure edge function
-    const { data: profileUpdateData, error: functionError } = await supabase.functions.invoke('increment-review-count');
+    const oldProfile = userProfile;
+    const { error: functionError } = await supabase.functions.invoke('increment-review-count');
 
     if (functionError) {
         console.error("Developer action 'force review' failed:", functionError);
-        return; // Stop if the function call fails
+        return;
     }
 
-    // Refetch data to reflect change
-    await fetchUserData();
+    // Refetch data to reflect change and get the new profile
+    const { profile: newProfile } = await fetchUserData();
 
-    // Trigger popups
-    const newLevel = profileUpdateData?.newLevel || oldLevel;
-    if (newLevel > oldLevel) {
-        setLeveledUpInfo({ key: Date.now(), newLevel });
+    // Trigger popups based on the change
+    if (newProfile && oldProfile && newProfile.level > oldProfile.level) {
+        setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
     }
     setReviewPopupInfo({ key: Date.now() });
   };
@@ -456,6 +448,7 @@ const App = () => {
                     selectedPubId={selectedPubId}
                     onPlacesFound={handlePlacesFound}
                     theme={settings.theme}
+                    filter={filter}
                   />
               </div>
               <div className={`flex-shrink-0 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out ${isListExpanded ? 'max-h-[40%]' : 'max-h-14'}`}>
