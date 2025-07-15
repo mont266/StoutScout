@@ -32,7 +32,15 @@ export type Database = {
           username?: string
           xp?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       pubs: {
         Row: {
@@ -87,12 +95,14 @@ export type Database = {
           {
             foreignKeyName: "ratings_pub_id_fkey"
             columns: ["pub_id"]
+            isOneToOne: false
             referencedRelation: "pubs"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "ratings_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           }
