@@ -58,7 +58,7 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMod
                         <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>
                         <div>
                             <p className="font-bold text-gray-900 dark:text-white">{reviews}</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">{reviews === 1 ? 'Review' : 'Reviews'}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{reviews === 1 ? 'Rating' : 'Ratings'}</p>
                         </div>
                     </div>
 
@@ -75,7 +75,7 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMod
                             ></div>
                         </div>
                         <p className="text-xs text-amber-600 dark:text-amber-300 mt-1 text-center">
-                            {reviewsForCurrentLevel} / {REVIEWS_PER_LEVEL} Reviews to next level
+                            {reviewsForCurrentLevel} / {REVIEWS_PER_LEVEL} Ratings to next level
                         </p>
                     </div>
                 </div>
@@ -125,7 +125,7 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMod
                           onClick={onForceReview}
                           className="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
                         >
-                          Force +1 Review &amp; Level Up Check
+                          Force +1 Rating &amp; Level Up Check
                         </button>
                     </div>
                   </div>

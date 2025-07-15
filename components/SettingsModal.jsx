@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants.js';
 
@@ -105,7 +106,7 @@ const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, userProfil
           </div>
 
           {/* Developer Mode */}
-          {userProfile?.username === 'mont26' && (
+          {userProfile?.username === 'mont266' && (
             <div>
               <label className="block text-lg font-semibold text-gray-800 dark:text-white mb-2" id="dev-mode-label">Developer Mode</label>
               <div className="flex rounded-lg bg-gray-200 dark:bg-gray-900 p-1" role="group" aria-labelledby="dev-mode-label">
