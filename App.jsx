@@ -135,10 +135,10 @@ const App = () => {
 
   // --- CORE APP LOGIC ---
 
-  const handlePlacesFound = (places, capped) => {
+  const handlePlacesFound = useCallback((places, capped) => {
     setGooglePlaces(places);
     setResultsAreCapped(capped);
-  };
+  }, []);
 
   useEffect(() => {
     const root = window.document.documentElement;
