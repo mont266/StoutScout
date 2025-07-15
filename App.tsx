@@ -1,8 +1,11 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Session } from '@supabase/supabase-js';
 import { Pub, Rating, FilterType, Coordinates, Settings, UserProfile, UserRating } from './types';
 import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants';
-import { loadRatings, saveRatings, loadSettings, saveSettings, loadUserProfile, saveUserProfile, loadUserRatings, saveUserRatings } from './storage';
+import { loadSettings, saveSettings } from './storage';
+import { supabase } from './supabase';
+
 import MapComponent from './components/Map';
 import FilterControls from './components/FilterControls';
 import PubDetails from './components/PubDetails';
@@ -12,11 +15,17 @@ import SettingsModal from './components/SettingsModal';
 import ProfilePage from './components/ProfilePage';
 import XPPopup from './components/XPPopup';
 import LevelUpPopup from './components/LevelUpPopup';
+import AuthPage from './components/AuthPage';
 
 const App: React.FC = () => {
+  // Auth state
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // App state
   const [googlePlaces, setGooglePlaces] = useState<google.maps.places.Place[]>([]);
   const [pubs, setPubs] = useState<Pub[]>([]);
-  const [allRatings, setAllRatings] = useState<Map<string, Rating[]>>(() => loadRatings());
+  const [allRatings, setAllRatings] = useState<Map<string, Rating[]>>(new Map());
   const [selectedPubId, setSelectedPubId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>(FilterType.Distance);
   const [isListExpanded, setIsListExpanded] = useState(true);
@@ -29,14 +38,92 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<Settings>(loadSettings);
 
   const [currentView, setCurrentView] = useState<'map' | 'profile'>('map');
-  const [userProfile, setUserProfile] = useState<UserProfile>(loadUserProfile);
-  const [userRatings, setUserRatings] = useState<UserRating[]>(loadUserRatings);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userRatings, setUserRatings] = useState<UserRating[]>([]);
 
   const [reviewPopupInfo, setReviewPopupInfo] = useState<{key: number} | null>(null);
   const [leveledUpInfo, setLeveledUpInfo] = useState<{key: number, newLevel: number} | null>(null);
 
+  // --- AUTH & DATA FETCHING ---
 
-  // Effect to apply the theme to the root <html> element
+  useEffect(() => {
+    setLoading(true);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session);
+        setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchAllRatings = async () => {
+      const { data, error } = await supabase
+          .from('ratings')
+          .select('pub_id, price, quality');
+
+      if (error) {
+          console.error("Error fetching all ratings:", error);
+          return;
+      }
+
+      const ratingsMap = new Map<string, Rating[]>();
+      for (const rating of data) {
+          const existing = ratingsMap.get(rating.pub_id) || [];
+          ratingsMap.set(rating.pub_id, [...existing, { price: rating.price, quality: rating.quality }]);
+      }
+      setAllRatings(ratingsMap);
+  };
+  
+  const fetchUserData = async (userId: string) => {
+      // Fetch Profile
+      const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+      
+      if (profileError) console.error("Error fetching profile:", profileError);
+      else setUserProfile(profileData);
+      
+      // Fetch user's ratings
+      const { data: userRatingsData, error: userRatingsError } = await supabase
+          .from('ratings')
+          .select('id, pub_id, price, quality, created_at, pubs(name, address)')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+      if (userRatingsError) {
+          console.error("Error fetching user ratings:", userRatingsError);
+          return;
+      }
+      
+      const mappedUserRatings: UserRating[] = userRatingsData.map(r => ({
+        id: r.id,
+        pubId: r.pub_id,
+        rating: { price: r.price, quality: r.quality },
+        timestamp: new Date(r.created_at).getTime(),
+        pubName: r.pubs?.name || 'Unknown Pub',
+        pubAddress: r.pubs?.address || 'Unknown Address',
+      }));
+
+      setUserRatings(mappedUserRatings);
+  };
+
+  useEffect(() => {
+    if (session) {
+      fetchAllRatings();
+      fetchUserData(session.user.id);
+    } else {
+      // Clear user-specific data on logout
+      setUserProfile(null);
+      setUserRatings([]);
+      // We could clear allRatings, but keeping it provides data for logged-out users if we change the UX
+    }
+  }, [session]);
+
+
+  // --- CORE APP LOGIC ---
+
   useEffect(() => {
     const root = window.document.documentElement;
     if (settings.theme === 'dark') {
@@ -46,35 +133,24 @@ const App: React.FC = () => {
     }
   }, [settings.theme]);
 
-  // Effect to hide the Review popup after its animation finishes
   useEffect(() => {
     if (reviewPopupInfo) {
-      const timer = setTimeout(() => {
-        setReviewPopupInfo(null);
-      }, 2000); // Must match the animation duration in index.html
-
+      const timer = setTimeout(() => setReviewPopupInfo(null), 2000);
       return () => clearTimeout(timer);
     }
   }, [reviewPopupInfo]);
   
-  // Effect to hide the Level Up popup after its animation finishes
   useEffect(() => {
     if (leveledUpInfo) {
-      const timer = setTimeout(() => {
-        setLeveledUpInfo(null);
-      }, 3000); // Must match the animation duration in index.html
-
+      const timer = setTimeout(() => setLeveledUpInfo(null), 3000);
       return () => clearTimeout(timer);
     }
   }, [leveledUpInfo]);
 
-  // This effect runs when places are found by the map OR when ratings are updated.
-  // It combines the Google Place data with our stored ratings to create the definitive list of pubs.
   useEffect(() => {
     if (googlePlaces.length === 0 && pubs.length === 0) return;
 
     const newPubs = googlePlaces.map((place): Pub | null => {
-      // Use properties from the new Place object
       if (!place.id || !place.displayName || !place.location || !place.formattedAddress) {
         return null;
       }
@@ -97,6 +173,7 @@ const App: React.FC = () => {
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   const existingUserRatingForSelectedPub = useMemo(() => {
     if (!selectedPub) return undefined;
+    // The check now uses pubId, which matches the mapped Supabase data.
     return userRatings.find(r => r.pubId === selectedPub.id);
   }, [selectedPub, userRatings]);
 
@@ -121,13 +198,11 @@ const App: React.FC = () => {
     return R * c; // in metres
   }, []);
 
-  // Effect to watch user's live position
   useEffect(() => {
     if (!navigator.geolocation) {
       setLocationError("Geolocation is not supported. Using default location.");
       return;
     }
-
     const watcher = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -135,23 +210,15 @@ const App: React.FC = () => {
         setLocationError(null);
       },
       (error) => {
-        let message = "An unknown error occurred.";
-        if (error.code === error.PERMISSION_DENIED) {
-            message = "Location access denied. Showing pubs for default location.";
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-            message = "Location information unavailable. Using last known or default location.";
-        }
-        setLocationError(message);
+        setLocationError(error.code === error.PERMISSION_DENIED ? "Location access denied." : "Could not get location.");
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-
     return () => navigator.geolocation.clearWatch(watcher);
   }, []);
 
-  // Effect to trigger a new search when user moves a significant distance
   useEffect(() => {
-    if (getDistance(userLocation, searchCenter) > 500) { // 500 meter threshold
+    if (getDistance(userLocation, searchCenter) > 500) {
       setSearchCenter(userLocation);
     }
   }, [userLocation, searchCenter, getDistance]);
@@ -170,173 +237,109 @@ const App: React.FC = () => {
     });
   }, [pubs, filter, userLocation, getDistance]);
 
-  const handleRatePub = useCallback((pubId: string, pubName: string, pubAddress: string, newRating: Rating) => {
-    const existingUserRatingIndex = userRatings.findIndex(r => r.pubId === pubId);
+  const handleRatePub = useCallback(async (pubId: string, pubName: string, pubAddress: string, newRating: Rating) => {
+    if (!session || !selectedPub) return;
 
-    if (existingUserRatingIndex !== -1) {
-      // --- UPDATE an existing rating ---
-      const oldUserRating = userRatings[existingUserRatingIndex];
-
-      // 1. Update allRatings Map by replacing the old rating with the new one
-      setAllRatings(prevAllRatings => {
-        const newAllRatings = new Map(prevAllRatings);
-        const pubRatings = [...(newAllRatings.get(pubId) || [])]; // Make a mutable copy
-        const oldRating = oldUserRating.rating;
-
-        // Find and remove the old rating value. This is robust enough for a single-user app.
-        const indexToRemove = pubRatings.findIndex(r => r.price === oldRating.price && r.quality === oldRating.quality);
-        if (indexToRemove !== -1) {
-            pubRatings.splice(indexToRemove, 1);
-        }
-        
-        pubRatings.push(newRating); // Add the new one
-        newAllRatings.set(pubId, pubRatings);
-        saveRatings(newAllRatings);
-        return newAllRatings;
-      });
-
-      // 2. Update the specific user rating in their history
-      setUserRatings(prevUserRatings => {
-        const newUserRatings = [...prevUserRatings];
-        newUserRatings[existingUserRatingIndex] = {
-            ...oldUserRating,
-            pubAddress: pubAddress,
-            rating: newRating,
-            timestamp: Date.now(), // Update timestamp on edit
-        };
-        saveUserRatings(newUserRatings);
-        return newUserRatings;
-      });
-      // 3. No level progression for updating a rating.
-
-    } else {
-      // --- ADD a new rating ---
-      // 1. Update pub-specific ratings
-      setAllRatings(prevRatings => {
-        const newRatingsMap = new Map(prevRatings);
-        const currentRatings = newRatingsMap.get(pubId) || [];
-        newRatingsMap.set(pubId, [...currentRatings, newRating]);
-        saveRatings(newRatingsMap);
-        return newRatingsMap;
-      });
-
-      // 2. Create and add to user's personal rating history
-      const newUserRating: UserRating = {
-          pubId,
-          pubName,
-          pubAddress,
-          rating: newRating,
-          timestamp: Date.now(),
-      };
-
-      // 3. Update user ratings list and check for level-up
-      setUserRatings(prevUserRatings => {
-          const oldLevel = Math.floor(prevUserRatings.length / REVIEWS_PER_LEVEL);
-          const newLevel = Math.floor((prevUserRatings.length + 1) / REVIEWS_PER_LEVEL);
-
-          if (newLevel > oldLevel) {
-            setLeveledUpInfo({ key: Date.now(), newLevel });
-          }
-
-          const updatedRatings = [newUserRating, ...prevUserRatings];
-          saveUserRatings(updatedRatings);
-          return updatedRatings;
-      });
-
-      // 4. Trigger Review Popup
-      setReviewPopupInfo({ key: Date.now() });
+    // 1. Upsert the pub into the 'pubs' table to ensure it exists.
+    const { error: pubError } = await supabase.from('pubs').upsert({
+      id: pubId,
+      name: pubName,
+      address: pubAddress,
+      lat: selectedPub.location.lat,
+      lng: selectedPub.location.lng,
+    });
+    if (pubError) {
+      console.error("Error upserting pub:", pubError);
+      return;
     }
-  }, [userRatings]);
 
-  const handleForceReview = () => {
-    // This function mimics a user submitting a new review for developer testing.
+    const isUpdating = userRatings.some(r => r.pubId === pubId);
     
-    // 1. Create a fake user rating to add to the history.
-    const fakeUserRating: UserRating = {
-        pubId: `dev-forced-review-${Date.now()}`,
-        pubName: 'Developer Test Pint',
-        pubAddress: '123 Debug Lane, Cyberspace',
-        rating: { price: 3, quality: 4 }, // Arbitrary valid rating
-        timestamp: Date.now(),
+    // 2. Insert or update the rating in the 'ratings' table.
+    const ratingPayload = {
+      pub_id: pubId,
+      user_id: session.user.id,
+      price: newRating.price,
+      quality: newRating.quality,
     };
 
-    // 2. Update the list of user ratings, which will also trigger
-    //    a check for leveling up. This uses the functional update form of setState.
-    setUserRatings(prevUserRatings => {
-        const oldLevel = Math.floor(prevUserRatings.length / REVIEWS_PER_LEVEL);
-        const newLevel = Math.floor((prevUserRatings.length + 1) / REVIEWS_PER_LEVEL);
+    const { error: ratingError } = isUpdating
+      ? await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
+      : await supabase.from('ratings').insert(ratingPayload);
+    
+    if (ratingError) {
+        console.error('Error saving rating:', ratingError);
+        return;
+    }
 
-        // If the new review causes a level-up, trigger the celebration popup.
+    // 3. On success, refetch all data to update the UI.
+    fetchAllRatings(); // For average ratings
+    fetchUserData(session.user.id); // For user's own rating history & level
+
+    // 4. Trigger popups for new (not updated) reviews
+    if (!isUpdating) {
+        const oldLevel = Math.floor(userRatings.length / REVIEWS_PER_LEVEL);
+        const newLevel = Math.floor((userRatings.length + 1) / REVIEWS_PER_LEVEL);
         if (newLevel > oldLevel) {
           setLeveledUpInfo({ key: Date.now(), newLevel });
         }
-        
-        // Add the new fake rating to the list and save it to storage.
-        const updatedRatings = [fakeUserRating, ...prevUserRatings];
-        saveUserRatings(updatedRatings);
-        return updatedRatings;
-    });
+        setReviewPopupInfo({ key: Date.now() });
+    }
+  }, [session, userRatings, selectedPub]);
 
-    // 3. Trigger the "+1 Review" confirmation popup.
+  const handleForceReview = async () => {
+    // This function can be adapted for Supabase if needed,
+    // e.g., by inserting a fake rating for the current user.
+    // For now, it remains a client-side simulation for UI testing.
+    console.log("Developer action: Force review popup");
     setReviewPopupInfo({ key: Date.now() });
+    const currentLevel = userProfile ? Math.floor(userRatings.length / REVIEWS_PER_LEVEL) : 0;
+    setLeveledUpInfo({ key: Date.now(), newLevel: currentLevel + 1 });
   };
-
+  
   const handleSelectPub = useCallback((pubId: string | null) => {
     setSelectedPubId(pubId);
-    if (pubId && !isListExpanded) {
-        setIsListExpanded(true);
-    }
+    if (pubId && !isListExpanded) setIsListExpanded(true);
   }, [isListExpanded]);
   
-  const handleCloseDetails = () => {
-    setSelectedPubId(null);
-  };
-
-  const handleToggleList = () => {
-    setIsListExpanded(prev => !prev);
-  };
-
+  const handleCloseDetails = () => setSelectedPubId(null);
+  const handleToggleList = () => setIsListExpanded(prev => !prev);
   const handleSettingsChange = (newSettings: Settings) => {
     setSettings(newSettings);
     saveSettings(newSettings);
   };
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setCurrentView('map');
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-400"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthPage />;
+  }
 
   return (
     <div className="w-full max-w-md mx-auto h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased">
-      {currentView === 'map' ? (
+      {currentView === 'map' && userProfile ? (
         <>
           <header className="p-2 bg-gray-50 dark:bg-gray-800 shadow-lg z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              {/* Left cell for the settings button */}
               <div className="flex justify-start">
-                  <button
-                      onClick={() => setIsSettingsOpen(true)}
-                      className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
-                      aria-label="Open settings"
-                  >
-                      <i className="fas fa-cog fa-lg"></i>
-                  </button>
+                  <button onClick={() => setIsSettingsOpen(true)} className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" aria-label="Open settings"><i className="fas fa-cog fa-lg"></i></button>
               </div>
-
-              {/* Center cell contains the logo, which will be centered by the grid layout. */}
               <Logo /> 
-
-              {/* Right cell for the profile button */}
               <div className="flex justify-end">
-                  <button
-                      onClick={() => setCurrentView('profile')}
-                      className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
-                      aria-label="Open profile"
-                  >
-                      <i className="fas fa-user-circle fa-lg"></i>
-                  </button>
+                  <button onClick={() => setCurrentView('profile')} className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" aria-label="Open profile"><i className="fas fa-user-circle fa-lg"></i></button>
               </div>
           </header>
 
-          {locationError && (
-            <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">
-              {locationError}
-            </div>
-          )}
+          {locationError && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
           <FilterControls currentFilter={filter} onFilterChange={setFilter} />
 
           <div className="flex-grow flex flex-col overflow-hidden">
@@ -387,15 +390,16 @@ const App: React.FC = () => {
             userProfile={userProfile}
           />
         </>
-      ) : (
+      ) : userProfile ? (
         <ProfilePage 
           userProfile={userProfile}
           userRatings={userRatings}
           onClose={() => setCurrentView('map')}
+          onLogout={handleLogout}
           developerMode={settings.developerMode}
           onForceReview={handleForceReview}
         />
-      )}
+      ) : null}
       {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
       {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
     </div>

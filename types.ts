@@ -31,18 +31,25 @@ export interface Settings {
   developerMode: boolean;
 }
 
+// Updated to better match Supabase 'profiles' table
 export interface UserProfile {
+  id: string;
   username: string;
-  isBetaTester: boolean;
+  is_beta_tester: boolean;
+  updated_at?: string;
 }
 
+// Kept signature the same, but will be populated by Supabase data.
+// This minimizes changes needed in consuming components.
 export interface UserRating {
+  id: number;
   pubId: string;
   pubName: string;
   pubAddress?: string;
   rating: Rating;
-  timestamp: number; // Unix timestamp
+  timestamp: number; // Unix timestamp (will be derived from created_at)
 }
+
 
 export interface Rank {
   name: string;

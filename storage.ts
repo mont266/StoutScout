@@ -1,10 +1,7 @@
-import { Rating, Settings, UserProfile, UserRating } from './types';
+import { Settings } from './types';
 import { DEFAULT_RADIUS_MI, MILES_TO_METERS } from './constants';
 
-const RATINGS_STORAGE_KEY = 'stout-scout-ratings';
 const SETTINGS_STORAGE_KEY = 'stout-scout-settings';
-const USER_PROFILE_STORAGE_KEY = 'stout-scout-user-profile';
-const USER_RATINGS_STORAGE_KEY = 'stout-scout-user-ratings';
 
 /**
  * Loads the user's settings from localStorage.
@@ -44,95 +41,5 @@ export const saveSettings = (settings: Settings) => {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   } catch (e) {
     console.error("Failed to save settings to localStorage", e);
-  }
-};
-
-
-/**
- * Loads the ratings map from localStorage.
- * Ratings are stored as a JSON string of an array of [key, value] pairs.
- */
-export const loadRatings = (): Map<string, Rating[]> => {
-  try {
-    const storedRatings = localStorage.getItem(RATINGS_STORAGE_KEY);
-    if (storedRatings) {
-      const parsed = JSON.parse(storedRatings);
-      return new Map(parsed);
-    }
-  } catch (e) {
-    console.error("Failed to load ratings from localStorage", e);
-  }
-  return new Map();
-};
-
-/**
- * Saves the ratings map to localStorage.
- * Converts the Map to an array of [key, value] pairs for JSON serialization.
- */
-export const saveRatings = (ratings: Map<string, Rating[]>) => {
-  try {
-    const array = Array.from(ratings.entries());
-    localStorage.setItem(RATINGS_STORAGE_KEY, JSON.stringify(array));
-  } catch (e) {
-    console.error("Failed to save ratings to localStorage", e);
-  }
-};
-
-/**
- * Loads the user's profile from localStorage.
- */
-export const loadUserProfile = (): UserProfile => {
-  try {
-    const stored = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      const username = parsed.username || 'mont26';
-      // The user 'mont26' is always a beta tester.
-      // Other users might have the flag set from previous versions.
-      const isBetaTester = username === 'mont26' || parsed.isBetaTester === true;
-      return { username, isBetaTester };
-    }
-  } catch (e) {
-    console.error("Failed to load user profile from localStorage", e);
-  }
-  // Default profile for a new user.
-  return {
-    username: 'mont26',
-    isBetaTester: true,
-  };
-};
-
-/**
- * Saves the user's profile to localStorage.
- */
-export const saveUserProfile = (profile: UserProfile) => {
-  try {
-    localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile));
-  } catch (e) {
-    console.error("Failed to save user profile to localStorage", e);
-  }
-};
-
-/**
- * Loads the user's submitted ratings from localStorage.
- */
-export const loadUserRatings = (): UserRating[] => {
-  try {
-    const stored = localStorage.getItem(USER_RATINGS_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch (e) {
-    console.error("Failed to load user ratings from localStorage", e);
-  }
-  return [];
-};
-
-/**
- * Saves the user's submitted ratings to localStorage.
- */
-export const saveUserRatings = (ratings: UserRating[]) => {
-  try {
-    localStorage.setItem(USER_RATINGS_STORAGE_KEY, JSON.stringify(ratings));
-  } catch (e) {
-    console.error("Failed to save user ratings to localStorage", e);
   }
 };

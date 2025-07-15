@@ -8,12 +8,15 @@ interface ProfilePageProps {
   userProfile: UserProfile;
   userRatings: UserRating[];
   onClose: () => void;
+  onLogout: () => void;
   developerMode: boolean;
   onForceReview: () => void;
 }
 
-const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, userRatings, onClose, developerMode, onForceReview }) => {
-    const { username, isBetaTester } = userProfile;
+const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, userRatings, onClose, onLogout, developerMode, onForceReview }) => {
+    const { username } = userProfile;
+    // Special check for our beta tester 'mont26' or anyone with the DB flag.
+    const isBetaTester = userProfile.username === 'mont26' || userProfile.is_beta_tester;
     const totalReviews = userRatings.length;
     
     const level = Math.floor(totalReviews / REVIEWS_PER_LEVEL);
@@ -136,12 +139,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, userRatings, onC
                 )}
 
                 {/* Recent Ratings */}
-                <div>
+                <div className="mb-6">
                     <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Your Recent Ratings</h3>
                     {userRatings.length > 0 ? (
                         <ul className="space-y-3">
                             {userRatings.slice(0, 10).map((r) => ( // Show latest 10
-                                <li key={r.timestamp} className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                                <li key={r.id} className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md">
                                     <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                                         <div className="flex-grow pr-4 min-w-0">
                                             <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{r.pubName}</p>
@@ -170,6 +173,17 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, userRatings, onC
                             <p>Go find a pint and start your journey!</p>
                         </div>
                     )}
+                </div>
+
+                {/* Sign Out Button */}
+                <div className="mt-auto pt-4">
+                    <button
+                      onClick={onLogout}
+                      className="w-full flex items-center justify-center space-x-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      <i className="fas fa-sign-out-alt"></i>
+                      <span>Sign Out</span>
+                    </button>
                 </div>
             </main>
         </div>

@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
 import { Pub, Coordinates } from '../types';
@@ -72,7 +73,7 @@ const libraries: ('places' | 'marker')[] = ['places', 'marker'];
 const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme }) => {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: 'AIzaSyDOIwBb0UfqszI0ItiXtZF_8BSYXFveqn0',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
     libraries,
     version: 'beta',
   });
