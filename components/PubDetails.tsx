@@ -1,10 +1,9 @@
 
-
-
 import React from 'react';
 import { Pub, Rating, UserRating } from '../types';
 import StarRating from './StarRating';
 import RatingForm from './RatingForm';
+import { Session } from '@supabase/supabase-js';
 
 interface PubDetailsProps {
   pub: Pub;
@@ -12,9 +11,11 @@ interface PubDetailsProps {
   onRate: (pubId: string, pubName: string, pubAddress: string, rating: Rating) => void;
   getAverageRating: (ratings: Rating[], key: keyof Rating) => number;
   existingUserRating?: UserRating;
+  session: Session | null;
+  onLoginRequest: () => void;
 }
 
-const PubDetails: React.FC<PubDetailsProps> = ({ pub, onClose, onRate, getAverageRating, existingUserRating }) => {
+const PubDetails: React.FC<PubDetailsProps> = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest }) => {
   const avgPrice = getAverageRating(pub.ratings, 'price');
   const avgQuality = getAverageRating(pub.ratings, 'quality');
 
@@ -52,12 +53,24 @@ const PubDetails: React.FC<PubDetailsProps> = ({ pub, onClose, onRate, getAverag
 
         <div className="space-y-4">
            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-             {existingUserRating ? 'Update Your Rating' : 'Rate Your Pint'}
+             {session && existingUserRating ? 'Update Your Rating' : 'Rate Your Pint'}
             </h3>
-           <RatingForm 
-             onSubmit={(rating) => onRate(pub.id, pub.name, pub.address, rating)}
-             existingRating={existingUserRating?.rating}
-            />
+            {session ? (
+               <RatingForm 
+                 onSubmit={(rating) => onRate(pub.id, pub.name, pub.address, rating)}
+                 existingRating={existingUserRating?.rating}
+                />
+            ) : (
+                <div className="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg text-center">
+                    <p className="text-gray-700 dark:text-gray-300 mb-3">Want to rate this pub?</p>
+                    <button
+                        onClick={onLoginRequest}
+                        className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors"
+                    >
+                        Sign In or Create Account
+                    </button>
+                </div>
+            )}
         </div>
       </div>
     </div>

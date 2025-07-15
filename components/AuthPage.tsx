@@ -1,14 +1,31 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import Logo from './Logo';
 
-const AuthPage: React.FC = () => {
+interface AuthPageProps {
+  onClose: () => void;
+}
+
+const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +62,7 @@ const AuthPage: React.FC = () => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
+      // On success, the onAuthStateChange listener in App.tsx will close the modal.
     } catch (err: any) {
       setError(err.error_description || err.message);
     } finally {
@@ -53,12 +71,25 @@ const AuthPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <div className="max-w-sm w-full">
-        <div className="mb-8">
-            <Logo />
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl border-t-4 border-amber-400">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-60 dark:bg-opacity-70 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="max-w-sm w-full" onClick={e => e.stopPropagation()}>
+        <div className="relative bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl border-t-4 border-amber-400">
+          <button
+              onClick={onClose}
+              className="absolute top-2 right-2 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full"
+              aria-label="Close authentication"
+          >
+              <i className="fas fa-times fa-lg"></i>
+          </button>
+          
+          <div className="mb-6">
+              <Logo />
+          </div>
           <h2 className="text-2xl font-bold text-center text-gray-800 dark:text-white mb-2">
             {isSignUp ? 'Create Account' : 'Welcome Back'}
           </h2>

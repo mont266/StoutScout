@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Settings, DistanceUnit, UserProfile } from '../types';
 import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants';
@@ -7,7 +8,7 @@ interface SettingsModalProps {
   onClose: () => void;
   settings: Settings;
   onSettingsChange: (newSettings: Settings) => void;
-  userProfile: UserProfile;
+  userProfile: UserProfile | null;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSettingsChange, userProfile }) => {
@@ -114,7 +115,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
           </div>
 
           {/* Developer Mode */}
-          {userProfile.username === 'mont26' && (
+          {userProfile?.username === 'mont26' && (
             <div>
               <label className="block text-lg font-semibold text-gray-800 dark:text-white mb-2" id="dev-mode-label">Developer Mode</label>
               <div className="flex rounded-lg bg-gray-200 dark:bg-gray-900 p-1" role="group" aria-labelledby="dev-mode-label">

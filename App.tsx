@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Pub, Rating, FilterType, Coordinates, Settings, UserProfile, UserRating } from './types';
@@ -22,6 +21,7 @@ const App: React.FC = () => {
   // Auth state
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // App state
   const [googlePlaces, setGooglePlaces] = useState<google.maps.places.Place[]>([]);
@@ -52,11 +52,16 @@ const App: React.FC = () => {
     setLoading(true);
     supabase.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
-        setLoading(false);
     });
+    
+    // Fetch all public ratings for everyone
+    fetchAllRatings();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         setSession(session);
+        if (session) {
+            setIsAuthOpen(false); // Close auth modal on successful login
+        }
         setLoading(false);
     });
 
@@ -118,13 +123,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (session?.user) {
-      fetchAllRatings();
       fetchUserData(session.user.id);
     } else {
       // Clear user-specific data on logout
       setUserProfile(null);
       setUserRatings([]);
-      setAllRatings(new Map());
     }
   }, [session]);
 
@@ -160,7 +163,7 @@ const App: React.FC = () => {
   }, [leveledUpInfo]);
 
   useEffect(() => {
-    if (googlePlaces.length === 0 && pubs.length === 0) return;
+    if (googlePlaces.length === 0 && pubs.length === 0 && allRatings.size === 0) return;
 
     const newPubs = googlePlaces.map((place): Pub | null => {
       if (!place.id || !place.displayName || !place.location || !place.formattedAddress) {
@@ -345,6 +348,14 @@ const App: React.FC = () => {
     setSelectedPubId(pubId);
     if (pubId && !isListExpanded) setIsListExpanded(true);
   }, [isListExpanded]);
+
+  const handleProfileClick = () => {
+    if (session) {
+      setCurrentView('profile');
+    } else {
+      setIsAuthOpen(true);
+    }
+  };
   
   const handleCloseDetails = () => setSelectedPubId(null);
   const handleToggleList = () => setIsListExpanded(prev => !prev);
@@ -365,13 +376,11 @@ const App: React.FC = () => {
     );
   }
 
-  if (!session) {
-    return <AuthPage />;
-  }
-
   return (
     <div className="w-full max-w-md mx-auto h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased">
-      {currentView === 'map' && userProfile ? (
+      {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
+      
+      {currentView === 'map' ? (
         <>
           <header className="p-2 bg-gray-50 dark:bg-gray-800 shadow-lg z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               <div className="flex justify-start">
@@ -379,7 +388,7 @@ const App: React.FC = () => {
               </div>
               <Logo /> 
               <div className="flex justify-end">
-                  <button onClick={() => setCurrentView('profile')} className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" aria-label="Open profile"><i className="fas fa-user-circle fa-lg"></i></button>
+                  <button onClick={handleProfileClick} className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" aria-label="Open profile"><i className="fas fa-user-circle fa-lg"></i></button>
               </div>
           </header>
 
@@ -423,6 +432,8 @@ const App: React.FC = () => {
                     onRate={handleRatePub}
                     getAverageRating={getAverageRating}
                     existingUserRating={existingUserRatingForSelectedPub}
+                    session={session}
+                    onLoginRequest={() => setIsAuthOpen(true)}
                 />
             )}
           </div>
