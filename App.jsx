@@ -52,6 +52,7 @@ const App = () => {
     setLoading(true);
     supabase.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
+        setLoading(false); // Stop loading after initial session check
     });
     
     // Fetch all public ratings for everyone
@@ -62,7 +63,7 @@ const App = () => {
         if (session) {
             setIsAuthOpen(false); // Close auth modal on successful login
         }
-        setLoading(false);
+        // No need to set loading here, as initial load is handled above
     });
 
     return () => subscription.unsubscribe();
@@ -87,9 +88,6 @@ const App = () => {
   };
   
   const fetchUserData = async () => {
-    // Get the freshest session data directly before we use it.
-    // This can help avoid timing issues after login where the session from
-    // onAuthStateChange might not be fully propagated for RLS checks.
     const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError || !currentSession) {
@@ -106,7 +104,7 @@ const App = () => {
         .eq('id', userId)
         .single();
     
-    // If profile not found, it's likely the first login after signup. Create it.
+    // If profile not found, it's the first login. Create it.
     if (profileError && profileError.code === 'PGRST116') {
       console.log('Profile not found for user, attempting to create one.');
       const newUsername = currentSession.user.user_metadata?.username;
@@ -115,6 +113,20 @@ const App = () => {
         console.error("Fatal: Cannot create profile, username not found in user metadata on first login.", currentSession.user);
         return;
       }
+
+      // --- CRITICAL FIX ---
+      // Explicitly update the user's metadata before creating the profile.
+      // This helps prevent a race condition on the backend where the RLS policy for
+      // profile insertion fails because the user's auth data hasn't fully propagated yet.
+      console.log('First login detected. Explicitly updating user metadata before creating profile.');
+      const { error: updateUserError } = await supabase.auth.updateUser({
+        data: { username: newUsername, full_name: newUsername }
+      });
+      if (updateUserError) {
+        // This is not ideal, but we can still try to create the profile.
+        console.warn('Could not explicitly update user metadata. Proceeding with profile creation anyway.', updateUserError);
+      }
+      // --- END FIX ---
       
       const { data: newProfile, error: createError } = await supabase
         .from('profiles')
@@ -133,7 +145,7 @@ const App = () => {
       }
 
       console.log('Profile created successfully:', newProfile);
-      profileData = newProfile; // Use the newly created profile data
+      profileData = newProfile;
     
     } else if (profileError) {
       console.error("Error fetching profile:", profileError);

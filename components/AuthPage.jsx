@@ -45,6 +45,7 @@ const AuthPage = ({ onClose }) => {
           options: {
             data: {
               username: username,
+              full_name: username, // Also set full_name in metadata
             },
           },
         });
