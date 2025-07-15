@@ -1,7 +1,8 @@
 
+
 import React, { useEffect, useRef } from 'react';
-import { Pub, FilterType, Rating, Coordinates, DistanceUnit } from '../types';
-import StarRating from './StarRating';
+import { Pub, FilterType, Rating, Coordinates, DistanceUnit } from '../types.ts';
+import StarRating from './StarRating.tsx';
 
 interface PubListProps {
   pubs: Pub[];

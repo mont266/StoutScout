@@ -1,5 +1,5 @@
 import React from 'react';
-import { getRankData } from '../utils';
+import { getRankData } from '../utils.ts';
 
 interface LevelUpPopupProps {
   newLevel: number;

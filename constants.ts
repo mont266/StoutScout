@@ -1,4 +1,4 @@
-import { Coordinates, Rank } from './types';
+import { Coordinates, Rank } from './types.ts';
 
 // St Stephen's Green, a fallback central point in Dublin for when live location is not available.
 export const DEFAULT_LOCATION: Coordinates = { lat: 53.3498, lng: -6.2603 };

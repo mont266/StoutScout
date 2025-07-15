@@ -1,8 +1,9 @@
 
+
 import React from 'react';
-import { Pub, Rating, UserRating } from '../types';
-import StarRating from './StarRating';
-import RatingForm from './RatingForm';
+import { Pub, Rating, UserRating } from '../types.ts';
+import StarRating from './StarRating.tsx';
+import RatingForm from './RatingForm.tsx';
 import { Session } from '@supabase/supabase-js';
 
 interface PubDetailsProps {

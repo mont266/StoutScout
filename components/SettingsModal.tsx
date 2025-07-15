@@ -1,7 +1,8 @@
 
+
 import React from 'react';
-import { Settings, DistanceUnit, UserProfile } from '../types';
-import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants';
+import { Settings, DistanceUnit, UserProfile } from '../types.ts';
+import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants.ts';
 
 interface SettingsModalProps {
   isOpen: boolean;

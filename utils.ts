@@ -1,5 +1,5 @@
-import { RANK_DETAILS } from './constants';
-import { Rank } from './types';
+import { RANK_DETAILS } from './constants.ts';
+import { Rank } from './types.ts';
 
 /**
  * Returns the full rank data object for a given level.

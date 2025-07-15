@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { Rating } from '../types';
-import StarRating from './StarRating';
+import { Rating } from '../types.ts';
+import StarRating from './StarRating.tsx';
 
 interface RatingFormProps {
   onSubmit: (rating: Rating) => void;

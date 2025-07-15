@@ -1,6 +1,7 @@
 
+
 import React from 'react';
-import { FilterType } from '../types';
+import { FilterType } from '../types.ts';
 
 interface FilterControlsProps {
   currentFilter: FilterType;

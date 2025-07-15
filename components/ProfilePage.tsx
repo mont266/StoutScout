@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { UserProfile, UserRating } from '../types';
-import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants';
-import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils';
-import StarRating from './StarRating';
+import { UserProfile, UserRating } from '../types.ts';
+import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants.ts';
+import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.ts';
+import StarRating from './StarRating.tsx';
 
 interface ProfilePageProps {
   userProfile: UserProfile;

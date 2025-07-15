@@ -1,21 +1,21 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { Pub, Rating, FilterType, Coordinates, Settings, UserProfile, UserRating } from './types';
-import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants';
-import { loadSettings, saveSettings } from './storage';
-import { supabase } from './supabase';
+import { Pub, Rating, FilterType, Coordinates, Settings, UserProfile, UserRating } from './types.ts';
+import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants.ts';
+import { loadSettings, saveSettings } from './storage.ts';
+import { supabase } from './supabase.ts';
 
-import MapComponent from './components/Map';
-import FilterControls from './components/FilterControls';
-import PubDetails from './components/PubDetails';
-import PubList from './components/PubList';
-import Logo from './components/Logo';
-import SettingsModal from './components/SettingsModal';
-import ProfilePage from './components/ProfilePage';
-import XPPopup from './components/XPPopup';
-import LevelUpPopup from './components/LevelUpPopup';
-import AuthPage from './components/AuthPage';
+import MapComponent from './components/Map.tsx';
+import FilterControls from './components/FilterControls.tsx';
+import PubDetails from './components/PubDetails.tsx';
+import PubList from './components/PubList.tsx';
+import Logo from './components/Logo.tsx';
+import SettingsModal from './components/SettingsModal.tsx';
+import ProfilePage from './components/ProfilePage.tsx';
+import XPPopup from './components/XPPopup.tsx';
+import LevelUpPopup from './components/LevelUpPopup.tsx';
+import AuthPage from './components/AuthPage.tsx';
 
 const App: React.FC = () => {
   // Auth state

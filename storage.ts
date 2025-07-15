@@ -1,5 +1,5 @@
-import { Settings } from './types';
-import { DEFAULT_RADIUS_MI, MILES_TO_METERS } from './constants';
+import { Settings } from './types.ts';
+import { DEFAULT_RADIUS_MI, MILES_TO_METERS } from './constants.ts';
 
 const SETTINGS_STORAGE_KEY = 'stout-scout-settings';
 

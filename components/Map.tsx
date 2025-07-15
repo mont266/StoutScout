@@ -1,7 +1,8 @@
 
+
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
-import { Pub, Coordinates } from '../types';
+import { Pub, Coordinates } from '../types.ts';
 
 interface MapProps {
   pubs: Pub[];

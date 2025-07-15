@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
-import Logo from './Logo';
+import { supabase } from '../supabase.ts';
+import Logo from './Logo.tsx';
 
 interface AuthPageProps {
   onClose: () => void;
