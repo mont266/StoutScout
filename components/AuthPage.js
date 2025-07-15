@@ -1,22 +1,18 @@
-// This file is now 'components/AuthPage.js'
+
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
-import Logo from './Logo';
+import { supabase } from '../supabase.js';
+import Logo from './Logo.js';
 
-interface AuthPageProps {
-  onClose: () => void;
-}
-
-const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
+const AuthPage = ({ onClose }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         onClose();
       }
@@ -27,7 +23,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
     };
   }, [onClose]);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -62,8 +58,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      // On success, the onAuthStateChange listener in App.tsx will close the modal.
-    } catch (err: any) {
+      // On success, the onAuthStateChange listener in App.js will close the modal.
+    } catch (err) {
       setError(err.error_description || err.message);
     } finally {
       setLoading(false);

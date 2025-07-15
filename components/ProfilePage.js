@@ -1,20 +1,10 @@
-// This file is now 'components/ProfilePage.js'
+
 import React, { useState } from 'react';
-import { UserProfile, UserRating } from '../types';
-import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants';
-import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils';
-import StarRating from './StarRating';
+import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants.js';
+import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
+import StarRating from './StarRating.js';
 
-interface ProfilePageProps {
-  userProfile: UserProfile;
-  userRatings: UserRating[];
-  onClose: () => void;
-  onLogout: () => void;
-  developerMode: boolean;
-  onForceReview: () => void;
-}
-
-const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, userRatings, onClose, onLogout, developerMode, onForceReview }) => {
+const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMode, onForceReview }) => {
     const { username, level, xp } = userProfile;
     // Special check for our beta tester 'mont26' or anyone with the DB flag.
     const isBetaTester = userProfile.username === 'mont26' || userProfile.is_beta_tester;

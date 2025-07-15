@@ -1,13 +1,8 @@
-// This file is now 'components/FilterControls.js'
+
 import React from 'react';
-import { FilterType } from '../types';
+import { FilterType } from '../types.js';
 
-interface FilterControlsProps {
-  currentFilter: FilterType;
-  onFilterChange: (filter: FilterType) => void;
-}
-
-const FilterControls: React.FC<FilterControlsProps> = ({ currentFilter, onFilterChange }) => {
+const FilterControls = ({ currentFilter, onFilterChange }) => {
   const filters = [
     { key: FilterType.Distance, label: 'Nearest', icon: 'fa-map-marker-alt' },
     { key: FilterType.Price, label: 'Best Price', icon: 'fa-tag' },

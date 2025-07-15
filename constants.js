@@ -1,8 +1,6 @@
-// This file is now 'constants.js'
-import { Coordinates, Rank } from './types';
 
 // St Stephen's Green, a fallback central point in Dublin for when live location is not available.
-export const DEFAULT_LOCATION: Coordinates = { lat: 53.3498, lng: -6.2603 };
+export const DEFAULT_LOCATION = { lat: 53.3498, lng: -6.2603 };
 
 // New constants for settings
 export const MILES_TO_METERS = 1609.34;
@@ -15,7 +13,7 @@ export const REVIEWS_PER_LEVEL = 3;
 
 // The single source of truth for rank progression.
 // Each rank has a name, a Font Awesome icon, and the minimum level required.
-export const RANK_DETAILS: Rank[] = [
+export const RANK_DETAILS = [
   { name: "Stout Sprout",       icon: "fa-seedling",       minLevel: 0 },
   { name: "Pint Pilgrim",       icon: "fa-map-signs",      minLevel: 3 },
   { name: "Draught Discoverer", icon: "fa-binoculars",     minLevel: 6 },

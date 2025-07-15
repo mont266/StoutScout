@@ -1,21 +1,9 @@
-// This file is now 'components/PubDetails.js'
+
 import React from 'react';
-import { Pub, Rating, UserRating } from '../types';
-import StarRating from './StarRating';
-import RatingForm from './RatingForm';
-import { Session } from '@supabase/supabase-js';
+import StarRating from './StarRating.js';
+import RatingForm from './RatingForm.js';
 
-interface PubDetailsProps {
-  pub: Pub;
-  onClose: () => void;
-  onRate: (pubId: string, pubName: string, pubAddress: string, rating: Rating) => void;
-  getAverageRating: (ratings: Rating[], key: keyof Rating) => number;
-  existingUserRating?: UserRating;
-  session: Session | null;
-  onLoginRequest: () => void;
-}
-
-const PubDetails: React.FC<PubDetailsProps> = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest }) => {
+const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest }) => {
   const avgPrice = getAverageRating(pub.ratings, 'price');
   const avgQuality = getAverageRating(pub.ratings, 'quality');
 

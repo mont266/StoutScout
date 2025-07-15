@@ -1,3 +1,4 @@
+// This file is now 'types.js'
 
 export interface Coordinates {
   lat: number;
@@ -57,57 +58,4 @@ export interface Rank {
   name: string;
   icon: string;
   minLevel: number;
-}
-
-
-declare global {
-  namespace google.maps {
-    class LatLng {
-      constructor(lat: number, lng: number);
-      lat(): number;
-      lng(): number;
-    }
-
-    class Point {
-      constructor(x: number, y: number);
-    }
-
-    class Size {
-      constructor(width: number, height: number);
-    }
-
-    class Map {
-      panTo(location: Coordinates | LatLng): void;
-    }
-
-    enum SymbolPath {
-      CIRCLE,
-    }
-
-    namespace places {
-      class Place {
-        static searchNearby(request: SearchNearbyRequest): Promise<{ places: Place[] }>;
-        id?: string;
-        displayName?: string;
-        formattedAddress?: string;
-        location?: LatLng;
-      }
-
-      interface SearchNearbyRequest {
-        locationRestriction: {
-          center: Coordinates | LatLng;
-          radius: number;
-        };
-        includedTypes: string[];
-        maxResultCount?: number;
-        fields?: string[];
-      }
-    }
-
-    namespace marker {
-      class AdvancedMarkerElement {
-        constructor(options?: any);
-      }
-    }
-  }
 }

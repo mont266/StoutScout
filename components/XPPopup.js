@@ -1,8 +1,8 @@
-// This file is now 'components/XPPopup.js'
+
 import React from 'react';
 
 // This component is triggered when a new review is submitted.
-const XPPopup: React.FC = () => {
+const XPPopup = () => {
   return (
     <div
       className="fixed inset-0 flex items-center justify-center pointer-events-none z-50"

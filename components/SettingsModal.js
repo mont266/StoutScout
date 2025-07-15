@@ -1,32 +1,23 @@
-// This file is now 'components/SettingsModal.js'
+
 import React from 'react';
-import { Settings, DistanceUnit, UserProfile } from '../types';
-import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants';
+import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants.js';
 
-interface SettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  settings: Settings;
-  onSettingsChange: (newSettings: Settings) => void;
-  userProfile: UserProfile | null;
-}
-
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSettingsChange, userProfile }) => {
+const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, userProfile }) => {
   if (!isOpen) return null;
 
-  const handleUnitChange = (unit: DistanceUnit) => {
+  const handleUnitChange = (unit) => {
     onSettingsChange({ ...settings, unit });
   };
 
-  const handleThemeChange = (theme: 'light' | 'dark') => {
+  const handleThemeChange = (theme) => {
     onSettingsChange({ ...settings, theme });
   };
 
-  const handleDeveloperModeChange = (enabled: boolean) => {
+  const handleDeveloperModeChange = (enabled) => {
     onSettingsChange({ ...settings, developerMode: enabled });
   };
 
-  const handleRadiusChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRadiusChange = (e) => {
     const radiusInMiles = parseFloat(e.target.value);
     onSettingsChange({ ...settings, radius: radiusInMiles * MILES_TO_METERS });
   };

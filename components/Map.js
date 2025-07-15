@@ -1,18 +1,6 @@
-// This file is now 'components/Map.js'
+
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
-import { Pub, Coordinates } from '../types';
-
-interface MapProps {
-  pubs: Pub[];
-  userLocation: Coordinates;
-  searchCenter: Coordinates;
-  searchRadius: number;
-  onSelectPub: (pubId: string | null) => void;
-  selectedPubId: string | null;
-  onPlacesFound: (places: google.maps.places.Place[], wasCapped: boolean) => void;
-  theme: 'light' | 'dark';
-}
 
 const containerStyle = {
   width: '100%',
@@ -65,17 +53,17 @@ const mapStylesLight = [
 ];
 
 
-const libraries: ('places' | 'marker')[] = ['places', 'marker'];
+const libraries = ['places', 'marker'];
 
-const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme }) => {
+const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme }) => {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: process.env.VITE_GOOGLE_MAPS_API_KEY || '',
     libraries,
     version: 'beta',
   });
 
-  const mapRef = useRef<google.maps.Map | null>(null);
+  const mapRef = useRef(null);
 
   // Effect to pan the map to a selected pub, or to the user's live location
   useEffect(() => {
@@ -99,7 +87,7 @@ const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadiu
     
     const search = async () => {
       // The `fields` property is now required. We list the fields the app uses.
-      const request: google.maps.places.SearchNearbyRequest = {
+      const request = {
         fields: ['id', 'displayName', 'formattedAddress', 'location'],
         locationRestriction: {
           center: searchCenter,
@@ -125,7 +113,7 @@ const Map: React.FC<MapProps> = ({ pubs, userLocation, searchCenter, searchRadiu
 
   }, [searchCenter, searchRadius, isLoaded, onPlacesFound]);
 
-  const onLoad = useCallback(function callback(map: google.maps.Map) {
+  const onLoad = useCallback(function callback(map) {
     mapRef.current = map;
   }, []);
 

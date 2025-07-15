@@ -1,24 +1,11 @@
-// This file is now 'components/PubList.js'
+
 import React, { useEffect, useRef } from 'react';
-import { Pub, FilterType, Rating, Coordinates, DistanceUnit } from '../types';
-import StarRating from './StarRating';
+import { FilterType } from '../types.js';
+import StarRating from './StarRating.js';
 
-interface PubListProps {
-  pubs: Pub[];
-  selectedPubId: string | null;
-  onSelectPub: (pubId: string | null) => void;
-  filter: FilterType;
-  getAverageRating: (ratings: Rating[], key: keyof Rating) => number;
-  getDistance: (pubLocation: Coordinates) => number;
-  distanceUnit: DistanceUnit;
-  isExpanded: boolean;
-  onToggle: () => void;
-  resultsAreCapped: boolean;
-}
-
-const PubList: React.FC<PubListProps> = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped }) => {
-  const selectedItemRef = useRef<HTMLLIElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped }) => {
+  const selectedItemRef = useRef(null);
+  const listRef = useRef(null);
 
   useEffect(() => {
     // Scroll to selected item only if the list is expanded
@@ -30,7 +17,7 @@ const PubList: React.FC<PubListProps> = ({ pubs, selectedPubId, onSelectPub, fil
     }
   }, [selectedPubId, isExpanded]);
 
-  const renderMetric = (pub: Pub) => {
+  const renderMetric = (pub) => {
     switch(filter) {
         case FilterType.Price:
             const avgPrice = getAverageRating(pub.ratings, 'price');

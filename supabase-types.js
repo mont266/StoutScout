@@ -1,4 +1,3 @@
-// This file is now 'supabase-types.js'
 export type Json =
   | string
   | number
@@ -83,7 +82,20 @@ export type Database = {
           quality?: number
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ratings_pub_id_fkey"
+            columns: ["pub_id"]
+            referencedRelation: "pubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {

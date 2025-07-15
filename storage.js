@@ -1,6 +1,5 @@
-// This file is now 'storage.js'
-import { Settings } from './types';
-import { DEFAULT_RADIUS_MI, MILES_TO_METERS } from './constants';
+
+import { DEFAULT_RADIUS_MI, MILES_TO_METERS } from './constants.js';
 
 const SETTINGS_STORAGE_KEY = 'stout-scout-settings';
 
@@ -8,7 +7,7 @@ const SETTINGS_STORAGE_KEY = 'stout-scout-settings';
  * Loads the user's settings from localStorage.
  * Provides default values if no settings are stored.
  */
-export const loadSettings = (): Settings => {
+export const loadSettings = () => {
   try {
     const storedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (storedSettings) {
@@ -37,7 +36,7 @@ export const loadSettings = (): Settings => {
 /**
  * Saves the user's settings to localStorage.
  */
-export const saveSettings = (settings: Settings) => {
+export const saveSettings = (settings) => {
   try {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   } catch (e) {

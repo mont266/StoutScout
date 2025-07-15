@@ -1,12 +1,8 @@
-// This file is now 'components/LevelUpPopup.js'
+
 import React from 'react';
-import { getRankData } from '../utils';
+import { getRankData } from '../utils.js';
 
-interface LevelUpPopupProps {
-  newLevel: number;
-}
-
-const LevelUpPopup: React.FC<LevelUpPopupProps> = ({ newLevel }) => {
+const LevelUpPopup = ({ newLevel }) => {
   const oldLevel = newLevel - 1;
   const newRank = getRankData(newLevel);
   const oldRank = getRankData(oldLevel);

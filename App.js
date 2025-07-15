@@ -1,50 +1,49 @@
-// This file is now 'App.js'
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Session } from '@supabase/supabase-js';
-import { Pub, Rating, FilterType, Coordinates, Settings, UserProfile, UserRating } from './types';
-import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants';
-import { loadSettings, saveSettings } from './storage';
-import { supabase } from './supabase';
+import { FilterType } from './types.js';
+import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants.js';
+import { loadSettings, saveSettings } from './storage.js';
+import { supabase } from './supabase.js';
 
-import MapComponent from './components/Map';
-import FilterControls from './components/FilterControls';
-import PubDetails from './components/PubDetails';
-import PubList from './components/PubList';
-import Logo from './components/Logo';
-import SettingsModal from './components/SettingsModal';
-import ProfilePage from './components/ProfilePage';
-import XPPopup from './components/XPPopup';
-import LevelUpPopup from './components/LevelUpPopup';
-import AuthPage from './components/AuthPage';
+import MapComponent from './components/Map.js';
+import FilterControls from './components/FilterControls.js';
+import PubDetails from './components/PubDetails.js';
+import PubList from './components/PubList.js';
+import Logo from './components/Logo.js';
+import SettingsModal from './components/SettingsModal.js';
+import ProfilePage from './components/ProfilePage.js';
+import XPPopup from './components/XPPopup.js';
+import LevelUpPopup from './components/LevelUpPopup.js';
+import AuthPage from './components/AuthPage.js';
 
-const App: React.FC = () => {
+const App = () => {
   // Auth state
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // App state
-  const [googlePlaces, setGooglePlaces] = useState<google.maps.places.Place[]>([]);
-  const [pubs, setPubs] = useState<Pub[]>([]);
-  const [allRatings, setAllRatings] = useState<Map<string, Rating[]>>(new Map());
-  const [selectedPubId, setSelectedPubId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterType>(FilterType.Distance);
+  const [googlePlaces, setGooglePlaces] = useState([]);
+  const [pubs, setPubs] = useState([]);
+  const [allRatings, setAllRatings] = useState(new Map());
+  const [selectedPubId, setSelectedPubId] = useState(null);
+  const [filter, setFilter] = useState(FilterType.Distance);
   const [isListExpanded, setIsListExpanded] = useState(true);
 
-  const [userLocation, setUserLocation] = useState<Coordinates>(DEFAULT_LOCATION);
-  const [searchCenter, setSearchCenter] = useState<Coordinates>(DEFAULT_LOCATION);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState(DEFAULT_LOCATION);
+  const [searchCenter, setSearchCenter] = useState(DEFAULT_LOCATION);
+  const [locationError, setLocationError] = useState(null);
   const [resultsAreCapped, setResultsAreCapped] = useState(false);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [settings, setSettings] = useState(loadSettings);
 
-  const [currentView, setCurrentView] = useState<'map' | 'profile'>('map');
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [userRatings, setUserRatings] = useState<UserRating[]>([]);
+  const [currentView, setCurrentView] = useState('map');
+  const [userProfile, setUserProfile] = useState(null);
+  const [userRatings, setUserRatings] = useState([]);
 
-  const [reviewPopupInfo, setReviewPopupInfo] = useState<{key: number} | null>(null);
-  const [leveledUpInfo, setLeveledUpInfo] = useState<{key: number, newLevel: number} | null>(null);
+  const [reviewPopupInfo, setReviewPopupInfo] = useState(null);
+  const [leveledUpInfo, setLeveledUpInfo] = useState(null);
 
   // --- AUTH & DATA FETCHING ---
 
@@ -78,7 +77,7 @@ const App: React.FC = () => {
           return;
       }
 
-      const ratingsMap = new Map<string, Rating[]>();
+      const ratingsMap = new Map();
       for (const rating of data || []) {
           const existing = ratingsMap.get(rating.pub_id) || [];
           ratingsMap.set(rating.pub_id, [...existing, { price: rating.price, quality: rating.quality }]);
@@ -86,66 +85,42 @@ const App: React.FC = () => {
       setAllRatings(ratingsMap);
   };
   
-  const fetchUserData = async (userId: string) => {
-    // Fetch Profile
-    const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-    
-    if (profileError) {
-      console.error("Error fetching profile:", profileError);
-    } else {
-      setUserProfile(profileData);
-    }
-    
-    // Fetch user's ratings (without the join)
-    const { data: userRatingsData, error: userRatingsError } = await supabase
-        .from('ratings')
-        .select('id, pub_id, price, quality, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+  const fetchUserData = async (userId) => {
+      // Fetch Profile
+      const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+      
+      if (profileError) {
+        console.error("Error fetching profile:", profileError);
+      } else if (profileData) {
+        setUserProfile(profileData);
+      }
+      
+      // Fetch user's ratings
+      const { data: userRatingsData, error: userRatingsError } = await supabase
+          .from('ratings')
+          .select('id, pub_id, price, quality, created_at, pubs(name, address)')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
 
-    if (userRatingsError) {
-        console.error("Error fetching user ratings:", userRatingsError);
-        return;
-    }
+      if (userRatingsError) {
+          console.error("Error fetching user ratings:", userRatingsError);
+          return;
+      }
+      
+      const mappedUserRatings = (userRatingsData || []).map(r => ({
+        id: r.id,
+        pubId: r.pub_id,
+        rating: { price: r.price, quality: r.quality },
+        timestamp: new Date(r.created_at).getTime(),
+        pubName: r.pubs?.name || 'Unknown Pub',
+        pubAddress: r.pubs?.address || 'Unknown Address',
+      }));
 
-    if (!userRatingsData || userRatingsData.length === 0) {
-        setUserRatings([]);
-        return;
-    }
-
-    // Get unique pub IDs from the ratings
-    const pubIds = [...new Set(userRatingsData.map(r => r.pub_id))];
-    
-    // Fetch the details for all the pubs that have been rated
-    const { data: pubsData, error: pubsError } = await supabase
-        .from('pubs')
-        .select('id, name, address')
-        .in('id', pubIds);
-
-    if (pubsError) {
-        console.error("Error fetching pub details for ratings:", pubsError);
-        // We can still proceed, but names/addresses will be unknown
-    }
-
-    const pubsMap = new Map(pubsData?.map(p => [p.id, p]) || []);
-
-    const mappedUserRatings: UserRating[] = userRatingsData.map(r => {
-      const pubDetails = pubsMap.get(r.pub_id);
-      return {
-          id: r.id,
-          pubId: r.pub_id,
-          rating: { price: r.price, quality: r.quality },
-          timestamp: new Date(r.created_at).getTime(),
-          pubName: pubDetails?.name || 'Unknown Pub',
-          pubAddress: pubDetails?.address || 'Unknown Address',
-      };
-    });
-
-    setUserRatings(mappedUserRatings);
+      setUserRatings(mappedUserRatings);
   };
 
   useEffect(() => {
@@ -161,7 +136,7 @@ const App: React.FC = () => {
 
   // --- CORE APP LOGIC ---
 
-  const handlePlacesFound = (places: google.maps.places.Place[], capped: boolean) => {
+  const handlePlacesFound = (places, capped) => {
     setGooglePlaces(places);
     setResultsAreCapped(capped);
   };
@@ -192,7 +167,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (googlePlaces.length === 0 && pubs.length === 0 && allRatings.size === 0) return;
 
-    const newPubs = googlePlaces.map((place): Pub | null => {
+    const newPubs = googlePlaces.map((place) => {
       if (!place.id || !place.displayName || !place.location || !place.formattedAddress) {
         return null;
       }
@@ -206,7 +181,7 @@ const App: React.FC = () => {
         },
         ratings: allRatings.get(place.id) || [],
       };
-    }).filter((pub): pub is Pub => pub !== null);
+    }).filter((pub) => pub !== null);
 
     setPubs(newPubs);
     
@@ -218,13 +193,13 @@ const App: React.FC = () => {
     return userRatings.find(r => r.pubId === selectedPub.id);
   }, [selectedPub, userRatings]);
 
-  const getAverageRating = (ratings: Rating[], key: keyof Rating): number => {
+  const getAverageRating = (ratings, key) => {
     if (ratings.length === 0) return 0;
     const total = ratings.reduce((acc, r) => acc + r[key], 0);
     return total / ratings.length;
   };
 
-  const getDistance = useCallback((location1: Coordinates, location2: Coordinates): number => {
+  const getDistance = useCallback((location1, location2) => {
     const R = 6371e3; // metres
     const φ1 = location1.lat * Math.PI/180;
     const φ2 = location2.lat * Math.PI/180;
@@ -278,7 +253,7 @@ const App: React.FC = () => {
     });
   }, [pubs, filter, userLocation, getDistance]);
 
-  const handleRatePub = useCallback(async (pubId: string, pubName: string, pubAddress: string, newRating: Rating) => {
+  const handleRatePub = useCallback(async (pubId, pubName, pubAddress, newRating) => {
     if (!session || !userProfile || !selectedPub) return;
 
     // 1. Upsert the pub into the 'pubs' table to ensure it exists.
@@ -371,7 +346,7 @@ const App: React.FC = () => {
     setReviewPopupInfo({ key: Date.now() });
   };
   
-  const handleSelectPub = useCallback((pubId: string | null) => {
+  const handleSelectPub = useCallback((pubId) => {
     setSelectedPubId(pubId);
     if (pubId && !isListExpanded) setIsListExpanded(true);
   }, [isListExpanded]);
@@ -386,7 +361,7 @@ const App: React.FC = () => {
   
   const handleCloseDetails = () => setSelectedPubId(null);
   const handleToggleList = () => setIsListExpanded(prev => !prev);
-  const handleSettingsChange = (newSettings: Settings) => {
+  const handleSettingsChange = (newSettings) => {
     setSettings(newSettings);
     saveSettings(newSettings);
   };

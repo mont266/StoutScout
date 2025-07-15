@@ -1,14 +1,13 @@
-// This file is now 'utils.js'
-import { RANK_DETAILS } from './constants';
-import { Rank } from './types';
+
+import { RANK_DETAILS } from './constants.js';
 
 /**
  * Returns the full rank data object for a given level.
  * It finds the highest rank achieved for the user's level.
- * @param level The user's current level.
+ * @param {number} level The user's current level.
  * @returns The full Rank object.
  */
-export const getRankData = (level: number): Rank => {
+export const getRankData = (level) => {
   // Iterate backwards to find the first rank the user has achieved
   for (let i = RANK_DETAILS.length - 1; i >= 0; i--) {
     if (level >= RANK_DETAILS[i].minLevel) {
@@ -22,10 +21,10 @@ export const getRankData = (level: number): Rank => {
 /**
  * Parses a Google Maps formatted address string and returns a concise "Town, Country" string.
  * It handles different formats, such as those in the US vs. the UK.
- * @param address The full formatted address string.
+ * @param {string | undefined} address The full formatted address string.
  * @returns A formatted "Town, Country" string.
  */
-export const formatLocationDisplay = (address?: string): string => {
+export const formatLocationDisplay = (address) => {
   if (!address) return '';
   const parts = address.split(',').map(p => p.trim());
 
@@ -47,7 +46,7 @@ export const formatLocationDisplay = (address?: string): string => {
   } else if (parts.length >= 2) {
       // General case for formats like "..., Town Postcode, Country"
       const townPart = parts[parts.length - 2];
-      const match = townPart.match(/^[a-zA-Z\s-'.()]+/);
+      const match = townPart.match(/^[a-zA-Z\\s-'.()]+/);
       town = match ? match[0].trim() : townPart;
   }
 
@@ -62,7 +61,7 @@ export const formatLocationDisplay = (address?: string): string => {
   return address; // Fallback
 };
 
-export const formatTimeAgo = (timestamp: number): string => {
+export const formatTimeAgo = (timestamp) => {
     const now = new Date();
     const seconds = Math.floor((now.getTime() - timestamp) / 1000);
   

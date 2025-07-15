@@ -70,7 +70,8 @@
     "@react-google-maps/api": "https://esm.sh/@react-google-maps/api@2.19.3?external=react,react-dom",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.8",
     "react-dom/": "https://esm.sh/react-dom@18.2.0/",
-    "react/": "https://esm.sh/react@18.2.0/"
+    "react/": "https://esm.sh/react@18.2.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.9.0"
   }
 }
 </script>
@@ -84,7 +85,7 @@
   <body class="bg-gray-50 dark:bg-gray-900">
     <div id="root"></div>
     <!-- Load the main app script, telling Babel to transpile it as a module -->
-    <script type="text/babel" data-presets="react,typescript" data-type="module" src="./index.tsx"></script>
+    <script type="text/babel" data-presets="react,typescript" data-type="module" src="./index.js"></script>
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>

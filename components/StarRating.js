@@ -1,16 +1,7 @@
-// This file is now 'components/StarRating.js'
+
 import React, { useState } from 'react';
 
-interface StarRatingProps {
-  rating: number;
-  count?: number;
-  onRatingChange?: (rating: number) => void;
-  interactive?: boolean;
-  color?: string;
-  labels?: string[];
-}
-
-const StarRating: React.FC<StarRatingProps> = ({
+const StarRating = ({
   rating,
   count = 5,
   onRatingChange,
@@ -55,10 +46,10 @@ const StarRating: React.FC<StarRatingProps> = ({
           {displayLabel && (
             <div className="text-sm">
               <span className="font-semibold block leading-tight text-gray-700 dark:text-gray-300">
-                {displayLabel.split('\n')[0]}
+                {displayLabel.split('\\n')[0]}
               </span>
               <span className="text-xs block leading-tight text-gray-600 dark:text-gray-400">
-                {displayLabel.split('\n')[1]}
+                {displayLabel.split('\\n')[1]}
               </span>
             </div>
           )}

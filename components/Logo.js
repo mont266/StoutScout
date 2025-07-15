@@ -1,7 +1,7 @@
-// This file is now 'components/Logo.js'
+
 import React from 'react';
 
-const Logo: React.FC = () => (
+const Logo = () => (
   <div className="flex flex-col items-center">
     <h1 className="text-2xl font-bold text-amber-500 dark:text-amber-400 leading-tight">StoutScout</h1>
     <div className="flex items-center space-x-1.5 mt-1">

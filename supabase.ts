@@ -1,7 +1,6 @@
-
-
+// This file is now 'supabase.js'
 import { createClient } from '@supabase/supabase-js';
-import { Database } from './supabase-types.ts';
+import { Database } from './supabase-types';
 
 // These values are injected by the build tool (e.g., Vite) from environment variables.
 // In Netlify, these are set in the site's build & deploy settings.

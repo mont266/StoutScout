@@ -1,25 +1,19 @@
-// This file is now 'components/RatingForm.js'
-import React, { useState, useEffect } from 'react';
-import { Rating } from '../types';
-import StarRating from './StarRating';
 
-interface RatingFormProps {
-  onSubmit: (rating: Rating) => void;
-  existingRating?: Rating;
-}
+import React, { useState, useEffect } from 'react';
+import StarRating from './StarRating.js';
 
 // Labels to guide the user on price rating. Higher stars mean cheaper price.
 // The \n character is used to create a two-line label in the StarRating component.
 const priceLabels = [
-  'Very Expensive\n£10.00+',    // 1 star
-  'Expensive\n£8.50 - £9.99', // 2 stars
-  'Average\n£7.50 - £8.49',   // 3 stars
-  'Cheap\n£6.50 - £7.49',     // 4 stars
-  'Very Cheap\n< £6.50'        // 5 stars
+  'Very Expensive\\n£10.00+',    // 1 star
+  'Expensive\\n£8.50 - £9.99', // 2 stars
+  'Average\\n£7.50 - £8.49',   // 3 stars
+  'Cheap\\n£6.50 - £7.49',     // 4 stars
+  'Very Cheap\\n< £6.50'        // 5 stars
 ];
 
 
-const RatingForm: React.FC<RatingFormProps> = ({ onSubmit, existingRating }) => {
+const RatingForm = ({ onSubmit, existingRating }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
 
@@ -29,7 +23,7 @@ const RatingForm: React.FC<RatingFormProps> = ({ onSubmit, existingRating }) => 
     setQuality(existingRating?.quality || 0);
   }, [existingRating]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (price > 0 && quality > 0) {
       onSubmit({ price, quality });
