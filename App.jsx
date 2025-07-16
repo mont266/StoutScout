@@ -782,7 +782,7 @@ const App = () => {
                   onClick={handleFindCurrentPub}
                   disabled={isFindingPub}
                   title={isFindingPub ? "Finding pubs near you..." : "Find pubs at your current location"}
-                  className="absolute bottom-4 right-4 z-20 bg-amber-500 text-black rounded-full w-16 h-16 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-wait"
+                  className="absolute bottom-4 left-4 z-20 bg-amber-500 text-black rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-wait"
                   aria-label="Find pubs at your current location"
                 >
                   {isFindingPub ? (
