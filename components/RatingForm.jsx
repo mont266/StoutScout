@@ -100,7 +100,7 @@ const RatingForm = ({ onSubmit, existingRating }) => {
 
       <div>
         <p className="text-xs text-center text-gray-700 dark:text-yellow-200 italic mb-3 p-2 rounded-md bg-yellow-100 dark:bg-yellow-900/50 border border-yellow-200 dark:border-yellow-800/60">
-          Please provide honest ratings to help keep StoutScout accurate for everyone.
+          Please provide honest ratings to help keep Stoutly accurate for everyone.
         </p>
         <button
           type="submit"

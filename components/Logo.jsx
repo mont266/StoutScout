@@ -6,7 +6,7 @@ import React from 'react';
 const getTitle = (tab) => {
     switch(tab) {
         case 'map':
-            return 'StoutScout';
+            return 'Stoutly';
         case 'leaderboard':
             return 'Top Reviewers';
         case 'profile':
@@ -14,7 +14,7 @@ const getTitle = (tab) => {
         case 'settings':
             return 'Settings';
         default:
-            return 'StoutScout';
+            return 'Stoutly';
     }
 }
 

@@ -769,16 +769,28 @@ const App = () => {
             {locationError && !(settings.developerMode && settings.simulatedLocation) && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
             <FilterControls
               currentFilter={filter} onFilterChange={handleFilterChange}
-              onFindCurrentPub={handleFindCurrentPub} isFindingPub={isFindingPub}
             />
 
-            <div className="flex-grow min-h-0">
+            <div className="flex-grow min-h-0 relative">
                 <MapComponent 
                   pubs={sortedPubs} userLocation={userLocation}
                   searchCenter={searchCenter} searchRadius={settings.radius}
                   onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
                   onPlacesFound={handlePlacesFound} theme={settings.theme} filter={filter}
                 />
+                <button
+                  onClick={handleFindCurrentPub}
+                  disabled={isFindingPub}
+                  title={isFindingPub ? "Finding pubs near you..." : "Find pubs at your current location"}
+                  className="absolute bottom-4 right-4 z-20 bg-amber-500 text-black rounded-full w-16 h-16 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-wait"
+                  aria-label="Find pubs at your current location"
+                >
+                  {isFindingPub ? (
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-black"></div>
+                  ) : (
+                    <i className="fas fa-crosshairs text-2xl"></i>
+                  )}
+                </button>
             </div>
             <div className={`flex-shrink-0 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out ${isListExpanded ? 'max-h-[45%]' : 'max-h-12'}`}>
                   <PubList

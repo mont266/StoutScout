@@ -10,6 +10,8 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
     const [isModerationVisible, setIsModerationVisible] = useState(false);
+    const [isRankProgressionVisible, setIsRankProgressionVisible] = useState(false);
+    const [isRatingsVisible, setIsRatingsVisible] = useState(true);
 
     // Keep state in sync with props from App.jsx
     useEffect(() => {
@@ -57,8 +59,6 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
 
     const { percentage: progressPercentage, progressText: reviewsForNextLevelText, nextLevelDisplay } = getLevelProgress();
     
-    const [isRankProgressionVisible, setIsRankProgressionVisible] = useState(false);
-
     // Determine if the logged-in user can see moderation tools for the viewed profile
     const isViewingOwnProfile = !loggedInUserProfile || profile.id === loggedInUserProfile.id;
     const canModerate = loggedInUserProfile?.is_developer && !isViewingOwnProfile;
@@ -229,54 +229,66 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
 
                 {/* Recent Ratings */}
                 <div className="mb-6">
-                    <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Recent Ratings ({userRatings.length})</h3>
-                    {userRatings.length > 0 ? (
-                        <ul className="space-y-3">
-                            {userRatings.slice(0, 10).map((r) => ( // Show latest 10
-                                <li key={r.id}
-                                    className={`bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md transition-colors ${r.pubLocation ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50' : ''}`}
-                                    onClick={() => r.pubLocation && onViewPub({ id: r.pubId, location: r.pubLocation })}
-                                    role={r.pubLocation ? "button" : "listitem"}
-                                    tabIndex={r.pubLocation ? "0" : "-1"}
-                                    onKeyDown={(e) => {
-                                        if (r.pubLocation && (e.key === 'Enter' || e.key === ' ')) {
-                                            onViewPub({ id: r.pubId, location: r.pubLocation });
-                                        }
-                                    }}
-                                    aria-label={r.pubLocation ? `View details for ${r.pubName}` : undefined}
-                                >
-                                    <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                        <div className="flex-grow pr-4 min-w-0">
-                                            <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{r.pubName}</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{formatLocationDisplay(r.pubAddress)}</p>
-                                        </div>
-                                        <div className="flex-shrink-0 text-right">
-                                            <p className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(r.timestamp)}</p>
-                                             {r.pubLocation && <i className="fas fa-map-pin text-amber-500 dark:text-amber-400 mt-2" title="View on map"></i>}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-700 dark:text-gray-300">Price Rating:</span>
-                                            <StarRating rating={r.rating.price} color="text-green-400" />
-                                        </div>
-                                        {r.rating.exact_price > 0 && (
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-gray-700 dark:text-gray-300">Price Paid:</span>
-                                                <span className="font-bold text-gray-900 dark:text-white">£{r.rating.exact_price.toFixed(2)}</span>
+                    <button
+                        onClick={() => setIsRatingsVisible(!isRatingsVisible)}
+                        className="w-full flex justify-between items-center text-left text-xl font-semibold text-gray-900 dark:text-white p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        aria-expanded={isRatingsVisible}
+                        aria-controls="recent-ratings-list"
+                    >
+                        <span>Recent Ratings ({userRatings.length})</span>
+                        <i className={`fas fa-chevron-down text-gray-500 dark:text-gray-400 transition-transform duration-300 ${isRatingsVisible ? 'rotate-180' : ''}`}></i>
+                    </button>
+                    {isRatingsVisible && (
+                        <div id="recent-ratings-list" className="mt-2">
+                            {userRatings.length > 0 ? (
+                                <ul className="space-y-3">
+                                    {userRatings.slice(0, 10).map((r) => ( // Show latest 10
+                                        <li key={r.id}
+                                            className={`bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md transition-colors ${r.pubLocation ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50' : ''}`}
+                                            onClick={() => r.pubLocation && onViewPub({ id: r.pubId, location: r.pubLocation })}
+                                            role={r.pubLocation ? "button" : "listitem"}
+                                            tabIndex={r.pubLocation ? "0" : "-1"}
+                                            onKeyDown={(e) => {
+                                                if (r.pubLocation && (e.key === 'Enter' || e.key === ' ')) {
+                                                    onViewPub({ id: r.pubId, location: r.pubLocation });
+                                                }
+                                            }}
+                                            aria-label={r.pubLocation ? `View details for ${r.pubName}` : undefined}
+                                        >
+                                            <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                                                <div className="flex-grow pr-4 min-w-0">
+                                                    <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{r.pubName}</p>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{formatLocationDisplay(r.pubAddress)}</p>
+                                                </div>
+                                                <div className="flex-shrink-0 text-right">
+                                                    <p className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(r.timestamp)}</p>
+                                                     {r.pubLocation && <i className="fas fa-map-pin text-amber-500 dark:text-amber-400 mt-2" title="View on map"></i>}
+                                                </div>
                                             </div>
-                                        )}
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-700 dark:text-gray-300">Quality Rating:</span>
-                                            <StarRating rating={r.rating.quality} color="text-amber-400" />
-                                        </div>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                            <p>This user hasn't rated any pubs yet.</p>
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-700 dark:text-gray-300">Price Rating:</span>
+                                                    <StarRating rating={r.rating.price} color="text-green-400" />
+                                                </div>
+                                                {r.rating.exact_price > 0 && (
+                                                    <div className="flex justify-between items-center text-sm">
+                                                        <span className="text-gray-700 dark:text-gray-300">Price Paid:</span>
+                                                        <span className="font-bold text-gray-900 dark:text-white">£{r.rating.exact_price.toFixed(2)}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-700 dark:text-gray-300">Quality Rating:</span>
+                                                    <StarRating rating={r.rating.quality} color="text-amber-400" />
+                                                </div>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                    <p>This user hasn't rated any pubs yet.</p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

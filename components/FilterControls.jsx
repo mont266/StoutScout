@@ -1,7 +1,7 @@
 import React from 'react';
 import { FilterType } from '../types.js';
 
-const FilterControls = ({ currentFilter, onFilterChange, onFindCurrentPub, isFindingPub }) => {
+const FilterControls = ({ currentFilter, onFilterChange }) => {
   const filters = [
     { key: FilterType.Distance, label: 'Nearest', icon: 'fa-map-marker-alt' },
     { key: FilterType.Price, label: 'Best Price', icon: 'fa-tag' },
@@ -27,21 +27,6 @@ const FilterControls = ({ currentFilter, onFilterChange, onFindCurrentPub, isFin
             </button>
           ))}
         </div>
-        
-        <div className="w-px h-6 bg-gray-300 dark:bg-gray-600"></div>
-
-        <button
-          onClick={onFindCurrentPub}
-          disabled={isFindingPub}
-          className="px-3 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-wait"
-        >
-          {isFindingPub ? (
-             <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-amber-500"></div>
-          ) : (
-            <i className="fas fa-crosshairs"></i>
-          )}
-          <span>{isFindingPub ? 'Finding...' : "I'm Here"}</span>
-        </button>
       </div>
     </div>
   );

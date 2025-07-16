@@ -2,7 +2,7 @@
 
 import { DEFAULT_RADIUS_MI, MILES_TO_METERS } from './constants.js';
 
-const SETTINGS_STORAGE_KEY = 'stout-scout-settings';
+const SETTINGS_STORAGE_KEY = 'stoutly-settings';
 
 /**
  * Loads the user's settings from localStorage.
