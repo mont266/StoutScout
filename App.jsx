@@ -78,6 +78,11 @@ const App = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [userRatings, setUserRatings] = useState([]);
 
+  // State for viewing other user profiles
+  const [viewedProfile, setViewedProfile] = useState(null);
+  const [viewedRatings, setViewedRatings] = useState([]);
+  const [isFetchingViewedProfile, setIsFetchingViewedProfile] = useState(false);
+
   const [reviewPopupInfo, setReviewPopupInfo] = useState(null);
   const [leveledUpInfo, setLeveledUpInfo] = useState(null);
 
@@ -99,6 +104,7 @@ const App = () => {
         } else {
             // If user logs out, send them back to the map tab
             setActiveTab('map');
+            setViewedProfile(null);
         }
     });
 
@@ -334,6 +340,9 @@ const App = () => {
     } else {
       setActiveTab(tab);
     }
+    // Clear any viewed profile when changing tabs
+    setViewedProfile(null);
+    setViewedRatings([]);
   };
 
   const handleSettingsChange = (newSettings) => {
@@ -380,6 +389,43 @@ const App = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
+  
+  const handleViewProfile = async (userId) => {
+      setIsFetchingViewedProfile(true);
+      setActiveTab('profile');
+
+      const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+      if (profileError) {
+          console.error("Error fetching viewed profile:", profileError);
+          setIsFetchingViewedProfile(false);
+          // Optionally, show an error message
+          return;
+      }
+
+      const { data: ratingsData } = await supabase
+          .from('ratings')
+          .select('id, pub_id, price, quality, created_at, exact_price, pubs(id, name, address, lat, lng)')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+      const mappedRatings = (ratingsData || []).map(r => ({
+          id: r.id, pubId: r.pub_id,
+          rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
+          timestamp: new Date(r.created_at).getTime(),
+          pubName: r.pubs?.name || 'Unknown',
+          pubAddress: r.pubs?.address || 'Unknown',
+          pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
+      }));
+      
+      setViewedProfile(profileData);
+      setViewedRatings(mappedRatings);
+      setIsFetchingViewedProfile(false);
+  };
 
   if (loading) {
     return (
@@ -387,6 +433,30 @@ const App = () => {
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-400"></div>
       </div>
     );
+  }
+  
+  const renderProfile = () => {
+      if (isFetchingViewedProfile) {
+          return (
+              <div className="w-full h-full flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-400"></div>
+              </div>
+          );
+      }
+      
+      const profileToDisplay = viewedProfile || userProfile;
+      const ratingsToDisplay = viewedProfile ? viewedRatings : userRatings;
+      
+      if (!profileToDisplay) return null;
+
+      return (
+          <ProfilePage 
+              userProfile={profileToDisplay} 
+              userRatings={ratingsToDisplay} 
+              onViewPub={handleViewPub}
+              loggedInUserProfile={userProfile}
+          />
+      );
   }
 
   return (
@@ -421,15 +491,9 @@ const App = () => {
             </div>
           </div>
         )}
-        {activeTab === 'profile' && userProfile && (
-            <ProfilePage 
-                userProfile={userProfile} 
-                userRatings={userRatings} 
-                onViewPub={handleViewPub}
-            />
-        )}
+        {activeTab === 'profile' && renderProfile()}
          {activeTab === 'leaderboard' && session && (
-            <LeaderboardPage />
+            <LeaderboardPage onViewProfile={handleViewProfile} />
         )}
         {activeTab === 'settings' && (
             <SettingsPage

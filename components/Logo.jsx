@@ -10,7 +10,7 @@ const getTitle = (tab) => {
         case 'leaderboard':
             return 'Top Reviewers';
         case 'profile':
-            return 'Your Profile';
+            return 'Profile';
         case 'settings':
             return 'Settings';
         default:

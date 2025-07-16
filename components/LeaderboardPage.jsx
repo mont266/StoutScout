@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.js';
+import { getRankData } from '../utils.js';
 
-const LeaderboardPage = () => {
+const LeaderboardPage = ({ onViewProfile }) => {
     const [activePeriod, setActivePeriod] = useState('all'); // 'all', 'year', 'month', 'day'
     const [leaderboardData, setLeaderboardData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -92,24 +93,33 @@ const LeaderboardPage = () => {
                 )}
                 {!loading && !error && leaderboardData.length > 0 && (
                     <ul className="space-y-3">
-                        {leaderboardData.map((item, index) => (
-                            <li key={item.id}
-                                className={`bg-gray-50 dark:bg-gray-800 p-3 rounded-lg shadow-md border-l-4 ${index < 3 ? 'border-amber-400' : 'border-transparent'}`}
-                            >
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-8 text-center flex-shrink-0">{renderMedal(index + 1)}</div>
-                                    <div className="flex-grow min-w-0 flex items-center space-x-2">
-                                        <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{item.username}</p>
-                                        {item.is_developer && <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full flex-shrink-0" title="Developer"></div>}
-                                        {item.is_beta_tester && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full flex-shrink-0" title="Beta Tester"></div>}
+                        {leaderboardData.map((item, index) => {
+                            const rankData = getRankData(item.level || 1);
+                            return (
+                                <li key={item.id}
+                                    onClick={() => onViewProfile(item.id)}
+                                    className={`bg-gray-50 dark:bg-gray-800 p-3 rounded-lg shadow-md border-l-4 transition-colors cursor-pointer hover:bg-amber-500/10 dark:hover:bg-gray-700/50 ${index < 3 ? 'border-amber-400' : 'border-transparent'}`}
+                                    role="button"
+                                    tabIndex="0"
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { onViewProfile(item.id) }}}
+                                    aria-label={`View profile for ${item.username}`}
+                                >
+                                    <div className="flex items-center space-x-4">
+                                        <div className="w-8 text-center flex-shrink-0">{renderMedal(index + 1)}</div>
+                                        <div className="flex-grow min-w-0 flex items-center space-x-3">
+                                            <i className={`fas ${rankData.icon} text-amber-500 dark:text-amber-400 text-xl w-6 text-center`} title={`Rank: ${rankData.name}`}></i>
+                                            <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{item.username}</p>
+                                            {item.is_developer && <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full flex-shrink-0" title="Developer"></div>}
+                                            {item.is_beta_tester && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full flex-shrink-0" title="Beta Tester"></div>}
+                                        </div>
+                                        <div className="flex-shrink-0 text-right">
+                                            <p className="font-bold text-lg text-gray-900 dark:text-white">{item.review_count}</p>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">{item.review_count === 1 ? 'rating' : 'ratings'}</span>
+                                        </div>
                                     </div>
-                                    <div className="flex-shrink-0 text-right">
-                                        <p className="font-bold text-lg text-gray-900 dark:text-white">{item.review_count}</p>
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">{item.review_count === 1 ? 'rating' : 'ratings'}</span>
-                                    </div>
-                                </div>
-                            </li>
-                        ))}
+                                </li>
+                            );
+                        })}
                     </ul>
                 )}
             </main>

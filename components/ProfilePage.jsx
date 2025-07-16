@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
+import { supabase } from '../supabase.js';
 import StarRating from './StarRating.jsx';
 
-const ProfilePage = ({ userProfile, userRatings, onViewPub }) => {
-    const { username, level, is_beta_tester, is_developer } = userProfile;
-    const reviews = userProfile.reviews || 0;
+const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile }) => {
+    // Component now manages its own profile state to update it after a moderation action.
+    const [profile, setProfile] = useState(userProfile);
+    const [isBanning, setIsBanning] = useState(false);
+
+    // Keep state in sync with props from App.jsx
+    useEffect(() => {
+        setProfile(userProfile);
+    }, [userProfile]);
+
+    const { username, level, is_beta_tester, is_developer, is_banned } = profile;
+    const reviews = profile.reviews || 0;
     
     const rankData = getRankData(level);
     const reviewsForCurrentLevel = reviews % REVIEWS_PER_LEVEL;
@@ -13,11 +23,39 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub }) => {
 
     const [isRankProgressionVisible, setIsRankProgressionVisible] = useState(false);
 
+    // Determine if the logged-in user can see moderation tools for the viewed profile
+    const isViewingOwnProfile = !loggedInUserProfile || profile.id === loggedInUserProfile.id;
+    const canModerate = loggedInUserProfile?.is_developer && !isViewingOwnProfile;
+
+    const handleBanUser = async () => {
+        if (!window.confirm(`Are you sure you want to ban ${username}? This action is permanent and will hide all their contributions.`)) {
+            return;
+        }
+        setIsBanning(true);
+        const { error } = await supabase
+            .from('profiles')
+            .update({ is_banned: true })
+            .eq('id', profile.id);
+
+        if (error) {
+            alert(`Failed to ban user: ${error.message}`);
+        } else {
+            // Update local state to immediately reflect the change
+            setProfile(p => ({ ...p, is_banned: true }));
+        }
+        setIsBanning(false);
+    };
+
     return (
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
             <main className="flex-grow p-4 overflow-y-auto">
                 {/* Profile Card */}
                 <div className="relative bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6 text-center border-t-4 border-amber-400">
+                    {is_banned && (
+                         <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white font-bold px-4 py-1 rounded-full text-sm uppercase tracking-wider shadow-lg">
+                            Banned
+                        </div>
+                    )}
                     <div className="absolute top-4 right-4 flex flex-col sm:flex-row items-end sm:items-center gap-2">
                         {is_developer && (
                             <span className="bg-amber-500 text-black text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
@@ -70,6 +108,26 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub }) => {
                     </div>
                 </div>
 
+                {/* Moderation Tools Section */}
+                {canModerate && (
+                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <h3 className="text-xl font-bold text-red-500 dark:text-red-400 text-center mb-4">Moderation Tools</h3>
+                        <div className="flex flex-col items-center">
+                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                                Status: <span className={`font-bold ${is_banned ? 'text-red-500' : 'text-green-500'}`}>{is_banned ? 'Banned' : 'Active'}</span>
+                            </p>
+                            <button
+                                onClick={handleBanUser}
+                                disabled={is_banned || isBanning}
+                                className="w-full sm:w-auto bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 dark:disabled:bg-red-800 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                            >
+                                {isBanning ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <i className="fas fa-gavel"></i>}
+                                <span>{is_banned ? 'User Banned' : 'Ban User'}</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Rank Progression */}
                 <div className="mb-6">
                     <button
@@ -108,7 +166,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub }) => {
 
                 {/* Recent Ratings */}
                 <div className="mb-6">
-                    <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Your Recent Ratings ({userRatings.length})</h3>
+                    <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Recent Ratings ({userRatings.length})</h3>
                     {userRatings.length > 0 ? (
                         <ul className="space-y-3">
                             {userRatings.slice(0, 10).map((r) => ( // Show latest 10
@@ -155,8 +213,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub }) => {
                         </ul>
                     ) : (
                         <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                            <p>You haven't rated any pubs yet.</p>
-                            <p>Go find a pint and start your journey!</p>
+                            <p>This user hasn't rated any pubs yet.</p>
                         </div>
                     )}
                 </div>
