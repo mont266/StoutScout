@@ -60,7 +60,6 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
     id: 'google-map-script',
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
     libraries,
-    version: 'beta',
   });
 
   const mapRef = useRef(null);
@@ -95,8 +94,8 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
       const request = {
         fields: ['id', 'displayName', 'formattedAddress', 'location'],
         textQuery: 'pub OR bar', // Use a more explicit query
-        locationRestriction: {
-          center: new window.google.maps.LatLng(searchCenter.lat, searchCenter.lng),
+        locationBias: {
+          center: { lat: searchCenter.lat, lng: searchCenter.lng },
           radius: searchRadius,
         },
         maxResultCount: 20,
