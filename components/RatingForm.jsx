@@ -4,20 +4,20 @@ import StarRating from './StarRating.jsx';
 // Labels to guide the user on price rating. Higher stars mean cheaper price.
 // The \n character is used to create a two-line label in the StarRating component.
 const priceLabels = [
-  'Very Expensive\n£8.50+',      // 1 star
-  'Expensive\n£7.50 - £8.49',   // 2 stars
-  'Average\n£6.50 - £7.49',     // 3 stars
-  'Cheap\n£5.50 - £6.49',       // 4 stars
-  'Very Cheap\n< £5.50'          // 5 stars
+  'Very Expensive\n£6.50+',      // 1 star
+  'Expensive\n£5.50 - £6.49',   // 2 stars
+  'Average\n£5.00 - £5.49',     // 3 stars
+  'Cheap\n£4.50 - £4.99',       // 4 stars
+  'Very Cheap\n< £4.50'          // 5 stars
 ];
 
 const getStarRatingFromPrice = (price) => {
     if (price === '' || isNaN(price)) return 0;
     const numericPrice = parseFloat(price);
-    if (numericPrice < 5.50) return 5; // Very Cheap
-    if (numericPrice <= 6.49) return 4; // Cheap
-    if (numericPrice <= 7.49) return 3; // Average
-    if (numericPrice <= 8.49) return 2; // Expensive
+    if (numericPrice < 4.50) return 5; // Very Cheap
+    if (numericPrice <= 4.99) return 4; // Cheap
+    if (numericPrice <= 5.49) return 3; // Average
+    if (numericPrice <= 6.49) return 2; // Expensive
     return 1; // Very Expensive
 };
 
@@ -87,7 +87,7 @@ const RatingForm = ({ onSubmit, existingRating }) => {
             min="0"
             value={priceInput}
             onChange={handlePriceInputChange}
-            placeholder="e.g., 6.50"
+            placeholder="e.g., 5.00"
             className="w-full pl-7 pr-3 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
