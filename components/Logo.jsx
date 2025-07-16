@@ -7,6 +7,8 @@ const getTitle = (tab) => {
     switch(tab) {
         case 'map':
             return 'StoutScout';
+        case 'leaderboard':
+            return 'Leaderboards';
         case 'profile':
             return 'Your Profile';
         case 'settings':

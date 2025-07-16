@@ -11,6 +11,7 @@ import PubList from './components/PubList.jsx';
 import Header from './components/Logo.jsx';
 import SettingsPage from './components/SettingsModal.jsx';
 import ProfilePage from './components/ProfilePage.jsx';
+import LeaderboardPage from './components/LeaderboardPage.jsx';
 import XPPopup from './components/XPPopup.jsx';
 import LevelUpPopup from './components/LevelUpPopup.jsx';
 import AuthPage from './components/AuthPage.jsx';
@@ -19,6 +20,7 @@ import AuthPage from './components/AuthPage.jsx';
 const TabBar = ({ activeTab, onTabChange }) => {
   const tabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
+    { id: 'leaderboard', icon: 'fa-trophy', label: 'Leaders' },
     { id: 'profile', icon: 'fa-user', label: 'Profile' },
     { id: 'settings', icon: 'fa-cog', label: 'Settings' },
   ];
@@ -327,7 +329,7 @@ const App = () => {
   }, [isListExpanded]);
   
   const handleTabChange = (tab) => {
-    if (tab === 'profile' && !session) {
+    if ((tab === 'profile' || tab === 'leaderboard') && !session) {
       setIsAuthOpen(true);
     } else {
       setActiveTab(tab);
@@ -425,6 +427,9 @@ const App = () => {
                 userRatings={userRatings} 
                 onViewPub={handleViewPub}
             />
+        )}
+         {activeTab === 'leaderboard' && session && (
+            <LeaderboardPage onViewPub={handleViewPub} />
         )}
         {activeTab === 'settings' && (
             <SettingsPage
