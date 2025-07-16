@@ -7,9 +7,8 @@ import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
 import StarRating from './StarRating.jsx';
 
 const ProfilePage = ({ userProfile, userRatings, onClose, onLogout }) => {
-    const { username, level } = userProfile;
+    const { username, level, is_beta_tester, is_developer } = userProfile;
     const reviews = userProfile.reviews || 0;
-    const isBetaTester = userProfile.username === 'mont26' || userProfile.is_beta_tester;
     
     const rankData = getRankData(level);
     const reviewsForCurrentLevel = reviews % REVIEWS_PER_LEVEL;
@@ -33,11 +32,18 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout }) => {
             <main className="flex-grow p-4 overflow-y-auto">
                 {/* Profile Card */}
                 <div className="relative bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6 text-center border-t-4 border-amber-400">
-                    {isBetaTester && (
-                        <span className="absolute top-4 right-4 bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full dark:bg-blue-900 dark:text-blue-200 uppercase tracking-wide border-2 border-white dark:border-gray-800">
-                            Beta Tester
-                        </span>
-                    )}
+                    <div className="absolute top-4 right-4 flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                        {is_developer && (
+                            <span className="bg-amber-500 text-black text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
+                                Developer
+                            </span>
+                        )}
+                        {is_beta_tester && (
+                            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full dark:bg-blue-900 dark:text-blue-200 uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
+                                Beta Tester
+                            </span>
+                        )}
+                    </div>
 
                     <i className="fas fa-user-circle text-7xl text-gray-400 dark:text-gray-500 mb-4"></i>
                     
