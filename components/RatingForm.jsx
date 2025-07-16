@@ -98,13 +98,18 @@ const RatingForm = ({ onSubmit, existingRating }) => {
         <StarRating rating={quality} onRatingChange={setQuality} interactive color="text-amber-400" />
       </div>
 
-      <button
-        type="submit"
-        disabled={price === 0 || quality === 0}
-        className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-      >
-        {buttonText}
-      </button>
+      <div>
+        <p className="text-xs text-center text-gray-500 dark:text-gray-400 italic mb-3">
+          Please provide honest ratings to help keep StoutScout accurate for everyone.
+        </p>
+        <button
+          type="submit"
+          disabled={price === 0 || quality === 0}
+          className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+        >
+          {buttonText}
+        </button>
+      </div>
     </form>
   );
 };

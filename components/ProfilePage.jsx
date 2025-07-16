@@ -3,7 +3,7 @@ import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
 import StarRating from './StarRating.jsx';
 
-const ProfilePage = ({ userProfile, userRatings, onLogout }) => {
+const ProfilePage = ({ userProfile, userRatings, onViewPub }) => {
     const { username, level, is_beta_tester, is_developer } = userProfile;
     const reviews = userProfile.reviews || 0;
     
@@ -112,7 +112,18 @@ const ProfilePage = ({ userProfile, userRatings, onLogout }) => {
                     {userRatings.length > 0 ? (
                         <ul className="space-y-3">
                             {userRatings.slice(0, 10).map((r) => ( // Show latest 10
-                                <li key={r.id} className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                                <li key={r.id}
+                                    className={`bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md transition-colors ${r.pubLocation ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50' : ''}`}
+                                    onClick={() => r.pubLocation && onViewPub({ id: r.pubId, location: r.pubLocation })}
+                                    role={r.pubLocation ? "button" : "listitem"}
+                                    tabIndex={r.pubLocation ? "0" : "-1"}
+                                    onKeyDown={(e) => {
+                                        if (r.pubLocation && (e.key === 'Enter' || e.key === ' ')) {
+                                            onViewPub({ id: r.pubId, location: r.pubLocation });
+                                        }
+                                    }}
+                                    aria-label={r.pubLocation ? `View details for ${r.pubName}` : undefined}
+                                >
                                     <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                                         <div className="flex-grow pr-4 min-w-0">
                                             <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{r.pubName}</p>
@@ -120,15 +131,22 @@ const ProfilePage = ({ userProfile, userRatings, onLogout }) => {
                                         </div>
                                         <div className="flex-shrink-0 text-right">
                                             <p className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(r.timestamp)}</p>
+                                             {r.pubLocation && <i className="fas fa-map-pin text-amber-500 dark:text-amber-400 mt-2" title="View on map"></i>}
                                         </div>
                                     </div>
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-700 dark:text-gray-300">Price:</span>
+                                            <span className="text-gray-700 dark:text-gray-300">Price Rating:</span>
                                             <StarRating rating={r.rating.price} color="text-green-400" />
                                         </div>
+                                        {r.rating.exact_price > 0 && (
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-gray-700 dark:text-gray-300">Price Paid:</span>
+                                                <span className="font-bold text-gray-900 dark:text-white">£{r.rating.exact_price.toFixed(2)}</span>
+                                            </div>
+                                        )}
                                         <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-700 dark:text-gray-300">Quality:</span>
+                                            <span className="text-gray-700 dark:text-gray-300">Quality Rating:</span>
                                             <StarRating rating={r.rating.quality} color="text-amber-400" />
                                         </div>
                                     </div>

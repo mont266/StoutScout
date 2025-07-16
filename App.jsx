@@ -156,7 +156,7 @@ const App = () => {
     
     const { data: userRatingsData } = await supabase
         .from('ratings')
-        .select('id, pub_id, price, quality, created_at, exact_price, pubs(id, name, address)')
+        .select('id, pub_id, price, quality, created_at, exact_price, pubs(id, name, address, lat, lng)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -166,6 +166,7 @@ const App = () => {
       timestamp: new Date(r.created_at).getTime(),
       pubName: r.pubs?.name || 'Unknown',
       pubAddress: r.pubs?.address || 'Unknown',
+      pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
     }));
     setUserRatings(mappedUserRatings);
     return { profile: profileData, ratings: mappedUserRatings };
@@ -267,7 +268,10 @@ const App = () => {
       ? settings.simulatedLocation.coords
       : realUserLocation;
     setUserLocation(effectiveLocation);
-    setSearchCenter(effectiveLocation);
+    // Only set searchCenter on initial load or when not simulating
+    if (!settings.developerMode || !settings.simulatedLocation) {
+        setSearchCenter(effectiveLocation);
+    }
   }, [settings.developerMode, settings.simulatedLocation, realUserLocation]);
 
 
@@ -349,16 +353,26 @@ const App = () => {
       geocoder.geocode({ 'address': locationString }, (results, status) => {
         if (status === 'OK' && results?.[0]) {
           const location = results[0].geometry.location;
+          const newSimulatedLocation = { name: locationString, coords: { lat: location.lat(), lng: location.lng() } };
           handleSettingsChange({
               ...settings,
-              simulatedLocation: { name: locationString, coords: { lat: location.lat(), lng: location.lng() } }
+              simulatedLocation: newSimulatedLocation
           });
+          // Also update search center when a new location is set
+          setSearchCenter(newSimulatedLocation.coords);
           resolve();
         } else {
           reject(new Error('Geocode failed: ' + status));
         }
       });
     });
+  };
+
+  const handleViewPub = (pub) => {
+    if (!pub || !pub.id || !pub.location) return;
+    setSearchCenter(pub.location);
+    setActiveTab('map');
+    setSelectedPubId(pub.id);
   };
 
   const handleLogout = async () => {
@@ -406,7 +420,11 @@ const App = () => {
           </div>
         )}
         {activeTab === 'profile' && userProfile && (
-            <ProfilePage userProfile={userProfile} userRatings={userRatings} />
+            <ProfilePage 
+                userProfile={userProfile} 
+                userRatings={userRatings} 
+                onViewPub={handleViewPub}
+            />
         )}
         {activeTab === 'settings' && (
             <SettingsPage
