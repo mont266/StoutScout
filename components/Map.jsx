@@ -82,7 +82,7 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
 
   // Effect to perform a new search for pubs when the searchCenter or searchRadius changes
   useEffect(() => {
-    if (!isLoaded || !mapRef.current || !window.google) {
+    if (!isLoaded || !mapRef.current || !window.google || !searchCenter) {
       return;
     }
 
@@ -96,7 +96,7 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
         fields: ['id', 'displayName', 'formattedAddress', 'location'],
         textQuery: 'pub OR bar', // Use a more explicit query
         locationRestriction: {
-          center: searchCenter,
+          center: new window.google.maps.LatLng(searchCenter.lat, searchCenter.lng),
           radius: searchRadius,
         },
         maxResultCount: 20,

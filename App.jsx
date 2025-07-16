@@ -525,7 +525,7 @@ const App = () => {
             fields: ['id', 'displayName', 'location', 'formattedAddress'],
             textQuery: 'pub OR bar',
             locationRestriction: {
-                center: realUserLocation,
+                center: new window.google.maps.LatLng(realUserLocation.lat, realUserLocation.lng),
                 radius: 50, // 50-meter radius for a pinpoint search
             },
             maxResultCount: 5,
