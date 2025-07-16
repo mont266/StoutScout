@@ -18,6 +18,13 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
   const renderMetric = (pub) => {
     switch(filter) {
         case FilterType.Price:
+            const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
+            if (ratingsWithPrice.length > 0) {
+                const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
+                const average = total / ratingsWithPrice.length;
+                return <span className="text-lg font-semibold text-green-600 dark:text-green-400">£{average.toFixed(2)}</span>
+            }
+            
             const avgPrice = getAverageRating(pub.ratings, 'price');
             return <div className="flex flex-col items-end">
                 <StarRating rating={avgPrice} color="text-green-400" />

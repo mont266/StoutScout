@@ -7,9 +7,6 @@ export const MIN_RADIUS_MI = 0.5;
 export const MAX_RADIUS_MI = 5;
 export const DEFAULT_RADIUS_MI = 2;
 
-// Leveling is now based on number of reviews
-export const REVIEWS_PER_LEVEL = 3;
-
 // The single source of truth for rank progression.
 // Each rank has a name, a Font Awesome icon, and the minimum level required.
 export const RANK_DETAILS = [

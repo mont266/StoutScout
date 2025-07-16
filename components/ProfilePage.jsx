@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants.js';
+import { RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
 import { supabase } from '../supabase.js';
 import StarRating from './StarRating.jsx';
 
-const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile }) => {
+const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements }) => {
     // Component now manages its own profile state to update it after a moderation action.
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
+    const [isModerationVisible, setIsModerationVisible] = useState(false);
 
     // Keep state in sync with props from App.jsx
     useEffect(() => {
@@ -18,9 +19,43 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile 
     const reviews = profile.reviews || 0;
     
     const rankData = getRankData(level);
-    const reviewsForCurrentLevel = reviews % REVIEWS_PER_LEVEL;
-    const progressPercentage = (reviewsForCurrentLevel / REVIEWS_PER_LEVEL) * 100;
 
+    // New progress calculation logic based on the scaled system
+    const getLevelProgress = () => {
+        if (!levelRequirements || levelRequirements.length === 0 || !level) {
+            return {
+                percentage: 0,
+                progressText: 'Calculating...',
+                nextLevelDisplay: `Lvl ${level + 1}`
+            };
+        }
+
+        const currentLevelInfo = levelRequirements.find(lr => lr.level === level);
+        const nextLevelInfo = levelRequirements.find(lr => lr.level === level + 1);
+        
+        if (!currentLevelInfo) {
+             return { percentage: 0, progressText: 'Syncing...', nextLevelDisplay: `Lvl ${level + 1}` };
+        }
+        
+        // Handle max level case
+        if (!nextLevelInfo) {
+            return { percentage: 100, progressText: 'Max Level Reached!', nextLevelDisplay: 'Max' };
+        }
+        
+        const ratingsForThisLevel = nextLevelInfo.total_ratings_required - currentLevelInfo.total_ratings_required;
+        const progressIntoThisLevel = reviews - currentLevelInfo.total_ratings_required;
+        
+        const percentage = ratingsForThisLevel > 0 ? (progressIntoThisLevel / ratingsForThisLevel) * 100 : 0;
+        
+        return {
+            percentage: Math.min(100, Math.max(0, percentage)), // Clamp between 0 and 100
+            progressText: `${progressIntoThisLevel} / ${ratingsForThisLevel} Ratings to next level`,
+            nextLevelDisplay: `Lvl ${level + 1}`
+        };
+    };
+
+    const { percentage: progressPercentage, progressText: reviewsForNextLevelText, nextLevelDisplay } = getLevelProgress();
+    
     const [isRankProgressionVisible, setIsRankProgressionVisible] = useState(false);
 
     // Determine if the logged-in user can see moderation tools for the viewed profile
@@ -50,7 +85,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile 
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
             <main className="flex-grow p-4 overflow-y-auto">
                 {/* Profile Card */}
-                <div className="relative bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6 text-center border-t-4 border-amber-400">
+                <div className={`relative bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6 text-center border-t-4 ${is_beta_tester ? 'border-blue-500' : 'border-amber-400'}`}>
                     {is_banned && (
                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white font-bold px-4 py-1 rounded-full text-sm uppercase tracking-wider shadow-lg">
                             Banned
@@ -94,7 +129,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile 
                     <div className="mt-6">
                         <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-1">
                             <span>Progress to Next Level</span>
-                            <span>Lvl {level + 1}</span>
+                            <span>{nextLevelDisplay}</span>
                         </div>
                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 border border-gray-300 dark:border-gray-600">
                             <div
@@ -103,28 +138,40 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile 
                             ></div>
                         </div>
                         <p className="text-xs text-amber-600 dark:text-amber-300 mt-1 text-center">
-                            {reviewsForCurrentLevel} / {REVIEWS_PER_LEVEL} Ratings to next level
+                            {reviewsForNextLevelText}
                         </p>
                     </div>
                 </div>
 
                 {/* Moderation Tools Section */}
                 {canModerate && (
-                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                        <h3 className="text-xl font-bold text-red-500 dark:text-red-400 text-center mb-4">Moderation Tools</h3>
-                        <div className="flex flex-col items-center">
-                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                                Status: <span className={`font-bold ${is_banned ? 'text-red-500' : 'text-green-500'}`}>{is_banned ? 'Banned' : 'Active'}</span>
-                            </p>
-                            <button
-                                onClick={handleBanUser}
-                                disabled={is_banned || isBanning}
-                                className="w-full sm:w-auto bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 dark:disabled:bg-red-800 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                            >
-                                {isBanning ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <i className="fas fa-gavel"></i>}
-                                <span>{is_banned ? 'User Banned' : 'Ban User'}</span>
-                            </button>
-                        </div>
+                    <div className="mb-6">
+                        <button
+                            onClick={() => setIsModerationVisible(!isModerationVisible)}
+                            className="w-full flex justify-between items-center text-left text-lg font-semibold text-red-500 dark:text-red-400 p-4 bg-red-500/10 rounded-lg hover:bg-red-500/20 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                            aria-expanded={isModerationVisible}
+                            aria-controls="moderation-tools-panel"
+                        >
+                            <span><i className="fas fa-gavel mr-2"></i>Moderation Tools</span>
+                            <i className={`fas fa-chevron-down text-red-500/70 dark:text-red-400/70 transition-transform duration-300 ${isModerationVisible ? 'rotate-180' : ''}`}></i>
+                        </button>
+                        {isModerationVisible && (
+                            <div id="moderation-tools-panel" className="mt-2 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                                        Status: <span className={`font-bold ${is_banned ? 'text-red-500' : 'text-green-500'}`}>{is_banned ? 'Banned' : 'Active'}</span>
+                                    </p>
+                                    <button
+                                        onClick={handleBanUser}
+                                        disabled={is_banned || isBanning}
+                                        className="w-full sm:w-auto bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 dark:disabled:bg-red-800 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                                    >
+                                        {isBanning ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <i className="fas fa-user-slash"></i>}
+                                        <span>{is_banned ? 'User Banned' : 'Ban User'}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

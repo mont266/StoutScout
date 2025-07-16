@@ -85,6 +85,9 @@ const App = () => {
 
   const [reviewPopupInfo, setReviewPopupInfo] = useState(null);
   const [leveledUpInfo, setLeveledUpInfo] = useState(null);
+  
+  // New state for the scaled leveling system
+  const [levelRequirements, setLevelRequirements] = useState([]);
 
   // --- AUTH & DATA FETCHING ---
 
@@ -96,6 +99,7 @@ const App = () => {
     });
     
     fetchAllRatings();
+    fetchLevelRequirements();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         setSession(session);
@@ -110,6 +114,19 @@ const App = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+  
+  const fetchLevelRequirements = async () => {
+    const { data, error } = await supabase
+        .from('level_requirements')
+        .select('level, total_ratings_required')
+        .order('level', { ascending: true });
+    
+    if (error) {
+        console.error("Failed to fetch level requirements:", error);
+    } else {
+        setLevelRequirements(data);
+    }
+  };
 
   const fetchAllRatings = async () => {
       const { data, error } = await supabase
@@ -455,6 +472,7 @@ const App = () => {
               userRatings={ratingsToDisplay} 
               onViewPub={handleViewPub}
               loggedInUserProfile={userProfile}
+              levelRequirements={levelRequirements}
           />
       );
   }
