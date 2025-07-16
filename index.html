@@ -16,48 +16,82 @@
       .pb-safe {
           padding-bottom: env(safe-area-inset-bottom);
       }
-      @keyframes xp-popup-animation {
+      
+      /* New Toast animation for XP */
+      @keyframes toast-in-out {
         0% {
+          transform: translateY(150%) translateX(-50%);
           opacity: 0;
-          transform: translateY(20px) scale(0.8);
         }
-        20%, 80% {
+        15%, 85% {
+          transform: translateY(0) translateX(-50%);
           opacity: 1;
-          transform: translateY(0) scale(1);
         }
         100% {
+          transform: translateY(150%) translateX(-50%);
           opacity: 0;
-          transform: translateY(-50px) scale(0.9);
         }
       }
-      .animate-xp-popup {
-        animation: xp-popup-animation 2s ease-in-out forwards;
+      .animate-toast-in-out {
+        animation: toast-in-out 3s ease-in-out forwards;
       }
       
-      @keyframes level-up-animation {
-        0% {
+      /* New Modal Fade-in animation */
+      @keyframes modal-fade-in {
+        from {
           opacity: 0;
-          transform: translateY(50px) scale(0.7);
         }
-        20% {
+        to {
           opacity: 1;
-          transform: translateY(0) scale(1.1); /* Overshoot for bounce effect */
         }
-        30% {
-          transform: translateY(0) scale(1);
-        }
-        85% {
+      }
+      .animate-modal-fade-in {
+          animation: modal-fade-in 0.5s ease-out forwards;
+      }
+      
+      /* Confetti for Level/Rank up */
+      .confetti-piece {
+        position: absolute;
+        width: 10px;
+        height: 20px;
+        background: #fbb03b; /* Amber */
+        top: -5%;
+        opacity: 0;
+        animation: confetti-fall 4s ease-out infinite;
+      }
+      .confetti-piece:nth-child(2n) { background: #ffd700; } /* Yellow */
+      .confetti-piece:nth-child(3n) { background: #ffffff; } /* White */
+      .confetti-piece:nth-child(4n) { background: #2C1F17; } /* Dark brown */
+      .confetti-piece:nth-child(odd) { height: 10px; width: 10px; }
+      
+      .confetti-piece:nth-child(5n) { animation-duration: 6s; animation-delay: -5s; }
+      .confetti-piece:nth-child(3n) { animation-duration: 5s; animation-delay: -3s; }
+      .confetti-piece:nth-child(2n) { animation-duration: 3s; animation-delay: -1.5s; }
+      
+      @keyframes confetti-fall {
+        0% {
           opacity: 1;
-          transform: translateY(0) scale(1);
+          transform: translateY(0) rotateZ(0) rotateY(0);
         }
         100% {
-          opacity: 0;
-          transform: translateY(-80px) scale(0.9);
+          opacity: 1;
+          transform: translateY(110vh) rotateZ(1080deg) rotateY(720deg);
         }
       }
-      .animate-level-up {
-        animation: level-up-animation 3s ease-in-out forwards;
+
+      /* New Glow for Rank Up Icon */
+      @keyframes rank-up-glow {
+        0%, 100% {
+          filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 10px #ffd700) drop-shadow(0 0 15px #fbb03b);
+        }
+        50% {
+          filter: drop-shadow(0 0 10px #fff) drop-shadow(0 0 20px #ffd700) drop-shadow(0 0 30px #fbb03b);
+        }
       }
+      .animate-rank-up-glow {
+        animation: rank-up-glow 2.5s ease-in-out infinite;
+      }
+
     </style>
 
   <script type="importmap">

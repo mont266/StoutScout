@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { FilterType } from '../types.js';
 import StarRating from './StarRating.jsx';
 
-const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped }) => {
+const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius }) => {
   const selectedItemRef = useRef(null);
   const listRef = useRef(null);
 
@@ -48,6 +48,10 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
     }
   }
 
+  const displayRadius = distanceUnit === 'mi'
+    ? (searchRadius / 1609.34).toFixed(1)
+    : (searchRadius / 1000).toFixed(1);
+
   return (
     <div className="bg-white dark:bg-gray-800 h-full flex flex-col shadow-lg rounded-t-2xl">
       <header onClick={onToggle} className="py-3 cursor-pointer flex justify-center items-center border-b border-gray-200 dark:border-gray-700 flex-shrink-0" aria-label={isExpanded ? 'Collapse list' : 'Expand list'}>
@@ -56,6 +60,10 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
 
       {isExpanded && (
         <div className="overflow-y-auto">
+           <div className="p-2 text-center text-xs bg-gray-100 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+              <i className="fas fa-search-location mr-1.5"></i>
+              Searching within <strong className="text-gray-800 dark:text-gray-200">{displayRadius} {distanceUnit}</strong>
+            </div>
           {resultsAreCapped && (
             <div className="p-2 text-center text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-b border-gray-200 dark:border-gray-700">
               <i className="fas fa-info-circle mr-1"></i>

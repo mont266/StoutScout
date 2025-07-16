@@ -3,6 +3,7 @@ import { FilterType } from './types.js';
 import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
+import { getRankData } from './utils.js';
 
 import MapComponent from './components/Map.jsx';
 import FilterControls from './components/FilterControls.jsx';
@@ -14,7 +15,9 @@ import ProfilePage from './components/ProfilePage.jsx';
 import LeaderboardPage from './components/LeaderboardPage.jsx';
 import XPPopup from './components/XPPopup.jsx';
 import LevelUpPopup from './components/LevelUpPopup.jsx';
+import RankUpPopup from './components/RankUpPopup.jsx';
 import AuthPage from './components/AuthPage.jsx';
+import ConfirmCurrentPubModal from './components/ConfirmCurrentPubModal.jsx';
 
 // A new TabBar component to handle the main navigation.
 const TabBar = ({ activeTab, onTabChange }) => {
@@ -83,8 +86,15 @@ const App = () => {
   const [viewedRatings, setViewedRatings] = useState([]);
   const [isFetchingViewedProfile, setIsFetchingViewedProfile] = useState(false);
 
+  // Popup states
   const [reviewPopupInfo, setReviewPopupInfo] = useState(null);
   const [leveledUpInfo, setLeveledUpInfo] = useState(null);
+  const [rankUpInfo, setRankUpInfo] = useState(null);
+  
+  // "I'm Here" feature states
+  const [isFindingPub, setIsFindingPub] = useState(false);
+  const [pubCandidates, setPubCandidates] = useState([]);
+  const [findPubError, setFindPubError] = useState(null);
   
   // New state for the scaled leveling system
   const [levelRequirements, setLevelRequirements] = useState([]);
@@ -210,9 +220,12 @@ const App = () => {
   // --- CORE APP LOGIC ---
 
   const handlePlacesFound = useCallback((places, capped) => {
-    setGooglePlaces(places);
+    // Deduplicate places before setting state
+    const placeIds = new Set(googlePlaces.map(p => p.id));
+    const newPlaces = places.filter(p => !placeIds.has(p.id));
+    setGooglePlaces(prev => [...prev, ...newPlaces]);
     setResultsAreCapped(capped);
-  }, []);
+  }, [googlePlaces]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -221,17 +234,32 @@ const App = () => {
 
   useEffect(() => {
     if (reviewPopupInfo) {
-      const timer = setTimeout(() => setReviewPopupInfo(null), 2000);
+      const timer = setTimeout(() => setReviewPopupInfo(null), 3000);
       return () => clearTimeout(timer);
     }
   }, [reviewPopupInfo]);
   
   useEffect(() => {
     if (leveledUpInfo) {
-      const timer = setTimeout(() => setLeveledUpInfo(null), 3000);
+      const timer = setTimeout(() => setLeveledUpInfo(null), 4000);
       return () => clearTimeout(timer);
     }
   }, [leveledUpInfo]);
+
+  useEffect(() => {
+    if (rankUpInfo) {
+      const timer = setTimeout(() => setRankUpInfo(null), 5000); // Rank up is special, lasts longer
+      return () => clearTimeout(timer);
+    }
+  }, [rankUpInfo]);
+  
+  useEffect(() => {
+    if (findPubError) {
+      const timer = setTimeout(() => setFindPubError(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [findPubError]);
+
 
   useEffect(() => {
     const newPubs = googlePlaces.map((place) => {
@@ -299,19 +327,43 @@ const App = () => {
     }
   }, [settings.developerMode, settings.simulatedLocation, realUserLocation]);
 
+  const getComparablePrice = useCallback((pub) => {
+      if (!pub || !pub.ratings || pub.ratings.length === 0) return 999;
+
+      // Prioritize exact price if available
+      const ratingsWithExactPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
+      if (ratingsWithExactPrice.length > 0) {
+          const total = ratingsWithExactPrice.reduce((acc, r) => acc + r.exact_price, 0);
+          return total / ratingsWithExactPrice.length;
+      }
+
+      // Fallback to star rating, converting it to a representative price
+      const avgStarRating = getAverageRating(pub.ratings, 'price');
+      if (avgStarRating === 0) return 999; // No price data, send to bottom
+
+      // This mapping converts a star rating to an estimated price for sorting.
+      // It's based on the ranges defined in RatingForm.jsx.
+      if (avgStarRating > 4.5) return 4.25; // Represents 5 stars (< £4.50)
+      if (avgStarRating > 3.5) return 5.00; // Represents 4 stars (£4.50 - £5.49)
+      if (avgStarRating > 2.5) return 5.75; // Represents 3 stars (£5.50 - £5.99)
+      if (avgStarRating > 1.5) return 6.50; // Represents 2 stars (£6.00 - £6.99)
+      return 7.50; // Represents 1 star (£7.00+)
+  }, [getAverageRating]);
+
 
   const sortedPubs = useMemo(() => {
     return [...pubs].sort((a, b) => {
       switch (filter) {
         case FilterType.Price:
-          return getAverageRating(b.ratings, 'price') - getAverageRating(a.ratings, 'price');
+          // Sort by ascending price (cheapest first)
+          return getComparablePrice(a) - getComparablePrice(b);
         case FilterType.Quality:
           return getAverageRating(b.ratings, 'quality') - getAverageRating(a.ratings, 'quality');
         default:
           return getDistance(a.location, userLocation) - getDistance(b.location, userLocation);
       }
     });
-  }, [pubs, filter, userLocation, getDistance]);
+  }, [pubs, filter, userLocation, getDistance, getComparablePrice]);
 
   const handleRatePub = useCallback(async (pubId, pubName, pubAddress, newRating) => {
     if (!session || !userProfile || !selectedPub) return;
@@ -335,8 +387,16 @@ const App = () => {
         const oldProfile = userProfile;
         await supabase.functions.invoke('increment-review-count');
         const { profile: newProfile } = await fetchUserData();
+        
         if (newProfile && oldProfile && newProfile.level > oldProfile.level) {
-            setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
+            const oldRank = getRankData(oldProfile.level);
+            const newRank = getRankData(newProfile.level);
+            
+            if (newRank.name !== oldRank.name) {
+                setRankUpInfo({ key: Date.now(), newRank });
+            } else {
+                setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
+            }
         }
         setReviewPopupInfo({ key: Date.now() });
     }
@@ -444,6 +504,61 @@ const App = () => {
       setIsFetchingViewedProfile(false);
   };
 
+    const handleFindCurrentPub = async () => {
+        if (isFindingPub) return;
+        setIsFindingPub(true);
+        setFindPubError(null);
+
+        if (!window.google || !realUserLocation || (realUserLocation.lat === DEFAULT_LOCATION.lat && realUserLocation.lng === DEFAULT_LOCATION.lng)) {
+            setFindPubError(locationError || "Could not get your precise location.");
+            setIsFindingPub(false);
+            return;
+        }
+
+        const request = {
+            fields: ['id', 'displayName', 'location', 'formattedAddress'],
+            textQuery: 'pub OR bar',
+            locationRestriction: {
+                center: realUserLocation,
+                radius: 50, // 50-meter radius for a pinpoint search
+            },
+            maxResultCount: 5,
+        };
+
+        try {
+            const { places } = await window.google.maps.places.Place.searchByText(request);
+            if (!places || places.length === 0) {
+                setFindPubError("Couldn't find a pub at your current location.");
+            } else if (places.length === 1) {
+                const place = places[0];
+                const pubExists = googlePlaces.some(p => p.id === place.id);
+                if (!pubExists) {
+                    handlePlacesFound([place], false);
+                }
+                handleSelectPub(place.id);
+            } else {
+                setPubCandidates(places);
+            }
+        } catch (error) {
+            console.error("Find current pub failed:", error);
+            setFindPubError("An error occurred while searching for your location.");
+        } finally {
+            setIsFindingPub(false);
+        }
+    };
+
+    const handleCandidateSelect = (place) => {
+        if (place) {
+            const pubExists = googlePlaces.some(p => p.id === place.id);
+            if (!pubExists) {
+                handlePlacesFound([place], false);
+            }
+            handleSelectPub(place.id);
+        }
+        setPubCandidates([]);
+    };
+
+
   if (loading) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-white dark:bg-gray-900">
@@ -487,7 +602,10 @@ const App = () => {
         {activeTab === 'map' && (
           <div className="flex-grow flex flex-col overflow-hidden">
             {locationError && !(settings.developerMode && settings.simulatedLocation) && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
-            <FilterControls currentFilter={filter} onFilterChange={setFilter} />
+            <FilterControls
+              currentFilter={filter} onFilterChange={setFilter}
+              onFindCurrentPub={handleFindCurrentPub} isFindingPub={isFindingPub}
+            />
 
             <div className="flex-grow min-h-0">
                 <MapComponent 
@@ -505,6 +623,7 @@ const App = () => {
                     distanceUnit={settings.unit} isExpanded={isListExpanded}
                     onToggle={() => setIsListExpanded(p => !p)}
                     resultsAreCapped={resultsAreCapped}
+                    searchRadius={settings.radius}
                 />
             </div>
           </div>
@@ -536,8 +655,21 @@ const App = () => {
       
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
 
+      {/* Popups and Modals */}
       {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
       {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
+      {rankUpInfo && <RankUpPopup key={rankUpInfo.key} newRank={rankUpInfo.newRank} />}
+      {pubCandidates.length > 0 && (
+          <ConfirmCurrentPubModal candidates={pubCandidates} onSelect={handleCandidateSelect} onClose={() => setPubCandidates([])} />
+      )}
+      {findPubError && (
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-auto pointer-events-none z-50 pb-safe" role="alert">
+              <div className="animate-toast-in-out flex items-center space-x-3 bg-red-600 text-white font-bold text-base py-3 px-6 rounded-full shadow-2xl border border-red-400/50">
+                  <i className="fas fa-exclamation-triangle"></i>
+                  <span>{findPubError}</span>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

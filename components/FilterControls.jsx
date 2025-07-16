@@ -1,7 +1,7 @@
 import React from 'react';
 import { FilterType } from '../types.js';
 
-const FilterControls = ({ currentFilter, onFilterChange }) => {
+const FilterControls = ({ currentFilter, onFilterChange, onFindCurrentPub, isFindingPub }) => {
   const filters = [
     { key: FilterType.Distance, label: 'Nearest', icon: 'fa-map-marker-alt' },
     { key: FilterType.Price, label: 'Best Price', icon: 'fa-tag' },
@@ -10,21 +10,38 @@ const FilterControls = ({ currentFilter, onFilterChange }) => {
 
   return (
     <div className="p-2 bg-gray-100 dark:bg-gray-900 flex justify-center flex-shrink-0">
-      <div className="flex justify-around bg-gray-200 dark:bg-gray-700/50 rounded-full p-1 space-x-1">
-        {filters.map(({ key, label, icon }) => (
-          <button
-            key={key}
-            onClick={() => onFilterChange(key)}
-            className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
-              currentFilter === key
-                ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-600/50'
-            }`}
-          >
-            <i className={`fas ${icon} w-4 text-center`}></i>
-            <span>{label}</span>
-          </button>
-        ))}
+      <div className="flex justify-center items-center space-x-2">
+        <div className="flex bg-gray-200 dark:bg-gray-700/50 rounded-full p-1 space-x-1">
+          {filters.map(({ key, label, icon }) => (
+            <button
+              key={key}
+              onClick={() => onFilterChange(key)}
+              className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                currentFilter === key
+                  ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-600/50'
+              }`}
+            >
+              <i className={`fas ${icon} w-4 text-center`}></i>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+        
+        <div className="w-px h-6 bg-gray-300 dark:bg-gray-600"></div>
+
+        <button
+          onClick={onFindCurrentPub}
+          disabled={isFindingPub}
+          className="px-3 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-wait"
+        >
+          {isFindingPub ? (
+             <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-amber-500"></div>
+          ) : (
+            <i className="fas fa-crosshairs"></i>
+          )}
+          <span>{isFindingPub ? 'Finding...' : "I'm Here"}</span>
+        </button>
       </div>
     </div>
   );

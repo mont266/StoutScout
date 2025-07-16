@@ -64,6 +64,7 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
   });
 
   const mapRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
 
   // Effect to pan the map to a selected pub, or to the user's live location
   useEffect(() => {
@@ -84,32 +85,40 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
     if (!isLoaded || !mapRef.current || !window.google) {
       return;
     }
+
+    // Debounce the search to avoid excessive API calls when dragging the map
+    if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+    }
     
-    const search = async () => {
-      // The `fields` property is now required. We list the fields the app uses.
+    searchTimeoutRef.current = setTimeout(async () => {
       const request = {
         fields: ['id', 'displayName', 'formattedAddress', 'location'],
+        textQuery: 'pub OR bar', // Use a more explicit query
         locationRestriction: {
           center: searchCenter,
           radius: searchRadius,
         },
-        includedTypes: ['bar'],
         maxResultCount: 20,
       };
 
       try {
-        const { places } = await window.google.maps.places.Place.searchNearby(request);
+        // Use the newer, more accurate searchByText API
+        const { places } = await window.google.maps.places.Place.searchByText(request);
         const results = places || [];
-        // The API is capped at 20 results. If we get 20, it's likely there are more.
         const wasCapped = results.length === 20;
         onPlacesFound(results, wasCapped);
       } catch (error) {
         console.error('Places search failed:', error);
         onPlacesFound([], false);
       }
-    };
+    }, 500); // 500ms debounce
 
-    search();
+    return () => {
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+    };
 
   }, [searchCenter, searchRadius, isLoaded, onPlacesFound]);
 
@@ -158,7 +167,7 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
         mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
       >
         <div style={{ transform: 'translate(-50%, -50%)', zIndex: 100 }} title="Your Location">
-           <div className="w-4 h-4 rounded-full bg-[#4285F4] border-2 border-gray-800 dark:border-white shadow-md"></div>
+           <div className="w-4 h-4 rounded-full bg-[#4285F4] border-2 border-white dark:border-gray-800 shadow-md"></div>
         </div>
       </OverlayView>
 
