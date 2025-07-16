@@ -55,7 +55,7 @@ const mapStylesLight = [
 
 const libraries = ['places', 'marker'];
 
-const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme, filter }) => {
+const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme, filter, onCenterChange }) => {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
@@ -64,6 +64,7 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
 
   const mapRef = useRef(null);
   const searchTimeoutRef = useRef(null);
+  const centerChangeTimeoutRef = useRef(null);
 
   // Effect to pan the map to a selected pub, or to the user's live location
   useEffect(() => {
@@ -75,9 +76,9 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
             mapRef.current.panTo(pub.location);
         }
     } else {
-        mapRef.current.panTo(userLocation);
+        mapRef.current.panTo(searchCenter);
     }
-  }, [selectedPubId, pubs, userLocation]);
+  }, [selectedPubId, pubs, searchCenter]);
 
   // Effect to perform a new search for pubs when the searchCenter or searchRadius changes
   useEffect(() => {
@@ -129,6 +130,15 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
     mapRef.current = null;
   }, []);
   
+  const handleIdle = useCallback(() => {
+      if (mapRef.current && onCenterChange) {
+          const newCenter = mapRef.current.getCenter();
+          if (newCenter) {
+              onCenterChange({ lat: newCenter.lat(), lng: newCenter.lng() });
+          }
+      }
+  }, [onCenterChange]);
+  
   const mapOptions = useMemo(() => ({
     styles: theme === 'dark' ? mapStylesDark : mapStylesLight,
     disableDefaultUI: true,
@@ -155,11 +165,12 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
   return isLoaded ? (
     <GoogleMap
       mapContainerStyle={containerStyle}
-      center={userLocation}
+      center={searchCenter}
       zoom={14}
       onLoad={onLoad}
       onUnmount={onUnmount}
       options={mapOptions}
+      onIdle={handleIdle}
     >
       <OverlayView
         position={userLocation}

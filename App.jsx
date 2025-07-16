@@ -75,8 +75,8 @@ const App = () => {
 
   // Location State
   const [realUserLocation, setRealUserLocation] = useState(DEFAULT_LOCATION);
-  const [userLocation, setUserLocation] = useState(DEFAULT_LOCATION);
-  const [searchCenter, setSearchCenter] = useState(DEFAULT_LOCATION);
+  const [userLocation, setUserLocation] = useState(DEFAULT_LOCATION); // This is for the blue dot
+  const [searchCenter, setSearchCenter] = useState(DEFAULT_LOCATION); // This is for the map search area
   const [locationError, setLocationError] = useState(null);
   const [resultsAreCapped, setResultsAreCapped] = useState(false);
 
@@ -407,10 +407,22 @@ const App = () => {
       ? settings.simulatedLocation.coords
       : realUserLocation;
 
-    // Keep the user's location dot and the map's search center in sync.
+    // Keep the user's location dot and the map's search center in sync when the user's location changes.
     setUserLocation(effectiveLocation);
     setSearchCenter(effectiveLocation);
   }, [settings.developerMode, settings.simulatedLocation, realUserLocation]);
+  
+  const handleCenterChange = useCallback((newCenter) => {
+      // Prevent tiny adjustments from triggering re-searches, e.g. after zoom
+      const distance = getDistance(newCenter, searchCenter);
+      if (distance > 50) { // Only update if center moved more than 50 meters
+          setSearchCenter(newCenter);
+          trackEvent('search_on_drag', {
+              new_lat: newCenter.lat,
+              new_lng: newCenter.lng
+          });
+      }
+  }, [searchCenter, getDistance]);
 
   const getComparablePrice = useCallback((pub) => {
       if (!pub || !pub.ratings || pub.ratings.length === 0) return 999;
@@ -445,10 +457,11 @@ const App = () => {
         case FilterType.Quality:
           return getAverageRating(b.ratings, 'quality') - getAverageRating(a.ratings, 'quality');
         default:
-          return getDistance(a.location, userLocation) - getDistance(b.location, userLocation);
+           // Sort by distance from the current search center, not the user's location dot
+          return getDistance(a.location, searchCenter) - getDistance(b.location, searchCenter);
       }
     });
-  }, [pubs, filter, userLocation, getDistance, getComparablePrice]);
+  }, [pubs, filter, searchCenter, getDistance, getComparablePrice]);
 
   const handleRatePub = useCallback(async (pubId, pubName, pubAddress, newRating) => {
     if (!session || !userProfile || !selectedPub) return;
@@ -774,6 +787,7 @@ const App = () => {
                   searchCenter={searchCenter} searchRadius={settings.radius}
                   onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
                   onPlacesFound={handlePlacesFound} theme={settings.theme} filter={filter}
+                  onCenterChange={handleCenterChange}
                 />
                 <button
                   onClick={handleFindCurrentPub}
@@ -793,7 +807,7 @@ const App = () => {
                   <PubList
                     pubs={sortedPubs} selectedPubId={selectedPubId} onSelectPub={handleSelectPub}
                     filter={filter} getAverageRating={getAverageRating}
-                    getDistance={(loc) => getDistance(loc, userLocation)}
+                    getDistance={(loc) => getDistance(loc, searchCenter)}
                     distanceUnit={settings.unit} isExpanded={isListExpanded}
                     onToggle={() => setIsListExpanded(p => !p)}
                     resultsAreCapped={resultsAreCapped}
