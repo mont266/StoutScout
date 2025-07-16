@@ -280,7 +280,6 @@ const App = () => {
       setInitialSearchComplete(true);
     }
     // A new search from the map should always replace the old results.
-    // The previous additive approach was buggy for large location changes (e.g., simulation).
     setGooglePlaces(places || []);
     setResultsAreCapped(capped);
   }, [initialSearchComplete]);
@@ -318,24 +317,39 @@ const App = () => {
     }
   }, [findPubError]);
 
+  const getDistance = useCallback((location1, location2) => {
+    if (!location1 || !location2) return Infinity;
+    const R = 6371e3;
+    const φ1 = location1.lat * Math.PI/180;
+    const φ2 = location2.lat * Math.PI/180;
+    const Δφ = (location2.lat-location1.lat) * Math.PI/180;
+    const Δλ = (location2.lng-location1.lng) * Math.PI/180;
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; // Distance in meters
+  }, []);
+
 
   useEffect(() => {
     const combinedPubsMap = new Map();
 
-    // 1. Add all pubs from our database. These are our persistent records.
+    // 1. Filter pubs from our database to only include those in the current search area.
     dbPubs.forEach(pub => {
-      if (pub.id && pub.name && pub.location) {
-        combinedPubsMap.set(pub.id, {
-          id: pub.id,
-          name: pub.name,
-          address: pub.address,
-          location: pub.location,
-        });
-      }
+        if (pub.id && pub.name && pub.location) {
+            const distance = getDistance(pub.location, searchCenter);
+            if (distance <= settings.radius) {
+                combinedPubsMap.set(pub.id, {
+                    id: pub.id,
+                    name: pub.name,
+                    address: pub.address,
+                    location: pub.location,
+                });
+            }
+        }
     });
 
     // 2. Add or update with fresh data from Google's API search.
-    // This ensures names and addresses are current if they change on Google Maps.
+    // These are already guaranteed to be within the search radius.
     googlePlaces.forEach(place => {
       if (place.id && place.displayName && place.location && place.formattedAddress) {
         combinedPubsMap.set(place.id, {
@@ -354,7 +368,7 @@ const App = () => {
     }));
 
     setPubs(finalPubsList);
-  }, [googlePlaces, dbPubs, allRatings]);
+  }, [googlePlaces, dbPubs, allRatings, searchCenter, settings.radius, getDistance]);
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   
@@ -368,17 +382,6 @@ const App = () => {
     const total = ratings.reduce((acc, r) => acc + r[key], 0);
     return total / ratings.length;
   };
-
-  const getDistance = useCallback((location1, location2) => {
-    const R = 6371e3;
-    const φ1 = location1.lat * Math.PI/180;
-    const φ2 = location2.lat * Math.PI/180;
-    const Δφ = (location2.lat-location1.lat) * Math.PI/180;
-    const Δλ = (location2.lng-location1.lng) * Math.PI/180;
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  }, []);
 
   useEffect(() => {
     if (!navigator.geolocation) {
