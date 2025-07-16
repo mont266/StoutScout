@@ -220,12 +220,18 @@ const App = () => {
   // --- CORE APP LOGIC ---
 
   const handlePlacesFound = useCallback((places, capped) => {
-    // Deduplicate places before setting state
-    const placeIds = new Set(googlePlaces.map(p => p.id));
-    const newPlaces = places.filter(p => !placeIds.has(p.id));
-    setGooglePlaces(prev => [...prev, ...newPlaces]);
+    setGooglePlaces(prevGooglePlaces => {
+      // Deduplicate places before setting state
+      const placeIds = new Set(prevGooglePlaces.map(p => p.id));
+      const newPlaces = places.filter(p => !placeIds.has(p.id));
+      // Only update state if there are actually new places to prevent unnecessary re-renders
+      if (newPlaces.length > 0) {
+        return [...prevGooglePlaces, ...newPlaces];
+      }
+      return prevGooglePlaces;
+    });
     setResultsAreCapped(capped);
-  }, [googlePlaces]);
+  }, []);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -509,7 +515,7 @@ const App = () => {
         setIsFindingPub(true);
         setFindPubError(null);
 
-        if (!window.google || !realUserLocation || (realUserLocation.lat === DEFAULT_LOCATION.lat && realUserLocation.lng === DEFAULT_LOCATION.lng)) {
+        if (!window.google?.maps?.places || !realUserLocation || (realUserLocation.lat === DEFAULT_LOCATION.lat && realUserLocation.lng === DEFAULT_LOCATION.lng)) {
             setFindPubError(locationError || "Could not get your precise location.");
             setIsFindingPub(false);
             return;
@@ -518,10 +524,10 @@ const App = () => {
         const request = {
             fields: ['id', 'displayName', 'location', 'formattedAddress'],
             textQuery: 'pub OR bar',
-            locationRestriction: {
+            locationRestriction: new window.google.maps.Circle({
                 center: realUserLocation,
                 radius: 50, // 50-meter radius for a pinpoint search
-            },
+            }),
             maxResultCount: 5,
         };
 
