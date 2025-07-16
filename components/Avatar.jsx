@@ -1,5 +1,5 @@
 import React from 'react';
-import AVATAR_COMPONENTS from '../avatars.js';
+import AVATAR_COMPONENTS from '../avatars.jsx';
 
 const Avatar = ({ avatarId, className = 'w-24 h-24' }) => {
   const AvatarComponent = AVATAR_COMPONENTS[avatarId] || AVATAR_COMPONENTS.default;

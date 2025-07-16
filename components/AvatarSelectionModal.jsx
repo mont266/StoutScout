@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Avatar from './Avatar.jsx';
-import { AVATAR_LIST } from '../avatars.js';
+import { AVATAR_LIST } from '../avatars.jsx';
 
 const AvatarSelectionModal = ({ currentAvatarId, onSelect, onClose }) => {
   const [selectedId, setSelectedId] = useState(currentAvatarId);
