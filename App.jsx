@@ -524,10 +524,10 @@ const App = () => {
         const request = {
             fields: ['id', 'displayName', 'location', 'formattedAddress'],
             textQuery: 'pub OR bar',
-            locationRestriction: new window.google.maps.Circle({
+            locationRestriction: {
                 center: realUserLocation,
                 radius: 50, // 50-meter radius for a pinpoint search
-            }),
+            },
             maxResultCount: 5,
         };
 

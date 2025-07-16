@@ -95,10 +95,10 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
       const request = {
         fields: ['id', 'displayName', 'formattedAddress', 'location'],
         textQuery: 'pub OR bar', // Use a more explicit query
-        locationRestriction: new window.google.maps.Circle({
+        locationRestriction: {
           center: searchCenter,
           radius: searchRadius,
-        }),
+        },
         maxResultCount: 20,
       };
 
