@@ -8,7 +8,7 @@ const getTitle = (tab) => {
         case 'map':
             return 'StoutScout';
         case 'leaderboard':
-            return 'Leaderboards';
+            return 'Top Reviewers';
         case 'profile':
             return 'Your Profile';
         case 'settings':

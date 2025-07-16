@@ -429,7 +429,7 @@ const App = () => {
             />
         )}
          {activeTab === 'leaderboard' && session && (
-            <LeaderboardPage onViewPub={handleViewPub} />
+            <LeaderboardPage />
         )}
         {activeTab === 'settings' && (
             <SettingsPage
