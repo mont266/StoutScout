@@ -93,6 +93,13 @@ export const formatTimeAgo = (timestamp) => {
     return Math.floor(seconds) + " seconds ago";
   };
 
+const EUROZONE_COUNTRIES = [
+    'Austria', 'Belgium', 'Croatia', 'Cyprus', 'Estonia', 'Finland', 
+    'France', 'Germany', 'Greece', 'Ireland', 'Italy', 'Latvia', 
+    'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Portugal', 
+    'Slovakia', 'Slovenia', 'Spain'
+];
+
 /**
  * Infers currency information based on keywords in the address.
  * Defaults to GBP (£) for UK/unidentified locations.
@@ -100,11 +107,18 @@ export const formatTimeAgo = (timestamp) => {
  * @returns {{symbol: string, code: string}} The currency symbol and code.
  */
 export const getCurrencyInfo = (address = '') => {
-    if (address.includes('Ireland') && !address.includes('Northern Ireland')) {
-        return { symbol: '€', code: 'EUR' };
-    }
-    if (address.includes('USA') || address.includes('United States')) {
+    const lowerCaseAddress = address.toLowerCase();
+
+    if (lowerCaseAddress.includes('usa') || lowerCaseAddress.includes('united states')) {
         return { symbol: '$', code: 'USD' };
     }
+
+    if (EUROZONE_COUNTRIES.some(country => lowerCaseAddress.includes(country.toLowerCase()))) {
+        // Specifically exclude Northern Ireland from the Eurozone check as it uses GBP
+        if (!lowerCaseAddress.includes('northern ireland')) {
+            return { symbol: '€', code: 'EUR' };
+        }
+    }
+
     return { symbol: '£', code: 'GBP' };
 };

@@ -1,15 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import StarRating from './StarRating.jsx';
-
-// Labels to guide the user on price rating. Higher stars mean cheaper price.
-// These are now currency-agnostic.
-const priceLabels = [
-  'Very Expensive\n(e.g., 7.00+)',      // 1 star
-  'Expensive\n(e.g., 6.00 - 6.99)',   // 2 stars
-  'Average\n(e.g., 5.50 - 5.99)',     // 3 stars
-  'Cheap\n(e.g., 4.50 - 5.49)',       // 4 stars
-  'Very Cheap\n(e.g., < 4.50)'          // 5 stars
-];
 
 const getStarRatingFromPrice = (price) => {
     if (price === '' || isNaN(price)) return 0;
@@ -25,6 +15,15 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£' }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
   const [priceInput, setPriceInput] = useState('');
+
+  // Dynamically create price labels based on the currency symbol
+  const priceLabels = useMemo(() => [
+    `Very Expensive\n(e.g., ${currencySymbol}7.00+)`,      // 1 star
+    `Expensive\n(e.g., ${currencySymbol}6.00 - ${currencySymbol}6.99)`,   // 2 stars
+    `Average\n(e.g., ${currencySymbol}5.50 - ${currencySymbol}5.99)`,     // 3 stars
+    `Cheap\n(e.g., ${currencySymbol}4.50 - ${currencySymbol}5.49)`,       // 4 stars
+    `Very Cheap\n(e.g., < ${currencySymbol}4.50)`          // 5 stars
+  ], [currencySymbol]);
 
   useEffect(() => {
     // Pre-fill the form if an existing rating is provided

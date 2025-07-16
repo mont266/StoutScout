@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { RANK_DETAILS } from '../constants.js';
-import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
+import { getRankData, formatTimeAgo, formatLocationDisplay, getCurrencyInfo } from '../utils.js';
 import { supabase } from '../supabase.js';
 import StarRating from './StarRating.jsx';
 import Avatar from './Avatar.jsx';
@@ -68,13 +69,13 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
             return;
         }
         setIsBanning(true);
-        const { error } = await supabase
-            .from('profiles')
-            .update({ is_banned: true })
-            .eq('id', profile.id);
+        // This now calls a secure Edge Function instead of updating the DB from the client
+        const { error } = await supabase.functions.invoke('ban-user', {
+            body: { userIdToBan: profile.id },
+        });
 
         if (error) {
-            alert(`Failed to ban user: ${error.message}`);
+            alert(`Failed to ban user: ${error.message}. Ensure the 'ban-user' Edge Function is deployed.`);
         } else {
             // Update local state to immediately reflect the change
             setProfile(p => ({ ...p, is_banned: true }));
@@ -242,7 +243,9 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                         <div id="recent-ratings-list" className="mt-2">
                             {userRatings.length > 0 ? (
                                 <ul className="space-y-3">
-                                    {userRatings.slice(0, 10).map((r) => ( // Show latest 10
+                                    {userRatings.slice(0, 10).map((r) => { // Show latest 10
+                                        const currencyInfo = getCurrencyInfo(r.pubAddress);
+                                        return (
                                         <li key={r.id}
                                             className={`bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md transition-colors ${r.pubLocation ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50' : ''}`}
                                             onClick={() => r.pubLocation && onViewPub({ id: r.pubId, location: r.pubLocation })}
@@ -273,7 +276,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                                 {r.rating.exact_price > 0 && (
                                                     <div className="flex justify-between items-center text-sm">
                                                         <span className="text-gray-700 dark:text-gray-300">Price Paid:</span>
-                                                        <span className="font-bold text-gray-900 dark:text-white">£{r.rating.exact_price.toFixed(2)}</span>
+                                                        <span className="font-bold text-gray-900 dark:text-white">{currencyInfo.symbol}{(r.rating.exact_price).toFixed(2)}</span>
                                                     </div>
                                                 )}
                                                 <div className="flex justify-between items-center text-sm">
@@ -282,7 +285,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                                 </div>
                                             </div>
                                         </li>
-                                    ))}
+                                    )})}
                                 </ul>
                             ) : (
                                 <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">

@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.js';
 import Logo from './Logo.jsx';
@@ -35,10 +36,10 @@ const AuthPage = ({ onClose }) => {
     try {
       if (isSignUp) {
         // Sign Up
-        if (!username) {
-          setError('Please enter a username.');
-          setLoading(false);
-          return;
+        if (!username || username.length < 3 || username.length > 20 || !/^[a-zA-Z0-9_]+$/.test(username)) {
+            setError('Username must be 3-20 characters and contain only letters, numbers, or underscores.');
+            setLoading(false);
+            return;
         }
         
         const { data, error: signUpError } = await supabase.auth.signUp({
