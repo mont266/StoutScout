@@ -77,7 +77,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
             </div>
           ) : pubs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 p-8 text-center">
-                <p>No pubs found in this area. Try expanding the search radius in Settings.</p>
+                <p>No pubs found in this area. Try dragging the map or expanding the search radius in Settings to find a great pint of Guinness.</p>
             </div>
           ) : (
             <ul ref={listRef} className="divide-y divide-gray-200 dark:divide-gray-700">

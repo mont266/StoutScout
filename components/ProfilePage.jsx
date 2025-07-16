@@ -107,14 +107,14 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
 
                     <div className="flex justify-center mb-4">
                         {isViewingOwnProfile ? (
-                            <button 
-                                onClick={onAvatarChangeClick} 
-                                className="relative group rounded-full focus:outline-none focus:ring-4 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                            <button
+                                onClick={onAvatarChangeClick}
+                                className="relative rounded-full focus:outline-none focus:ring-4 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
                                 aria-label="Change avatar"
                             >
                                 <Avatar avatarId={avatar_id} className="w-28 h-28" />
-                                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                    <i className="fas fa-pen text-white text-2xl"></i>
+                                <div className="absolute bottom-0 right-0 bg-amber-500 text-black rounded-full w-8 h-8 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:bg-amber-400 transition-colors">
+                                    <i className="fas fa-pen text-sm"></i>
                                 </div>
                             </button>
                         ) : (

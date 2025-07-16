@@ -41,7 +41,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
 
       <div className="overflow-y-auto flex-grow">
         <div className="space-y-4 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Average Ratings</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Average Guinness Ratings</h3>
           {pub.ratings.length > 0 ? (
             <div className="space-y-3 p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg">
               {priceInfo && (
@@ -64,13 +64,13 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                <p className="text-right text-xs text-gray-500">Based on {pub.ratings.length} total rating(s)</p>
             </div>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400 italic text-center p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg">No ratings yet. Be the first!</p>
+            <p className="text-gray-500 dark:text-gray-400 italic text-center p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg">No Guinness ratings yet. Be the first!</p>
           )}
         </div>
 
         <div className="space-y-4">
            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-             {session && existingUserRating ? 'Update Your Rating' : 'Rate Your Pint'}
+             {session && existingUserRating ? 'Update Your Guinness Rating' : 'Rate Your Pint of Guinness'}
             </h3>
             {session ? (
                <RatingForm 

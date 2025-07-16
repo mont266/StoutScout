@@ -49,6 +49,9 @@ const TabBar = ({ activeTab, onTabChange }) => {
           </button>
         ))}
       </div>
+      <div className="text-center text-xs text-gray-400 dark:text-gray-500 pb-1 px-2">
+        Stoutly is a fan project and is not sponsored by or affiliated with Guinness® or Diageo plc.
+      </div>
       <div className="pb-safe"></div>
     </nav>
   );
@@ -403,14 +406,14 @@ const App = () => {
   }, []);
 
   useEffect(() => {
+    // Determine the effective location: simulated if dev mode is on, otherwise real.
     const effectiveLocation = (settings.developerMode && settings.simulatedLocation)
       ? settings.simulatedLocation.coords
       : realUserLocation;
+
+    // Keep the user's location dot and the map's search center in sync.
     setUserLocation(effectiveLocation);
-    // Only set searchCenter on initial load or when not simulating
-    if (!settings.developerMode || !settings.simulatedLocation) {
-        setSearchCenter(effectiveLocation);
-    }
+    setSearchCenter(effectiveLocation);
   }, [settings.developerMode, settings.simulatedLocation, realUserLocation]);
 
   const getComparablePrice = useCallback((pub) => {
@@ -577,8 +580,6 @@ const App = () => {
               ...settings,
               simulatedLocation: newSimulatedLocation
           });
-          // Also update search center when a new location is set
-          setSearchCenter(newSimulatedLocation.coords);
           resolve();
         } else {
           reject(new Error('Geocode failed: ' + status));
