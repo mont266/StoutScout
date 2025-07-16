@@ -98,8 +98,26 @@ const App = () => {
   
   // New state for the scaled leveling system
   const [levelRequirements, setLevelRequirements] = useState([]);
+  
+  // New state for persistent pubs from our database
+  const [dbPubs, setDbPubs] = useState([]);
 
   // --- AUTH & DATA FETCHING ---
+
+  const fetchDbPubs = async () => {
+    const { data, error } = await supabase.from('pubs').select('id, name, address, lat, lng');
+    if (error) {
+      console.error("Error fetching rated pubs from DB:", error);
+    } else {
+      const formatted = (data || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        address: p.address,
+        location: { lat: p.lat, lng: p.lng },
+      }));
+      setDbPubs(formatted);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -110,6 +128,7 @@ const App = () => {
     
     fetchAllRatings();
     fetchLevelRequirements();
+    fetchDbPubs();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         setSession(session);
@@ -268,17 +287,41 @@ const App = () => {
 
 
   useEffect(() => {
-    const newPubs = googlePlaces.map((place) => {
-      if (!place.id || !place.displayName || !place.location || !place.formattedAddress) return null;
-      return {
-        id: place.id, name: place.displayName,
-        address: place.formattedAddress,
-        location: { lat: place.location.lat(), lng: place.location.lng() },
-        ratings: allRatings.get(place.id) || [],
-      };
-    }).filter(Boolean);
-    setPubs(newPubs);
-  }, [googlePlaces, allRatings]);
+    const combinedPubsMap = new Map();
+
+    // 1. Add all pubs from our database. These are our persistent records.
+    dbPubs.forEach(pub => {
+      if (pub.id && pub.name && pub.location) {
+        combinedPubsMap.set(pub.id, {
+          id: pub.id,
+          name: pub.name,
+          address: pub.address,
+          location: pub.location,
+        });
+      }
+    });
+
+    // 2. Add or update with fresh data from Google's API search.
+    // This ensures names and addresses are current if they change on Google Maps.
+    googlePlaces.forEach(place => {
+      if (place.id && place.displayName && place.location && place.formattedAddress) {
+        combinedPubsMap.set(place.id, {
+          id: place.id,
+          name: place.displayName,
+          address: place.formattedAddress,
+          location: { lat: place.location.lat(), lng: place.location.lng() },
+        });
+      }
+    });
+
+    // 3. Convert the map back to an array and attach the ratings for each pub.
+    const finalPubsList = Array.from(combinedPubsMap.values()).map(pub => ({
+      ...pub,
+      ratings: allRatings.get(pub.id) || [],
+    }));
+
+    setPubs(finalPubsList);
+  }, [googlePlaces, dbPubs, allRatings]);
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   
@@ -409,6 +452,7 @@ const App = () => {
     
     fetchAllRatings();
     fetchUserData();
+    fetchDbPubs(); // Refresh the list of persistent pubs
 
   }, [session, userRatings, selectedPub, userProfile]);
   
@@ -525,7 +569,7 @@ const App = () => {
             fields: ['id', 'displayName', 'location', 'formattedAddress'],
             textQuery: 'pub OR bar',
             locationBias: {
-                center: { lat: realUserLocation.lat, lng: realUserLocation.lng },
+                center: new window.google.maps.LatLng(realUserLocation.lat, realUserLocation.lng),
                 radius: 50, // 50-meter radius for a pinpoint search
             },
             maxResultCount: 5,

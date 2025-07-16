@@ -95,7 +95,7 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
         fields: ['id', 'displayName', 'formattedAddress', 'location'],
         textQuery: 'pub OR bar', // Use a more explicit query
         locationBias: {
-          center: { lat: searchCenter.lat, lng: searchCenter.lng },
+          center: new window.google.maps.LatLng(searchCenter.lat, searchCenter.lng),
           radius: searchRadius,
         },
         maxResultCount: 20,
