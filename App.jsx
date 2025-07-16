@@ -279,16 +279,9 @@ const App = () => {
     if (!initialSearchComplete) {
       setInitialSearchComplete(true);
     }
-    setGooglePlaces(prevGooglePlaces => {
-      // Deduplicate places before setting state
-      const placeIds = new Set(prevGooglePlaces.map(p => p.id));
-      const newPlaces = places.filter(p => !placeIds.has(p.id));
-      // Only update state if there are actually new places to prevent unnecessary re-renders
-      if (newPlaces.length > 0) {
-        return [...prevGooglePlaces, ...newPlaces];
-      }
-      return prevGooglePlaces;
-    });
+    // A new search from the map should always replace the old results.
+    // The previous additive approach was buggy for large location changes (e.g., simulation).
+    setGooglePlaces(places || []);
     setResultsAreCapped(capped);
   }, [initialSearchComplete]);
 
