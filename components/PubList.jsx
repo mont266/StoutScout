@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { FilterType } from '../types.js';
 import StarRating from './StarRating.jsx';
 
-const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius }) => {
+const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading }) => {
   const selectedItemRef = useRef(null);
   const listRef = useRef(null);
 
@@ -70,7 +70,12 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
               Showing top 20 results. Reduce search radius in Settings to find more.
             </div>
           )}
-          {pubs.length === 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400"></div>
+              <p className="mt-4">Merging local ratings with live map data...</p>
+            </div>
+          ) : pubs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 p-8 text-center">
                 <p>No pubs found in this area. Try expanding the search radius in Settings.</p>
             </div>

@@ -101,6 +101,10 @@ const App = () => {
   
   // New state for persistent pubs from our database
   const [dbPubs, setDbPubs] = useState([]);
+  
+  // New state for initial data loading to prevent content flash
+  const [isDbPubsLoaded, setIsDbPubsLoaded] = useState(false);
+  const [initialSearchComplete, setInitialSearchComplete] = useState(false);
 
   // --- AUTH & DATA FETCHING ---
 
@@ -117,6 +121,7 @@ const App = () => {
       }));
       setDbPubs(formatted);
     }
+    setIsDbPubsLoaded(true);
   };
 
   useEffect(() => {
@@ -239,6 +244,9 @@ const App = () => {
   // --- CORE APP LOGIC ---
 
   const handlePlacesFound = useCallback((places, capped) => {
+    if (!initialSearchComplete) {
+      setInitialSearchComplete(true);
+    }
     setGooglePlaces(prevGooglePlaces => {
       // Deduplicate places before setting state
       const placeIds = new Set(prevGooglePlaces.map(p => p.id));
@@ -250,7 +258,7 @@ const App = () => {
       return prevGooglePlaces;
     });
     setResultsAreCapped(capped);
-  }, []);
+  }, [initialSearchComplete]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -641,6 +649,8 @@ const App = () => {
           />
       );
   }
+  
+  const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
 
   return (
     <div className="w-full max-w-md mx-auto h-[100dvh] flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased relative">
@@ -674,6 +684,7 @@ const App = () => {
                     onToggle={() => setIsListExpanded(p => !p)}
                     resultsAreCapped={resultsAreCapped}
                     searchRadius={settings.radius}
+                    isLoading={isInitialDataLoading}
                 />
             </div>
           </div>
