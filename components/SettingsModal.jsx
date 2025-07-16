@@ -1,8 +1,13 @@
 
-import React from 'react';
+
+
+import React, { useState } from 'react';
 import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants.js';
 
-const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, userProfile }) => {
+const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, onSetSimulatedLocation, userProfile }) => {
+  const [locationInput, setLocationInput] = useState(settings.simulatedLocation?.name || '');
+  const [isLocating, setIsLocating] = useState(false);
+  
   if (!isOpen) return null;
 
   const handleUnitChange = (unit) => {
@@ -20,6 +25,23 @@ const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, userProfil
   const handleRadiusChange = (e) => {
     const radiusInMiles = parseFloat(e.target.value);
     onSettingsChange({ ...settings, radius: radiusInMiles * MILES_TO_METERS });
+  };
+
+  const handleSetLocation = async () => {
+    if (!locationInput) return;
+    setIsLocating(true);
+    try {
+      await onSetSimulatedLocation(locationInput);
+    } catch (error) {
+      // Error is handled by the geocoding function (alert)
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const handleClearLocation = () => {
+    setLocationInput('');
+    onSetSimulatedLocation(null);
   };
 
   const radiusInMiles = (settings.radius / MILES_TO_METERS).toFixed(1);
@@ -105,26 +127,57 @@ const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, userProfil
             </div>
           </div>
 
-          {/* Developer Mode */}
+          {/* Developer Section */}
           {userProfile?.username === 'mont266' && (
-            <div>
-              <label className="block text-lg font-semibold text-gray-800 dark:text-white mb-2" id="dev-mode-label">Developer Mode</label>
-              <div className="flex rounded-lg bg-gray-200 dark:bg-gray-900 p-1" role="group" aria-labelledby="dev-mode-label">
-                <button
-                  onClick={() => handleDeveloperModeChange(true)}
-                  className={`w-1/2 py-2 rounded-md font-bold transition-colors flex items-center justify-center space-x-2 ${settings.developerMode ? 'bg-amber-500 text-black' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}
-                  aria-pressed={settings.developerMode}
-                >
-                  <i className="fas fa-bug"></i><span>On</span>
-                </button>
-                <button
-                  onClick={() => handleDeveloperModeChange(false)}
-                  className={`w-1/2 py-2 rounded-md font-bold transition-colors flex items-center justify-center space-x-2 ${!settings.developerMode ? 'bg-amber-500 text-black' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}
-                  aria-pressed={!settings.developerMode}
-                >
-                  <i className="fas fa-toggle-off"></i><span>Off</span>
-                </button>
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-6">
+              <h3 className="text-xl font-bold text-red-500 dark:text-red-400 text-center">Developer Tools</h3>
+              {/* Developer Mode Toggle */}
+              <div>
+                <label className="block text-lg font-semibold text-gray-800 dark:text-white mb-2" id="dev-mode-label">Developer Mode</label>
+                <div className="flex rounded-lg bg-gray-200 dark:bg-gray-900 p-1" role="group" aria-labelledby="dev-mode-label">
+                  <button
+                    onClick={() => handleDeveloperModeChange(true)}
+                    className={`w-1/2 py-2 rounded-md font-bold transition-colors flex items-center justify-center space-x-2 ${settings.developerMode ? 'bg-amber-500 text-black' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}
+                    aria-pressed={settings.developerMode}
+                  ><i className="fas fa-bug"></i><span>On</span></button>
+                  <button
+                    onClick={() => handleDeveloperModeChange(false)}
+                    className={`w-1/2 py-2 rounded-md font-bold transition-colors flex items-center justify-center space-x-2 ${!settings.developerMode ? 'bg-amber-500 text-black' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}
+                    aria-pressed={!settings.developerMode}
+                  ><i className="fas fa-toggle-off"></i><span>Off</span></button>
+                </div>
               </div>
+              {/* Location Simulation */}
+              {settings.developerMode && (
+                <div>
+                  <label htmlFor="location-input" className="block text-lg font-semibold text-gray-800 dark:text-white mb-2">Simulate Location</label>
+                  {settings.simulatedLocation && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                          Currently viewing: <span className="font-bold">{settings.simulatedLocation.name}</span>
+                      </p>
+                  )}
+                  <div className="flex space-x-2">
+                    <input
+                      id="location-input"
+                      type="text"
+                      value={locationInput}
+                      onChange={(e) => setLocationInput(e.target.value)}
+                      placeholder="e.g., Eiffel Tower, Paris"
+                      className="flex-grow px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <button
+                      onClick={handleSetLocation}
+                      disabled={isLocating || !locationInput}
+                      className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors disabled:bg-red-400/50 flex items-center justify-center w-20"
+                    >
+                      {isLocating ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : 'Set'}
+                    </button>
+                  </div>
+                   {settings.simulatedLocation && (
+                      <button onClick={handleClearLocation} className="text-sm text-center w-full mt-2 text-gray-500 dark:text-gray-400 hover:underline">Clear simulated location</button>
+                   )}
+                </div>
+              )}
             </div>
           )}
         </div>

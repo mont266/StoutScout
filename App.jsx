@@ -1,8 +1,6 @@
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { FilterType } from './types.js';
-import { DEFAULT_LOCATION, REVIEWS_PER_LEVEL } from './constants.js';
+import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
 
@@ -32,6 +30,8 @@ const App = () => {
   const [filter, setFilter] = useState(FilterType.Distance);
   const [isListExpanded, setIsListExpanded] = useState(true);
 
+  // Location State
+  const [realUserLocation, setRealUserLocation] = useState(DEFAULT_LOCATION);
   const [userLocation, setUserLocation] = useState(DEFAULT_LOCATION);
   const [searchCenter, setSearchCenter] = useState(DEFAULT_LOCATION);
   const [locationError, setLocationError] = useState(null);
@@ -64,7 +64,6 @@ const App = () => {
         if (session) {
             setIsAuthOpen(false); // Close auth modal on successful login
         }
-        // No need to set loading here, as initial load is handled above
     });
 
     return () => subscription.unsubscribe();
@@ -73,7 +72,7 @@ const App = () => {
   const fetchAllRatings = async () => {
       const { data, error } = await supabase
           .from('ratings')
-          .select('pub_id, price, quality');
+          .select('pub_id, price, quality, exact_price, created_at');
 
       if (error) {
           console.error("Error fetching all ratings:", error);
@@ -83,7 +82,12 @@ const App = () => {
       const ratingsMap = new Map();
       for (const rating of data || []) {
           const existing = ratingsMap.get(rating.pub_id) || [];
-          ratingsMap.set(rating.pub_id, [...existing, { price: rating.price, quality: rating.quality }]);
+          ratingsMap.set(rating.pub_id, [...existing, { 
+              price: rating.price, 
+              quality: rating.quality,
+              exact_price: rating.exact_price,
+              created_at: rating.created_at,
+            }]);
       }
       setAllRatings(ratingsMap);
   };
@@ -98,76 +102,49 @@ const App = () => {
 
     const userId = currentSession.user.id;
 
-    // Fetch Profile
     let { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
     
-    // If profile not found, it's the first login. Create it.
     if (profileError && profileError.code === 'PGRST116') {
-      if (isCreatingProfile) {
-        console.warn("Profile creation is already in progress. Aborting.");
-        return { profile: null, ratings: [] };
-      }
-
-      console.log('Profile not found for user, attempting to create one.');
+      if (isCreatingProfile) return { profile: null, ratings: [] };
       const newUsername = currentSession.user.user_metadata?.username;
-
-      if (!newUsername) {
-        console.error("Fatal: Cannot create profile, username not found in user metadata on first login.", currentSession.user);
-        return { profile: null, ratings: [] };
-      }
+      if (!newUsername) return { profile: null, ratings: [] };
       
-      setIsCreatingProfile(true); // Set flag to prevent re-entry
+      setIsCreatingProfile(true);
 
       try {
         const { data: newProfile, error: createError } = await supabase
           .from('profiles')
-          .insert({
-            id: userId,
-            username: newUsername,
-            reviews: 0,
-            level: 1,
-          })
+          .insert({ id: userId, username: newUsername, reviews: 0, level: 1 })
           .select()
           .single();
-        
-        if (createError) {
-          console.error("Error creating profile after first login:", createError);
-          return { profile: null, ratings: [] };
-        }
-
-        console.log('Profile created successfully:', newProfile);
+        if (createError) return { profile: null, ratings: [] };
         profileData = newProfile;
       } finally {
-        setIsCreatingProfile(false); // ALWAYS reset the flag
+        setIsCreatingProfile(false);
       }
     
     } else if (profileError) {
-      console.error("Error fetching profile:", profileError);
       return { profile: null, ratings: [] };
     }
     
     setUserProfile(profileData);
     
-    // Fetch user's ratings (with join)
     const { data: userRatingsData, error: userRatingsError } = await supabase
         .from('ratings')
-        .select('id, pub_id, price, quality, created_at, pubs(id, name, address)')
+        .select('id, pub_id, price, quality, created_at, exact_price, pubs(id, name, address)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-    if (userRatingsError) {
-        console.error("Error fetching user ratings:", userRatingsError);
-        return { profile: profileData, ratings: [] };
-    }
+    if (userRatingsError) return { profile: profileData, ratings: [] };
     
     const mappedUserRatings = (userRatingsData || []).map(r => ({
       id: r.id,
       pubId: r.pub_id,
-      rating: { price: r.price, quality: r.quality },
+      rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
       timestamp: new Date(r.created_at).getTime(),
       pubName: r.pubs?.name || 'Unknown Pub',
       pubAddress: r.pubs?.address || 'Unknown Address',
@@ -181,7 +158,6 @@ const App = () => {
     if (session?.user) {
       fetchUserData();
     } else {
-      // Clear user-specific data on logout
       setUserProfile(null);
       setUserRatings([]);
     }
@@ -219,29 +195,21 @@ const App = () => {
   }, [leveledUpInfo]);
 
   useEffect(() => {
-    if (googlePlaces.length === 0 && pubs.length === 0 && allRatings.size === 0) return;
-
     const newPubs = googlePlaces.map((place) => {
-      if (!place.id || !place.displayName || !place.location || !place.formattedAddress) {
-        return null;
-      }
+      if (!place.id || !place.displayName || !place.location || !place.formattedAddress) return null;
       return {
         id: place.id,
         name: place.displayName,
         address: place.formattedAddress,
-        location: {
-          lat: place.location.lat(),
-          lng: place.location.lng(),
-        },
+        location: { lat: place.location.lat(), lng: place.location.lng() },
         ratings: allRatings.get(place.id) || [],
       };
-    }).filter((pub) => pub !== null);
-
+    }).filter(Boolean);
     setPubs(newPubs);
-    
   }, [googlePlaces, allRatings]);
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
+  
   const existingUserRatingForSelectedPub = useMemo(() => {
     if (!selectedPub) return undefined;
     return userRatings.find(r => r.pubId === selectedPub.id);
@@ -254,20 +222,17 @@ const App = () => {
   };
 
   const getDistance = useCallback((location1, location2) => {
-    const R = 6371e3; // metres
+    const R = 6371e3;
     const φ1 = location1.lat * Math.PI/180;
     const φ2 = location2.lat * Math.PI/180;
     const Δφ = (location2.lat-location1.lat) * Math.PI/180;
     const Δλ = (location2.lng-location1.lng) * Math.PI/180;
-
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-    return R * c; // in metres
+    return R * c;
   }, []);
 
+  // Effect for real device location
   useEffect(() => {
     if (!navigator.geolocation) {
       setLocationError("Geolocation is not supported. Using default location.");
@@ -276,8 +241,7 @@ const App = () => {
     const watcher = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setUserLocation({ lat: latitude, lng: longitude });
-        setSearchCenter({ lat: latitude, lng: longitude });
+        setRealUserLocation({ lat: latitude, lng: longitude });
         setLocationError(null);
       },
       (error) => {
@@ -287,6 +251,18 @@ const App = () => {
     );
     return () => navigator.geolocation.clearWatch(watcher);
   }, []);
+
+  // Effect to decide between real and simulated location
+  useEffect(() => {
+    if (settings.developerMode && settings.simulatedLocation) {
+        setUserLocation(settings.simulatedLocation.coords);
+        setSearchCenter(settings.simulatedLocation.coords);
+    } else {
+        setUserLocation(realUserLocation);
+        setSearchCenter(realUserLocation);
+    }
+  }, [settings.developerMode, settings.simulatedLocation, realUserLocation]);
+
 
   const sortedPubs = useMemo(() => {
     return [...pubs].sort((a, b) => {
@@ -305,86 +281,43 @@ const App = () => {
   const handleRatePub = useCallback(async (pubId, pubName, pubAddress, newRating) => {
     if (!session || !userProfile || !selectedPub) return;
 
-    // 1. Upsert the pub into the 'pubs' table to ensure it exists.
     const { error: pubError } = await supabase.from('pubs').upsert({
-      id: pubId,
-      name: pubName,
-      address: pubAddress,
-      lat: selectedPub.location.lat,
-      lng: selectedPub.location.lng,
+      id: pubId, name: pubName, address: pubAddress,
+      lat: selectedPub.location.lat, lng: selectedPub.location.lng,
     });
-    if (pubError) {
-      console.error("Error upserting pub:", pubError);
-      return;
-    }
+    if (pubError) return;
 
     const isUpdating = userRatings.some(r => r.pubId === pubId);
     
-    // 2. Insert or update the rating in the 'ratings' table.
     const ratingPayload = {
-      pub_id: pubId,
-      user_id: session.user.id,
-      price: newRating.price,
-      quality: newRating.quality,
+      pub_id: pubId, user_id: session.user.id,
+      price: newRating.price, quality: newRating.quality,
+      exact_price: newRating.exact_price,
     };
 
     const { error: ratingError } = isUpdating
       ? await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
       : await supabase.from('ratings').insert(ratingPayload);
+    if (ratingError) return;
     
-    if (ratingError) {
-        console.error('Error saving rating:', ratingError);
-        return;
-    }
-    
-    // If updating, just refetch and finish. No need to increment review count.
     if (isUpdating) {
         fetchAllRatings();
         fetchUserData();
         return;
     }
     
-    // 3. For new ratings, invoke an edge function to securely update the user's profile.
     const oldProfile = userProfile;
-    const { error: functionError } = await supabase.functions.invoke('increment-review-count');
+    await supabase.functions.invoke('increment-review-count');
     
-    if (functionError) {
-        console.error('Failed to update user profile via edge function:', functionError);
-    }
-    
-    // 4. Refetch all data to update the UI and get the new profile.
-    fetchAllRatings(); // For average ratings
-    const { profile: newProfile } = await fetchUserData(); // For user's own rating history & level
+    fetchAllRatings();
+    const { profile: newProfile } = await fetchUserData();
 
-    // 5. Trigger popups for new review, comparing old and new profiles.
     if (newProfile && oldProfile && newProfile.level > oldProfile.level) {
         setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
     }
     setReviewPopupInfo({ key: Date.now() });
 
   }, [session, userRatings, selectedPub, userProfile]);
-
-  const handleForceReview = async () => {
-    if (!session || !userProfile) return;
-    console.log("Developer action: Force review popup and level up");
-
-    const oldProfile = userProfile;
-    const { error: functionError } = await supabase.functions.invoke('increment-review-count');
-
-    if (functionError) {
-        console.error("Developer action 'force review' failed:", functionError);
-        return;
-    }
-
-    // Refetch data to reflect change and get the new profile
-    const { profile: newProfile } = await fetchUserData();
-
-    // Trigger popups based on the change
-    if (newProfile && oldProfile && newProfile.level > oldProfile.level) {
-        setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
-    }
-    setReviewPopupInfo({ key: Date.now() });
-  };
   
   const handleSelectPub = useCallback((pubId) => {
     setSelectedPubId(pubId);
@@ -405,6 +338,48 @@ const App = () => {
     setSettings(newSettings);
     saveSettings(newSettings);
   };
+  
+  const handleSetSimulatedLocation = (locationString) => {
+    return new Promise((resolve, reject) => {
+      if (!locationString) {
+        handleSettingsChange({ ...settings, simulatedLocation: null });
+        resolve();
+        return;
+      }
+
+      if (!window.google || !window.google.maps || !window.google.maps.Geocoder) {
+        const errorMsg = "Maps API not loaded yet. Please try again in a moment.";
+        console.error(errorMsg);
+        alert(errorMsg);
+        reject(new Error(errorMsg));
+        return;
+      }
+
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ 'address': locationString }, (results, status) => {
+        if (status === 'OK' && results && results[0]) {
+          const location = results[0].geometry.location;
+          const coords = {
+            lat: location.lat(),
+            lng: location.lng()
+          };
+          const newSettings = {
+              ...settings,
+              simulatedLocation: { name: locationString, coords }
+          };
+          handleSettingsChange(newSettings);
+          resolve();
+        } else {
+          const errorMsg = 'Could not find location. Please try a different query. Reason: ' + status;
+          console.error('Geocode was not successful for the following reason: ' + status);
+          alert(errorMsg);
+          reject(new Error('Geocode failed: ' + status));
+        }
+      });
+    });
+  };
+
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setCurrentView('map');
@@ -434,7 +409,7 @@ const App = () => {
               </div>
           </header>
 
-          {locationError && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
+          {locationError && !(settings.developerMode && settings.simulatedLocation) && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
           <FilterControls currentFilter={filter} onFilterChange={setFilter} />
 
           <div className="flex-grow flex flex-col overflow-hidden">
@@ -486,6 +461,7 @@ const App = () => {
             onClose={() => setIsSettingsOpen(false)}
             settings={settings}
             onSettingsChange={handleSettingsChange}
+            onSetSimulatedLocation={handleSetSimulatedLocation}
             userProfile={userProfile}
           />
         </>
@@ -495,8 +471,6 @@ const App = () => {
           userRatings={userRatings}
           onClose={() => setCurrentView('map')}
           onLogout={handleLogout}
-          developerMode={settings.developerMode}
-          onForceReview={handleForceReview}
         />
       ) : null}
       {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}

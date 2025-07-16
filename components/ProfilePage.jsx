@@ -1,16 +1,14 @@
 
 
+
 import React, { useState } from 'react';
 import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
 import StarRating from './StarRating.jsx';
 
-const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMode, onForceReview }) => {
+const ProfilePage = ({ userProfile, userRatings, onClose, onLogout }) => {
     const { username, level } = userProfile;
-    // Safely handle cases where reviews might be null or undefined for older profiles.
     const reviews = userProfile.reviews || 0;
-
-    // Special check for our beta tester 'mont26' or anyone with the DB flag.
     const isBetaTester = userProfile.username === 'mont26' || userProfile.is_beta_tester;
     
     const rankData = getRankData(level);
@@ -115,21 +113,6 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout, developerMod
                         </div>
                     )}
                 </div>
-
-                {/* Developer Tools */}
-                {developerMode && (
-                  <div className="mb-6">
-                    <h3 className="text-xl font-semibold mb-2 text-red-500 dark:text-red-400">Developer Tools</h3>
-                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md border border-red-500/50">
-                        <button
-                          onClick={onForceReview}
-                          className="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
-                        >
-                          Force +1 Rating &amp; Level Up Check
-                        </button>
-                    </div>
-                  </div>
-                )}
 
                 {/* Recent Ratings */}
                 <div className="mb-6">
