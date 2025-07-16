@@ -1,7 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.js';
 import Logo from './Logo.jsx';
+import { trackEvent } from '../analytics.js';
 
 const AuthPage = ({ onClose }) => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -51,6 +53,8 @@ const AuthPage = ({ onClose }) => {
         });
 
         if (signUpError) throw signUpError;
+        
+        trackEvent('sign_up', { method: 'email' });
 
         // If signup is successful and requires email confirmation, show a message.
         if (data.user && !data.session) {

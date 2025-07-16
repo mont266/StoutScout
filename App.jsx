@@ -4,6 +4,7 @@ import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
 import { getRankData } from './utils.js';
+import { trackEvent } from './analytics.js';
 
 import MapComponent from './components/Map.jsx';
 import FilterControls from './components/FilterControls.jsx';
@@ -18,6 +19,7 @@ import LevelUpPopup from './components/LevelUpPopup.jsx';
 import RankUpPopup from './components/RankUpPopup.jsx';
 import AuthPage from './components/AuthPage.jsx';
 import ConfirmCurrentPubModal from './components/ConfirmCurrentPubModal.jsx';
+import AvatarSelectionModal from './components/AvatarSelectionModal.jsx';
 
 // A new TabBar component to handle the main navigation.
 const TabBar = ({ activeTab, onTabChange }) => {
@@ -106,6 +108,30 @@ const App = () => {
   const [isDbPubsLoaded, setIsDbPubsLoaded] = useState(false);
   const [initialSearchComplete, setInitialSearchComplete] = useState(false);
 
+  // New state for avatar selection modal
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+
+  // --- ANALYTICS ---
+  
+  useEffect(() => {
+    // Track screen views when the active tab changes
+    trackEvent('screen_view', {
+      screen_name: activeTab,
+    });
+  }, [activeTab]);
+
+  useEffect(() => {
+    // Track when a pub is selected to view its details
+    const pub = pubs.find(p => p.id === selectedPubId);
+    if (pub) {
+      trackEvent('select_content', {
+        content_type: 'pub',
+        item_id: pub.id,
+      });
+    }
+  }, [selectedPubId, pubs]);
+
+
   // --- AUTH & DATA FETCHING ---
 
   const fetchDbPubs = async () => {
@@ -136,6 +162,9 @@ const App = () => {
     fetchDbPubs();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (_event === 'SIGNED_IN') {
+          trackEvent('login', { method: 'email' });
+        }
         setSession(session);
         if (session) {
             setIsAuthOpen(false);
@@ -431,6 +460,15 @@ const App = () => {
     });
 
     const isUpdating = userRatings.some(r => r.pubId === pubId);
+    
+    trackEvent('rate_pub', {
+      pub_id: pubId,
+      is_update: isUpdating,
+      quality: newRating.quality,
+      price_rating: newRating.price,
+      has_exact_price: !!newRating.exact_price,
+    });
+    
     const ratingPayload = {
       pub_id: pubId, user_id: session.user.id,
       price: newRating.price, quality: newRating.quality,
@@ -451,16 +489,27 @@ const App = () => {
             
             if (newRank.name !== oldRank.name) {
                 setRankUpInfo({ key: Date.now(), newRank });
+                trackEvent('rank_up', {
+                  new_rank: newRank.name,
+                  level: newProfile.level,
+                });
             } else {
                 setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
+                trackEvent('level_up', {
+                  level: newProfile.level,
+                });
             }
         }
         setReviewPopupInfo({ key: Date.now() });
+    } else {
+        // If we are just updating an existing rating, we still need to fetch user data
+        // in case something has changed.
+        await fetchUserData();
     }
     
-    fetchAllRatings();
-    fetchUserData();
-    fetchDbPubs(); // Refresh the list of persistent pubs
+    // Always refetch ratings and the master pub list.
+    await fetchAllRatings();
+    await fetchDbPubs();
 
   }, [session, userRatings, selectedPub, userProfile]);
   
@@ -468,6 +517,11 @@ const App = () => {
     setSelectedPubId(pubId);
     if (pubId && !isListExpanded) setIsListExpanded(true);
   }, [isListExpanded]);
+
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+    trackEvent('change_filter', { filter_type: newFilter });
+  };
   
   const handleTabChange = (tab) => {
     if ((tab === 'profile' || tab === 'leaderboard') && !session) {
@@ -481,6 +535,25 @@ const App = () => {
   };
 
   const handleSettingsChange = (newSettings) => {
+    // Compare and track changes for analytics
+    if (settings.theme !== newSettings.theme) {
+        trackEvent('change_setting', { setting_name: 'theme', setting_value: newSettings.theme });
+    }
+    if (settings.unit !== newSettings.unit) {
+        trackEvent('change_setting', { setting_name: 'unit', setting_value: newSettings.unit });
+    }
+    if (settings.radius !== newSettings.radius) {
+        trackEvent('change_setting', { setting_name: 'radius_meters', setting_value: newSettings.radius });
+    }
+    if (settings.developerMode !== newSettings.developerMode) {
+        trackEvent('change_setting', { setting_name: 'developer_mode', setting_value: newSettings.developerMode });
+    }
+    const oldSim = settings.simulatedLocation?.name || null;
+    const newSim = newSettings.simulatedLocation?.name || null;
+    if (oldSim !== newSim) {
+         trackEvent('change_setting', { setting_name: 'simulated_location', setting_value: newSim || 'cleared' });
+    }
+    
     setSettings(newSettings);
     saveSettings(newSettings);
   };
@@ -522,10 +595,14 @@ const App = () => {
   };
 
   const handleLogout = async () => {
+    trackEvent('logout');
     await supabase.auth.signOut();
   };
   
   const handleViewProfile = async (userId) => {
+      if (userProfile?.id !== userId) {
+        trackEvent('view_another_profile', { viewed_user_id: userId });
+      }
       setIsFetchingViewedProfile(true);
       setActiveTab('profile');
 
@@ -566,10 +643,13 @@ const App = () => {
         if (isFindingPub) return;
         setIsFindingPub(true);
         setFindPubError(null);
+        trackEvent('find_current_pub_attempt');
 
         if (!window.google?.maps?.places || !realUserLocation || (realUserLocation.lat === DEFAULT_LOCATION.lat && realUserLocation.lng === DEFAULT_LOCATION.lng)) {
-            setFindPubError(locationError || "Could not get your precise location.");
+            const errorMsg = locationError || "Could not get your precise location.";
+            setFindPubError(errorMsg);
             setIsFindingPub(false);
+            trackEvent('find_current_pub_result', { success: false, reason: 'no_location' });
             return;
         }
 
@@ -587,6 +667,7 @@ const App = () => {
             const { places } = await window.google.maps.places.Place.searchByText(request);
             if (!places || places.length === 0) {
                 setFindPubError("Couldn't find a pub at your current location.");
+                trackEvent('find_current_pub_result', { success: false, reason: 'not_found' });
             } else if (places.length === 1) {
                 const place = places[0];
                 const pubExists = googlePlaces.some(p => p.id === place.id);
@@ -594,12 +675,15 @@ const App = () => {
                     handlePlacesFound([place], false);
                 }
                 handleSelectPub(place.id);
+                trackEvent('find_current_pub_result', { success: true, result: 'single_match' });
             } else {
                 setPubCandidates(places);
+                trackEvent('find_current_pub_result', { success: true, result: 'multiple_candidates' });
             }
         } catch (error) {
             console.error("Find current pub failed:", error);
             setFindPubError("An error occurred while searching for your location.");
+            trackEvent('find_current_pub_result', { success: false, reason: 'error' });
         } finally {
             setIsFindingPub(false);
         }
@@ -614,6 +698,26 @@ const App = () => {
             handleSelectPub(place.id);
         }
         setPubCandidates([]);
+    };
+
+    const handleUpdateAvatar = async (avatarId) => {
+        if (!session?.user) return;
+
+        trackEvent('change_avatar', { avatar_id: avatarId });
+        
+        const { error } = await supabase
+            .from('profiles')
+            .update({ avatar_id: avatarId })
+            .eq('id', session.user.id);
+
+        if (error) {
+            console.error("Failed to update avatar:", error);
+            // Optionally, show an error toast to the user
+        } else {
+            // Re-fetch user data to update the UI instantly
+            await fetchUserData();
+        }
+        setIsAvatarModalOpen(false);
     };
 
 
@@ -646,6 +750,7 @@ const App = () => {
               onViewPub={handleViewPub}
               loggedInUserProfile={userProfile}
               levelRequirements={levelRequirements}
+              onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
           />
       );
   }
@@ -663,7 +768,7 @@ const App = () => {
           <div className="flex-grow flex flex-col overflow-hidden">
             {locationError && !(settings.developerMode && settings.simulatedLocation) && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
             <FilterControls
-              currentFilter={filter} onFilterChange={setFilter}
+              currentFilter={filter} onFilterChange={handleFilterChange}
               onFindCurrentPub={handleFindCurrentPub} isFindingPub={isFindingPub}
             />
 
@@ -730,6 +835,13 @@ const App = () => {
                   <span>{findPubError}</span>
               </div>
           </div>
+      )}
+      {isAvatarModalOpen && userProfile && (
+        <AvatarSelectionModal 
+            currentAvatarId={userProfile.avatar_id}
+            onSelect={handleUpdateAvatar}
+            onClose={() => setIsAvatarModalOpen(false)}
+        />
       )}
     </div>
   );

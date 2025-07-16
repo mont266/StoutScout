@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.js';
 import { getRankData } from '../utils.js';
+import Avatar from './Avatar.jsx';
 
 const LeaderboardPage = ({ onViewProfile }) => {
     const [activePeriod, setActivePeriod] = useState('all'); // 'all', 'year', 'month', 'day'
@@ -106,11 +107,15 @@ const LeaderboardPage = ({ onViewProfile }) => {
                                 >
                                     <div className="flex items-center space-x-4">
                                         <div className="w-8 text-center flex-shrink-0">{renderMedal(index + 1)}</div>
-                                        <div className="flex-grow min-w-0 flex items-center space-x-3">
-                                            <i className={`fas ${rankData.icon} text-amber-500 dark:text-amber-400 text-xl w-6 text-center`} title={`Rank: ${rankData.name}`}></i>
-                                            <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{item.username}</p>
-                                            {item.is_developer && <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full flex-shrink-0" title="Developer"></div>}
-                                            {item.is_beta_tester && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full flex-shrink-0" title="Beta Tester"></div>}
+                                        <div className="flex-shrink-0">
+                                            <Avatar avatarId={item.avatar_id} className="w-12 h-12" />
+                                        </div>
+                                        <div className="flex-grow min-w-0">
+                                            <p className="font-bold text-lg text-gray-900 dark:text-white truncate" title={item.username}>{item.username}</p>
+                                            <div className="flex items-center space-x-2">
+                                                <i className={`fas ${rankData.icon} text-amber-500 dark:text-amber-400 text-xs w-3 text-center`} title={`Rank: ${rankData.name}`}></i>
+                                                <span className="text-sm text-gray-500 dark:text-gray-400">Level {item.level || 1}</span>
+                                            </div>
                                         </div>
                                         <div className="flex-shrink-0 text-right">
                                             <p className="font-bold text-lg text-gray-900 dark:text-white">{item.review_count}</p>

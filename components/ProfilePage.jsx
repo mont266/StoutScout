@@ -3,8 +3,9 @@ import { RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
 import { supabase } from '../supabase.js';
 import StarRating from './StarRating.jsx';
+import Avatar from './Avatar.jsx';
 
-const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements }) => {
+const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick }) => {
     // Component now manages its own profile state to update it after a moderation action.
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
@@ -15,7 +16,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         setProfile(userProfile);
     }, [userProfile]);
 
-    const { username, level, is_beta_tester, is_developer, is_banned } = profile;
+    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id } = profile;
     const reviews = profile.reviews || 0;
     
     const rankData = getRankData(level);
@@ -104,7 +105,22 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                         )}
                     </div>
 
-                    <i className="fas fa-user-circle text-7xl text-gray-400 dark:text-gray-500 mb-4"></i>
+                    <div className="flex justify-center mb-4">
+                        {isViewingOwnProfile ? (
+                            <button 
+                                onClick={onAvatarChangeClick} 
+                                className="relative group rounded-full focus:outline-none focus:ring-4 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                                aria-label="Change avatar"
+                            >
+                                <Avatar avatarId={avatar_id} className="w-28 h-28" />
+                                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    <i className="fas fa-pen text-white text-2xl"></i>
+                                </div>
+                            </button>
+                        ) : (
+                            <Avatar avatarId={avatar_id} className="w-28 h-28" />
+                        )}
+                    </div>
                     
                     <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{username}</h2>
                     
