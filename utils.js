@@ -92,3 +92,19 @@ export const formatTimeAgo = (timestamp) => {
     }
     return Math.floor(seconds) + " seconds ago";
   };
+
+/**
+ * Infers currency information based on keywords in the address.
+ * Defaults to GBP (£) for UK/unidentified locations.
+ * @param {string} address The pub's address string.
+ * @returns {{symbol: string, code: string}} The currency symbol and code.
+ */
+export const getCurrencyInfo = (address = '') => {
+    if (address.includes('Ireland') && !address.includes('Northern Ireland')) {
+        return { symbol: '€', code: 'EUR' };
+    }
+    if (address.includes('USA') || address.includes('United States')) {
+        return { symbol: '$', code: 'USD' };
+    }
+    return { symbol: '£', code: 'GBP' };
+};

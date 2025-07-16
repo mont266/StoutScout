@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import StarRating from './StarRating.jsx';
 
 // Labels to guide the user on price rating. Higher stars mean cheaper price.
-// The \n character is used to create a two-line label in the StarRating component.
+// These are now currency-agnostic.
 const priceLabels = [
-  'Very Expensive\n£7.00+',      // 1 star
-  'Expensive\n£6.00 - £6.99',   // 2 stars
-  'Average\n£5.50 - £5.99',     // 3 stars
-  'Cheap\n£4.50 - £5.49',       // 4 stars
-  'Very Cheap\n< £4.50'          // 5 stars
+  'Very Expensive\n(e.g., 7.00+)',      // 1 star
+  'Expensive\n(e.g., 6.00 - 6.99)',   // 2 stars
+  'Average\n(e.g., 5.50 - 5.99)',     // 3 stars
+  'Cheap\n(e.g., 4.50 - 5.49)',       // 4 stars
+  'Very Cheap\n(e.g., < 4.50)'          // 5 stars
 ];
 
 const getStarRatingFromPrice = (price) => {
@@ -21,7 +21,7 @@ const getStarRatingFromPrice = (price) => {
     return 1; // Very Expensive
 };
 
-const RatingForm = ({ onSubmit, existingRating }) => {
+const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£' }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
   const [priceInput, setPriceInput] = useState('');
@@ -79,7 +79,7 @@ const RatingForm = ({ onSubmit, existingRating }) => {
       <div>
         <label htmlFor="price-input" className="block text-gray-700 dark:text-gray-300 mb-2">Enter Exact Pint Price (Optional)</label>
         <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500 dark:text-gray-400 pointer-events-none">£</span>
+          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500 dark:text-gray-400 pointer-events-none">{currencySymbol}</span>
           <input
             id="price-input"
             type="number"

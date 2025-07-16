@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { FilterType } from '../types.js';
 import StarRating from './StarRating.jsx';
+import { getCurrencyInfo } from '../utils.js';
 
 const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading }) => {
   const selectedItemRef = useRef(null);
@@ -22,7 +23,8 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
             if (ratingsWithPrice.length > 0) {
                 const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
                 const average = total / ratingsWithPrice.length;
-                return <span className="text-lg font-semibold text-green-600 dark:text-green-400">£{average.toFixed(2)}</span>
+                const currencySymbol = getCurrencyInfo(pub.address).symbol;
+                return <span className="text-lg font-semibold text-green-600 dark:text-green-400">{currencySymbol}{average.toFixed(2)}</span>
             }
             
             const avgPrice = getAverageRating(pub.ratings, 'price');

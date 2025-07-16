@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
 import StarRating from './StarRating.jsx';
 import RatingForm from './RatingForm.jsx';
-import { formatTimeAgo } from '../utils.js';
+import { formatTimeAgo, getCurrencyInfo } from '../utils.js';
 
 const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest }) => {
   const avgPrice = getAverageRating(pub.ratings, 'price');
   const avgQuality = getAverageRating(pub.ratings, 'quality');
+  
+  const currencyInfo = getCurrencyInfo(pub.address);
 
   const priceInfo = useMemo(() => {
     const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
@@ -25,7 +27,6 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
         count: ratingsWithPrice.length,
     };
   }, [pub.ratings]);
-
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl p-4 border-t-4 border-amber-400 max-h-[80vh] flex flex-col">
@@ -48,7 +49,9 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                 <div className="pb-3 mb-3 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex justify-between items-center">
                         <span className="text-gray-700 dark:text-gray-300">Avg. Pint Price:</span>
-                        <span className="font-bold text-lg text-gray-900 dark:text-white">£{priceInfo.averagePrice}</span>
+                        <span className="font-bold text-lg text-gray-900 dark:text-white">
+                            {currencyInfo.symbol}{priceInfo.averagePrice}
+                        </span>
                     </div>
                     <p className="text-right text-xs text-gray-500">Based on {priceInfo.count} submission(s). Last updated {formatTimeAgo(priceInfo.lastUpdated)}</p>
                 </div>
@@ -76,6 +79,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                <RatingForm 
                  onSubmit={(rating) => onRate(pub.id, pub.name, pub.address, rating)}
                  existingRating={existingUserRating?.rating}
+                 currencySymbol={currencyInfo.symbol}
                 />
             ) : (
                 <div className="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg text-center">
