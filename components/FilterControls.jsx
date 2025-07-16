@@ -9,21 +9,23 @@ const FilterControls = ({ currentFilter, onFilterChange }) => {
   ];
 
   return (
-    <div className="p-2 bg-gray-100 dark:bg-gray-800 flex justify-around">
-      {filters.map(({ key, label, icon }) => (
-        <button
-          key={key}
-          onClick={() => onFilterChange(key)}
-          className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center space-x-2 ${
-            currentFilter === key
-              ? 'bg-amber-500 text-black shadow-md'
-              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-          }`}
-        >
-          <i className={`fas ${icon}`}></i>
-          <span>{label}</span>
-        </button>
-      ))}
+    <div className="p-2 bg-gray-100 dark:bg-gray-900 flex justify-center flex-shrink-0">
+      <div className="flex justify-around bg-gray-200 dark:bg-gray-700/50 rounded-full p-1 space-x-1">
+        {filters.map(({ key, label, icon }) => (
+          <button
+            key={key}
+            onClick={() => onFilterChange(key)}
+            className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+              currentFilter === key
+                ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-600/50'
+            }`}
+          >
+            <i className={`fas ${icon} w-4 text-center`}></i>
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 };

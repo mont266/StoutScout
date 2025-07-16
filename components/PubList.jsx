@@ -7,7 +7,6 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
   const listRef = useRef(null);
 
   useEffect(() => {
-    // Scroll to selected item only if the list is expanded
     if (isExpanded && selectedItemRef.current) {
         selectedItemRef.current.scrollIntoView({
             behavior: 'smooth',
@@ -43,12 +42,9 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 h-full flex flex-col">
-      <header onClick={onToggle} className="p-3 cursor-pointer flex justify-between items-center border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Nearby Pubs ({pubs.length})</h3>
-          <button aria-label={isExpanded ? 'Collapse list' : 'Expand list'}>
-              <i className={`fas fa-chevron-down text-gray-500 dark:text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}></i>
-          </button>
+    <div className="bg-white dark:bg-gray-800 h-full flex flex-col shadow-lg rounded-t-2xl">
+      <header onClick={onToggle} className="py-3 cursor-pointer flex justify-center items-center border-b border-gray-200 dark:border-gray-700 flex-shrink-0" aria-label={isExpanded ? 'Collapse list' : 'Expand list'}>
+          <div className="w-10 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
       </header>
 
       {isExpanded && (
@@ -60,8 +56,8 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
             </div>
           )}
           {pubs.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 p-4">
-                <p>Searching for nearby pubs...</p>
+            <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 p-8 text-center">
+                <p>No pubs found in this area. Try expanding the search radius in Settings.</p>
             </div>
           ) : (
             <ul ref={listRef} className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -72,17 +68,19 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
                     key={pub.id}
                     ref={isSelected ? selectedItemRef : null}
                     onClick={() => onSelectPub(pub.id)}
-                    className={`p-3 cursor-pointer transition-colors flex items-center justify-between space-x-4 ${isSelected ? 'bg-amber-500/10' : 'hover:bg-gray-100 dark:hover:bg-gray-700/50'}`}
+                    className={`p-4 cursor-pointer transition-colors border-l-4 ${isSelected ? 'bg-amber-500/10 border-amber-500' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'}`}
                   >
-                    <div className="flex items-center space-x-3 min-w-0">
-                        <span className={`text-lg font-bold w-6 text-center ${index < 3 ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'}`}>{index + 1}</span>
-                        <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-900 dark:text-white truncate">{pub.name}</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{pub.address}</p>
+                     <div className="flex items-center justify-between space-x-4">
+                        <div className="flex items-center space-x-4 min-w-0">
+                            <span className={`text-lg font-bold w-6 text-center ${index < 3 ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'}`}>{index + 1}</span>
+                            <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 dark:text-white truncate">{pub.name}</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{pub.address}</p>
+                            </div>
                         </div>
-                    </div>
-                    <div className="flex-shrink-0">
-                        {renderMetric(pub)}
+                        <div className="flex-shrink-0">
+                            {renderMetric(pub)}
+                        </div>
                     </div>
                   </li>
                 );

@@ -1,12 +1,9 @@
-
-
-
 import React, { useState } from 'react';
 import { REVIEWS_PER_LEVEL, RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, formatLocationDisplay } from '../utils.js';
 import StarRating from './StarRating.jsx';
 
-const ProfilePage = ({ userProfile, userRatings, onClose, onLogout }) => {
+const ProfilePage = ({ userProfile, userRatings, onLogout }) => {
     const { username, level, is_beta_tester, is_developer } = userProfile;
     const reviews = userProfile.reviews || 0;
     
@@ -18,17 +15,6 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout }) => {
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
-            <header className="p-2 bg-gray-50 dark:bg-gray-800 shadow-lg z-20 flex items-center">
-                <button
-                    onClick={onClose}
-                    className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 mr-4"
-                    aria-label="Back to map"
-                >
-                    <i className="fas fa-arrow-left fa-lg"></i>
-                </button>
-                <h1 className="text-2xl font-bold text-amber-500 dark:text-amber-400">Your Profile</h1>
-            </header>
-
             <main className="flex-grow p-4 overflow-y-auto">
                 {/* Profile Card */}
                 <div className="relative bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6 text-center border-t-4 border-amber-400">
@@ -155,17 +141,6 @@ const ProfilePage = ({ userProfile, userRatings, onClose, onLogout }) => {
                             <p>Go find a pint and start your journey!</p>
                         </div>
                     )}
-                </div>
-
-                {/* Sign Out Button */}
-                <div className="mt-auto pt-4">
-                    <button
-                      onClick={onLogout}
-                      className="w-full flex items-center justify-center space-x-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                    >
-                      <i className="fas fa-sign-out-alt"></i>
-                      <span>Sign Out</span>
-                    </button>
                 </div>
             </main>
         </div>
