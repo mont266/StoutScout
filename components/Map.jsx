@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
 import { FilterType } from '../types.js';
+import { DEFAULT_LOCATION } from '../constants.js';
 
 const containerStyle = {
   width: '100%',
@@ -55,7 +56,7 @@ const mapStylesLight = [
 
 const libraries = ['places', 'marker'];
 
-const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme, filter, onCenterChange }) => {
+const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme, filter, onCenterChange, refreshTrigger }) => {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
@@ -64,7 +65,6 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
 
   const mapRef = useRef(null);
   const searchTimeoutRef = useRef(null);
-  const centerChangeTimeoutRef = useRef(null);
 
   // Effect to pan the map to a selected pub, or to the user's live location
   useEffect(() => {
@@ -80,38 +80,44 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
     }
   }, [selectedPubId, pubs, searchCenter]);
 
-  // Effect to perform a new search for pubs when the searchCenter or searchRadius changes
-  useEffect(() => {
+  // Refactored search logic to be callable
+  const searchForPubs = useCallback(async () => {
     if (!isLoaded || !mapRef.current || !window.google || !searchCenter) {
       return;
     }
-
-    // Debounce the search to avoid excessive API calls when dragging the map
-    if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-    }
     
-    searchTimeoutRef.current = setTimeout(async () => {
-      const request = {
-        fields: ['id', 'displayName', 'formattedAddress', 'location'],
-        textQuery: 'pub OR bar', // Use a more explicit query
-        locationBias: {
-          center: new window.google.maps.LatLng(searchCenter.lat, searchCenter.lng),
-          radius: searchRadius,
-        },
-        maxResultCount: 20,
-      };
+    const request = {
+      fields: ['id', 'displayName', 'formattedAddress', 'location'],
+      textQuery: 'pub OR bar',
+      locationBias: {
+        center: new window.google.maps.LatLng(searchCenter.lat, searchCenter.lng),
+        radius: searchRadius,
+      },
+      maxResultCount: 20,
+    };
 
-      try {
-        // Use the newer, more accurate searchByText API
-        const { places } = await window.google.maps.places.Place.searchByText(request);
-        const results = places || [];
-        const wasCapped = results.length === 20;
-        onPlacesFound(results, wasCapped);
-      } catch (error) {
-        console.error('Places search failed:', error);
-        onPlacesFound([], false);
-      }
+    try {
+      const { places } = await window.google.maps.places.Place.searchByText(request);
+      const wasCapped = places?.length === 20;
+      onPlacesFound(places || [], wasCapped);
+    } catch (error) {
+      console.error('Places search failed:', error);
+      onPlacesFound([], false);
+    }
+  }, [isLoaded, searchCenter, searchRadius, onPlacesFound]);
+
+  // Use a ref to hold the latest search function to avoid stale closures in effects
+  const searchForPubsRef = useRef(searchForPubs);
+  useEffect(() => {
+    searchForPubsRef.current = searchForPubs;
+  });
+
+  // Effect to perform a debounced search when the map is dragged
+  useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      searchForPubsRef.current();
     }, 500); // 500ms debounce
 
     return () => {
@@ -119,8 +125,17 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
             clearTimeout(searchTimeoutRef.current);
         }
     };
+  }, [searchCenter, searchRadius]);
 
-  }, [searchCenter, searchRadius, isLoaded, onPlacesFound]);
+  // Effect to perform an immediate search when the refresh button is clicked
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      searchForPubsRef.current();
+    }
+  }, [refreshTrigger]);
 
   const onLoad = useCallback(function callback(map) {
     mapRef.current = map;
@@ -172,14 +187,16 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
       options={mapOptions}
       onIdle={handleIdle}
     >
-      <OverlayView
-        position={userLocation}
-        mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-      >
-        <div style={{ transform: 'translate(-50%, -50%)', zIndex: 100 }} title="Your Location">
-           <div className="w-4 h-4 rounded-full bg-[#4285F4] border-2 border-white dark:border-gray-800 shadow-md"></div>
-        </div>
-      </OverlayView>
+      {userLocation && userLocation.lat !== DEFAULT_LOCATION.lat && (
+        <OverlayView
+          position={userLocation}
+          mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+        >
+          <div style={{ transform: 'translate(-50%, -50%)', zIndex: 100 }} title="Your Location">
+             <div className="w-4 h-4 rounded-full bg-[#4285F4] border-2 border-white dark:border-gray-800 shadow-md animate-pulse-blue-dot"></div>
+          </div>
+        </OverlayView>
+      )}
 
       {pubs.map((pub, index) => {
         const isSelected = pub.id === selectedPubId;

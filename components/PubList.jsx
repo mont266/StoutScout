@@ -3,7 +3,7 @@ import { FilterType } from '../types.js';
 import StarRating from './StarRating.jsx';
 import { getCurrencyInfo } from '../utils.js';
 
-const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading }) => {
+const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading, showToggleHeader = true }) => {
   const selectedItemRef = useRef(null);
   const listRef = useRef(null);
 
@@ -56,9 +56,11 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
 
   return (
     <div className="bg-white dark:bg-gray-800 h-full flex flex-col shadow-lg rounded-t-2xl">
-      <header onClick={onToggle} className="py-3 cursor-pointer flex justify-center items-center border-b border-gray-200 dark:border-gray-700 flex-shrink-0" aria-label={isExpanded ? 'Collapse list' : 'Expand list'}>
-          <div className="w-10 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
-      </header>
+      {showToggleHeader && (
+        <header onClick={onToggle} className="py-3 cursor-pointer flex justify-center items-center border-b border-gray-200 dark:border-gray-700 flex-shrink-0" aria-label={isExpanded ? 'Collapse list' : 'Expand list'}>
+            <div className="w-10 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+        </header>
+      )}
 
       {isExpanded && (
         <div className="overflow-y-auto">
@@ -75,7 +77,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 p-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400"></div>
-              <p className="mt-4">Merging local ratings with live map data...</p>
+              <p className="mt-4">Finding the best pints...</p>
             </div>
           ) : pubs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 p-8 text-center">

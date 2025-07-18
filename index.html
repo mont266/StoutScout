@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Stoutly</title>
     
-    <link rel="icon" href="data:image/svg+xml,<svg viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M22.0208 10.7432C23.0485 10.2053 23.8687 9.17859 23.8687 8C23.8687 6.34315 22.5256 5 20.8687 5H11.1313C9.47442 5 8.13135 6.34315 8.13135 8C8.13135 9.17859 8.95152 10.2053 9.97918 10.7432C6.80208 11.5471 5 14.4479 5 18V25C5 26.1046 5.89543 27 7 27H25C26.1046 27 27 26.1046 27 25V18C27 14.4479 25.1979 11.5471 22.0208 10.7432Z' fill='%232C1F17'/><path d='M6 10H26' stroke='%23FDEED4' stroke-width='4' stroke-linecap='round'/><path d='M8 8C9.5 7 12.5 7 16 8C19.5 9 22.5 9 24 8' stroke='%23FDEED4' stroke-width='2.5' stroke-linecap='round'/></svg>">
+    <!-- PWA & Mobile App Settings -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2C1F17">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Stoutly">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><rect width='100' height='100' rx='22' fill='%232C1F17'/><g transform='translate(0 2)'><path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F'/><path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/></g></svg>">
+    
+    <link rel="icon" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><g transform='translate(0 2)'><path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F'/><path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/></g></svg>">
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
@@ -102,6 +110,19 @@
         animation: rank-up-glow 2.5s ease-in-out infinite;
       }
 
+      /* Pulse animation for user location dot */
+      @keyframes pulse-blue-dot {
+        0%, 100% {
+          box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 12px rgba(66, 133, 244, 0);
+        }
+      }
+      .animate-pulse-blue-dot {
+        animation: pulse-blue-dot 2s infinite;
+      }
+
     </style>
 
   <script type="importmap">
@@ -113,8 +134,7 @@
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.51.0",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.6.0",
     "react/": "https://esm.sh/react@^19.1.0/",
-    "@react-google-maps/api": "https://esm.sh/@react-google-maps/api@^2.20.7",
-    "@google/genai": "https://esm.sh/@google/genai@^1.9.0"
+    "@react-google-maps/api": "https://esm.sh/@react-google-maps/api@^2.20.7"
   }
 }
 </script>

@@ -5,8 +5,9 @@ import { getRankData, formatTimeAgo, formatLocationDisplay, getCurrencyInfo } fr
 import { supabase } from '../supabase.js';
 import StarRating from './StarRating.jsx';
 import Avatar from './Avatar.jsx';
+import { trackEvent } from '../analytics.js';
 
-const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick }) => {
+const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onBack }) => {
     // Component now manages its own profile state to update it after a moderation action.
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
@@ -79,12 +80,27 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         } else {
             // Update local state to immediately reflect the change
             setProfile(p => ({ ...p, is_banned: true }));
+            trackEvent('ban_user', { banned_user_id: profile.id });
         }
         setIsBanning(false);
     };
 
+    const toggleSection = (sectionName, isVisible, setVisible) => {
+        const nextState = !isVisible;
+        setVisible(nextState);
+        trackEvent('toggle_profile_section', { section_name: sectionName, is_visible: nextState });
+    };
+
     return (
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
+             {onBack && (
+                <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <button onClick={onBack} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg transition-colors">
+                        <i className="fas fa-arrow-left"></i>
+                        <span>Back</span>
+                    </button>
+                </div>
+            )}
             <main className="flex-grow p-4 overflow-y-auto">
                 {/* Profile Card */}
                 <div className={`relative bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6 text-center border-t-4 ${is_beta_tester ? 'border-blue-500' : 'border-amber-400'}`}>
@@ -195,7 +211,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                 {/* Rank Progression */}
                 <div className="mb-6">
                     <button
-                        onClick={() => setIsRankProgressionVisible(!isRankProgressionVisible)}
+                        onClick={() => toggleSection('rank_progression', isRankProgressionVisible, setIsRankProgressionVisible)}
                         className="w-full flex justify-between items-center text-left text-xl font-semibold text-gray-900 dark:text-white p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400"
                         aria-expanded={isRankProgressionVisible}
                         aria-controls="rank-progression-list"
@@ -231,7 +247,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                 {/* Recent Ratings */}
                 <div className="mb-6">
                     <button
-                        onClick={() => setIsRatingsVisible(!isRatingsVisible)}
+                        onClick={() => toggleSection('recent_ratings', isRatingsVisible, setIsRatingsVisible)}
                         className="w-full flex justify-between items-center text-left text-xl font-semibold text-gray-900 dark:text-white p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400"
                         aria-expanded={isRatingsVisible}
                         aria-controls="recent-ratings-list"

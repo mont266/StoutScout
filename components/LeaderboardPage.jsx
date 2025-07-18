@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.js';
 import { getRankData } from '../utils.js';
 import Avatar from './Avatar.jsx';
+import { trackEvent } from '../analytics.js';
 
 const LeaderboardPage = ({ onViewProfile }) => {
     const [activePeriod, setActivePeriod] = useState('all'); // 'all', 'year', 'month', 'day'
@@ -31,6 +32,11 @@ const LeaderboardPage = ({ onViewProfile }) => {
         fetchLeaderboardData();
     }, [fetchLeaderboardData]);
 
+    const handlePeriodChange = (id) => {
+        setActivePeriod(id);
+        trackEvent('change_leaderboard_filter', { period: id });
+    };
+
     const renderMedal = (rank) => {
         const medals = {
             1: { icon: 'fa-medal', color: 'text-yellow-400' },
@@ -54,7 +60,7 @@ const LeaderboardPage = ({ onViewProfile }) => {
                  {/* Period Filters */}
                 <div className="flex justify-around">
                     {periodFilters.map(({ id, label }) => (
-                        <button key={id} onClick={() => setActivePeriod(id)}
+                        <button key={id} onClick={() => handlePeriodChange(id)}
                             className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${
                                 activePeriod === id ? 'bg-amber-500 text-black' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                             }`}>
@@ -98,11 +104,11 @@ const LeaderboardPage = ({ onViewProfile }) => {
                             const rankData = getRankData(item.level || 1);
                             return (
                                 <li key={item.id}
-                                    onClick={() => onViewProfile(item.id)}
-                                    className={`bg-gray-50 dark:bg-gray-800 p-3 rounded-lg shadow-md border-l-4 transition-colors cursor-pointer hover:bg-amber-500/10 dark:hover:bg-gray-700/50 ${index < 3 ? 'border-amber-400' : 'border-transparent'}`}
+                                    onClick={() => onViewProfile(item.id, 'leaderboard')}
+                                    className={`group bg-gray-50 dark:bg-gray-800 p-3 rounded-lg shadow-md border-l-4 transition-colors cursor-pointer hover:bg-amber-500/10 dark:hover:bg-gray-700/50 ${index < 3 ? 'border-amber-400' : 'border-transparent'}`}
                                     role="button"
                                     tabIndex="0"
-                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { onViewProfile(item.id) }}}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { onViewProfile(item.id, 'leaderboard') }}}
                                     aria-label={`View profile for ${item.username}`}
                                 >
                                     <div className="flex items-center space-x-4">
@@ -111,7 +117,7 @@ const LeaderboardPage = ({ onViewProfile }) => {
                                             <Avatar avatarId={item.avatar_id} className="w-12 h-12" />
                                         </div>
                                         <div className="flex-grow min-w-0">
-                                            <p className="font-bold text-lg text-gray-900 dark:text-white truncate" title={item.username}>{item.username}</p>
+                                            <p className="font-bold text-lg text-gray-900 dark:text-white truncate group-hover:underline" title={item.username}>{item.username}</p>
                                             <div className="flex items-center space-x-2">
                                                 <i className={`fas ${rankData.icon} text-amber-500 dark:text-amber-400 text-xs w-3 text-center`} title={`Rank: ${rankData.name}`}></i>
                                                 <span className="text-sm text-gray-500 dark:text-gray-400">Level {item.level || 1}</span>
