@@ -32,7 +32,7 @@ const TabButton = ({ label, isActive, onClick }) => (
 );
 
 const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, showCloseButton = true }) => {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(session && !existingUserRating ? 'your-rating' : 'overview');
 
   const avgPrice = getAverageRating(pub.ratings, 'price');
   const avgQuality = getAverageRating(pub.ratings, 'quality');

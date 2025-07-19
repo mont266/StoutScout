@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, formatLocationDisplay, getCurrencyInfo } from '../utils.js';
@@ -11,6 +12,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     // Component now manages its own profile state to update it after a moderation action.
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
+    const [isUpdatingRoles, setIsUpdatingRoles] = useState(false);
     const [isModerationVisible, setIsModerationVisible] = useState(false);
     const [isRankProgressionVisible, setIsRankProgressionVisible] = useState(false);
     const [isRatingsVisible, setIsRatingsVisible] = useState(true);
@@ -64,6 +66,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     // Determine if the logged-in user can see moderation tools for the viewed profile
     const isViewingOwnProfile = !loggedInUserProfile || profile.id === loggedInUserProfile.id;
     const canModerate = loggedInUserProfile?.is_developer && !isViewingOwnProfile;
+    const isActionLoading = isBanning || isUpdatingRoles;
 
     const handleBanUser = async () => {
         if (!window.confirm(`Are you sure you want to ban ${username}? This action is permanent and will hide all their contributions.`)) {
@@ -83,6 +86,30 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
             trackEvent('ban_user', { banned_user_id: profile.id });
         }
         setIsBanning(false);
+    };
+
+    const handleSetRole = async (roleName, roleValue) => {
+        if (!window.confirm(`Are you sure you want to ${roleValue ? 'grant' : 'revoke'} the '${roleName.replace('is_', '')}' role for ${username}? This is a significant permission change.`)) {
+            return;
+        }
+        setIsUpdatingRoles(true);
+        
+        const { error } = await supabase.functions.invoke('set-user-role', {
+            body: { 
+                userIdToUpdate: profile.id,
+                roleName: roleName,
+                roleValue: roleValue
+            },
+        });
+
+        if (error) {
+            alert(`Failed to update role: ${error.message}. Ensure the 'set-user-role' Edge Function is deployed and has the correct permissions.`);
+            trackEvent('set_role_failed', { target_user_id: profile.id, role_name: roleName, error: error.message });
+        } else {
+            setProfile(p => ({ ...p, [roleName]: roleValue }));
+            trackEvent('set_role_success', { target_user_id: profile.id, role_name: roleName, role_value: roleValue });
+        }
+        setIsUpdatingRoles(false);
     };
 
     const toggleSection = (sectionName, isVisible, setVisible) => {
@@ -189,19 +216,40 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                             <i className={`fas fa-chevron-down text-red-500/70 dark:text-red-400/70 transition-transform duration-300 ${isModerationVisible ? 'rotate-180' : ''}`}></i>
                         </button>
                         {isModerationVisible && (
-                            <div id="moderation-tools-panel" className="mt-2 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                            <div id="moderation-tools-panel" className="mt-2 p-4 bg-red-500/10 border border-red-500/20 rounded-lg space-y-4">
                                 <div className="flex flex-col items-center">
                                     <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
                                         Status: <span className={`font-bold ${is_banned ? 'text-red-500' : 'text-green-500'}`}>{is_banned ? 'Banned' : 'Active'}</span>
                                     </p>
                                     <button
                                         onClick={handleBanUser}
-                                        disabled={is_banned || isBanning}
+                                        disabled={is_banned || isActionLoading}
                                         className="w-full sm:w-auto bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 dark:disabled:bg-red-800 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                                     >
                                         {isBanning ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <i className="fas fa-user-slash"></i>}
                                         <span>{is_banned ? 'User Banned' : 'Ban User'}</span>
                                     </button>
+                                </div>
+                                <div className="border-t border-red-500/20 pt-4">
+                                    <h4 className="text-md font-semibold text-center text-gray-700 dark:text-gray-300 mb-3">Manage Roles</h4>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <button
+                                            onClick={() => handleSetRole('is_beta_tester', !profile.is_beta_tester)}
+                                            disabled={isActionLoading}
+                                            className={`flex-1 flex items-center justify-center space-x-2 font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${profile.is_beta_tester ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300 hover:bg-blue-300 dark:hover:bg-blue-800'}`}
+                                        >
+                                            {isUpdatingRoles ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> : (profile.is_beta_tester ? <i className="fas fa-user-minus"></i> : <i className="fas fa-user-plus"></i>)}
+                                            <span>{profile.is_beta_tester ? 'Revoke Beta' : 'Grant Beta'}</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleSetRole('is_developer', !profile.is_developer)}
+                                            disabled={isActionLoading}
+                                            className={`flex-1 flex items-center justify-center space-x-2 font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${profile.is_developer ? 'bg-amber-500 text-black hover:bg-amber-600' : 'bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-300 hover:bg-amber-300 dark:hover:bg-amber-800'}`}
+                                        >
+                                            {isUpdatingRoles ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> : (profile.is_developer ? <i className="fas fa-user-minus"></i> : <i className="fas fa-user-plus"></i>)}
+                                            <span>{profile.is_developer ? 'Revoke Dev' : 'Grant Dev'}</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
