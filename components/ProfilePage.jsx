@@ -1,28 +1,34 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, formatLocationDisplay, getCurrencyInfo } from '../utils.js';
 import { supabase } from '../supabase.js';
 import StarRating from './StarRating.jsx';
 import Avatar from './Avatar.jsx';
+import ImageModal from './ImageModal.jsx';
+import ReportImageModal from './ReportImageModal.jsx';
 import { trackEvent } from '../analytics.js';
+import BanUserModal from './BanUserModal.jsx';
 
-const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onBack }) => {
+const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onBack, onProfileUpdate }) => {
     // Component now manages its own profile state to update it after a moderation action.
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
+    const [isUnbanning, setIsUnbanning] = useState(false);
     const [isUpdatingRoles, setIsUpdatingRoles] = useState(false);
     const [isModerationVisible, setIsModerationVisible] = useState(false);
     const [isRankProgressionVisible, setIsRankProgressionVisible] = useState(false);
     const [isRatingsVisible, setIsRatingsVisible] = useState(true);
+    const [isBanModalOpen, setIsBanModalOpen] = useState(false);
+    const [imageToView, setImageToView] = useState(null);
+    const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
+
 
     // Keep state in sync with props from App.jsx
     useEffect(() => {
         setProfile(userProfile);
     }, [userProfile]);
 
-    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id } = profile;
+    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count } = profile;
     const reviews = profile.reviews || 0;
     
     const rankData = getRankData(level);
@@ -66,26 +72,47 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     // Determine if the logged-in user can see moderation tools for the viewed profile
     const isViewingOwnProfile = !loggedInUserProfile || profile.id === loggedInUserProfile.id;
     const canModerate = loggedInUserProfile?.is_developer && !isViewingOwnProfile;
-    const isActionLoading = isBanning || isUpdatingRoles;
+    const isActionLoading = isBanning || isUnbanning || isUpdatingRoles;
 
-    const handleBanUser = async () => {
-        if (!window.confirm(`Are you sure you want to ban ${username}? This action is permanent and will hide all their contributions.`)) {
-            return;
-        }
+    const handleBanUser = async (reason) => {
         setIsBanning(true);
-        // This now calls a secure Edge Function instead of updating the DB from the client
+        setIsBanModalOpen(false);
         const { error } = await supabase.functions.invoke('ban-user', {
-            body: { userIdToBan: profile.id },
+            body: { user_id: profile.id, reason },
         });
 
         if (error) {
-            alert(`Failed to ban user: ${error.message}. Ensure the 'ban-user' Edge Function is deployed.`);
+            alert(`Failed to ban user: ${error.context?.error?.message || error.message}.`);
+            trackEvent('ban_user_failed', { banned_user_id: profile.id, error: error.message });
         } else {
-            // Update local state to immediately reflect the change
-            setProfile(p => ({ ...p, is_banned: true }));
-            trackEvent('ban_user', { banned_user_id: profile.id });
+            setProfile(p => ({ ...p, is_banned: true, ban_reason: reason }));
+            trackEvent('ban_user_success', { banned_user_id: profile.id, reason });
+             if (onProfileUpdate) { // Refresh data from parent
+                onProfileUpdate(profile.id);
+            }
         }
         setIsBanning(false);
+    };
+    
+    const handleUnbanUser = async () => {
+        if (!window.confirm(`Are you sure you want to unban ${username}? Their ratings will become public again.`)) return;
+        
+        setIsUnbanning(true);
+        const { error } = await supabase.functions.invoke('unban-user', {
+            body: { user_id: profile.id },
+        });
+
+        if (error) {
+            alert(`Failed to unban user: ${error.context?.error?.message || error.message}.`);
+            trackEvent('unban_user_failed', { unbanned_user_id: profile.id, error: error.message });
+        } else {
+            setProfile(p => ({ ...p, is_banned: false, ban_reason: null, banned_at: null }));
+            trackEvent('unban_user_success', { unbanned_user_id: profile.id });
+            if (onProfileUpdate) { // Refresh data from parent
+                onProfileUpdate(profile.id);
+            }
+        }
+        setIsUnbanning(false);
     };
 
     const handleSetRole = async (roleName, roleValue) => {
@@ -96,14 +123,14 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         
         const { error } = await supabase.functions.invoke('set-user-role', {
             body: { 
-                userIdToUpdate: profile.id,
+                user_id: profile.id,
                 roleName: roleName,
                 roleValue: roleValue
             },
         });
 
         if (error) {
-            alert(`Failed to update role: ${error.message}. Ensure the 'set-user-role' Edge Function is deployed and has the correct permissions.`);
+            alert(`Failed to update role: ${error.context?.error?.message || error.message}. Ensure the 'set-user-role' Edge Function is deployed and has the correct permissions.`);
             trackEvent('set_role_failed', { target_user_id: profile.id, role_name: roleName, error: error.message });
         } else {
             setProfile(p => ({ ...p, [roleName]: roleValue }));
@@ -118,7 +145,55 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         trackEvent('toggle_profile_section', { section_name: sectionName, is_visible: nextState });
     };
 
+    const handleInitiateReport = (ratingToReport) => {
+        setImageToView(null); // Close the image modal first
+        setReportModalInfo({ isOpen: true, rating: ratingToReport }); // Then open the report modal
+    };
+
+    const handleReportImage = async (rating, reason) => {
+        if (!loggedInUserProfile) {
+            alert("You must be logged in to report an image.");
+            return;
+        }
+        trackEvent('report_image', { rating_id: rating.id, reason });
+        try {
+            const { error } = await supabase.functions.invoke('report-image', {
+                body: { rating_id: rating.id, reason },
+            });
+            if (error) throw error;
+            alert("Thank you. The image has been reported and will be reviewed.");
+        } catch (error) {
+            console.error("Failed to report image:", error);
+            alert(`Could not report image: ${error.context?.error?.message || error.message}`);
+        }
+        setReportModalInfo({ isOpen: false, rating: null });
+        setImageToView(null);
+    };
+
+
     return (
+        <>
+        {isBanModalOpen && (
+            <BanUserModal 
+                username={profile.username}
+                onClose={() => setIsBanModalOpen(false)}
+                onConfirm={handleBanUser}
+            />
+        )}
+        {imageToView && (
+            <ImageModal
+                rating={imageToView}
+                onClose={() => setImageToView(null)}
+                onReport={() => handleInitiateReport(imageToView)}
+                canReport={loggedInUserProfile && loggedInUserProfile.id !== imageToView.user.id}
+            />
+        )}
+        {reportModalInfo.isOpen && (
+            <ReportImageModal 
+                onClose={() => setReportModalInfo({isOpen: false, rating: null})}
+                onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)}
+            />
+        )}
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
              {onBack && (
                 <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -183,6 +258,15 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                             <p className="font-bold text-gray-900 dark:text-white">{reviews}</p>
                             <p className="text-sm text-gray-500 dark:text-gray-400">{reviews === 1 ? 'Rating' : 'Ratings'}</p>
                         </div>
+                         {loggedInUserProfile?.is_developer && removed_image_count > 0 && (
+                            <>
+                                <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>
+                                <div>
+                                    <p className="font-bold text-red-500">{removed_image_count}</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Removed Photos</p>
+                                </div>
+                            </>
+                         )}
                     </div>
 
                     {/* Review Progress Bar */}
@@ -221,14 +305,25 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                     <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
                                         Status: <span className={`font-bold ${is_banned ? 'text-red-500' : 'text-green-500'}`}>{is_banned ? 'Banned' : 'Active'}</span>
                                     </p>
-                                    <button
-                                        onClick={handleBanUser}
-                                        disabled={is_banned || isActionLoading}
-                                        className="w-full sm:w-auto bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 dark:disabled:bg-red-800 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                                    >
-                                        {isBanning ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <i className="fas fa-user-slash"></i>}
-                                        <span>{is_banned ? 'User Banned' : 'Ban User'}</span>
-                                    </button>
+                                    {is_banned ? (
+                                        <button
+                                            onClick={handleUnbanUser}
+                                            disabled={isActionLoading}
+                                            className="w-full sm:w-auto bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                                        >
+                                            {isUnbanning ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <i className="fas fa-user-check"></i>}
+                                            <span>Unban User</span>
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => setIsBanModalOpen(true)}
+                                            disabled={isActionLoading}
+                                            className="w-full sm:w-auto bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                                        >
+                                            {isBanning ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <i className="fas fa-user-slash"></i>}
+                                            <span>Ban User</span>
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="border-t border-red-500/20 pt-4">
                                     <h4 className="text-md font-semibold text-center text-gray-700 dark:text-gray-300 mb-3">Manage Roles</h4>
@@ -309,43 +404,47 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                 <ul className="space-y-3">
                                     {userRatings.slice(0, 10).map((r) => { // Show latest 10
                                         const currencyInfo = getCurrencyInfo(r.pubAddress);
+                                        const ratingForModal = { ...r, user: { id: profile.id, username: profile.username } };
                                         return (
-                                        <li key={r.id}
-                                            className={`bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md transition-colors ${r.pubLocation ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50' : ''}`}
-                                            onClick={() => r.pubLocation && onViewPub({ id: r.pubId, location: r.pubLocation })}
-                                            role={r.pubLocation ? "button" : "listitem"}
-                                            tabIndex={r.pubLocation ? "0" : "-1"}
-                                            onKeyDown={(e) => {
-                                                if (r.pubLocation && (e.key === 'Enter' || e.key === ' ')) {
-                                                    onViewPub({ id: r.pubId, location: r.pubLocation });
-                                                }
-                                            }}
-                                            aria-label={r.pubLocation ? `View details for ${r.pubName}` : undefined}
-                                        >
-                                            <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                                <div className="flex-grow pr-4 min-w-0">
-                                                    <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{r.pubName}</p>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{formatLocationDisplay(r.pubAddress)}</p>
-                                                </div>
-                                                <div className="flex-shrink-0 text-right">
-                                                    <p className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(r.timestamp)}</p>
-                                                     {r.pubLocation && <i className="fas fa-map-pin text-amber-500 dark:text-amber-400 mt-2" title="View on map"></i>}
+                                        <li key={r.id} className={`bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md`}>
+                                            <div 
+                                                className={r.pubLocation ? 'cursor-pointer' : ''}
+                                                onClick={() => r.pubLocation && onViewPub({ id: r.pubId, location: r.pubLocation })}
+                                                role={r.pubLocation ? "button" : undefined}
+                                            >
+                                                <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                                                    <div className="flex-grow pr-4 min-w-0">
+                                                        <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{r.pubName}</p>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{formatLocationDisplay(r.pubAddress)}</p>
+                                                    </div>
+                                                    <div className="flex-shrink-0 text-right">
+                                                        <p className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(r.timestamp)}</p>
+                                                        {r.pubLocation && <i className="fas fa-map-pin text-amber-500 dark:text-amber-400 mt-2" title="View on map"></i>}
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between items-center text-sm">
-                                                    <span className="text-gray-700 dark:text-gray-300">Price Rating:</span>
-                                                    <StarRating rating={r.rating.price} color="text-green-400" />
-                                                </div>
-                                                {r.rating.exact_price > 0 && (
-                                                    <div className="flex justify-between items-center text-sm">
-                                                        <span className="text-gray-700 dark:text-gray-300">Price Paid:</span>
-                                                        <span className="font-bold text-gray-900 dark:text-white">{currencyInfo.symbol}{(r.rating.exact_price).toFixed(2)}</span>
-                                                    </div>
+
+                                            <div className="flex space-x-4 items-start">
+                                                {r.image_url && (
+                                                    <button onClick={() => setImageToView(ratingForModal)} className="flex-shrink-0 rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
+                                                        <img src={r.image_url} alt="Pint of Guinness" className="w-24 h-24 object-cover" />
+                                                    </button>
                                                 )}
-                                                <div className="flex justify-between items-center text-sm">
-                                                    <span className="text-gray-700 dark:text-gray-300">Quality Rating:</span>
-                                                    <StarRating rating={r.rating.quality} color="text-amber-400" />
+                                                <div className="flex-grow space-y-2">
+                                                    <div className="flex justify-between items-center text-sm">
+                                                        <span className="text-gray-700 dark:text-gray-300">Price Rating:</span>
+                                                        <StarRating rating={r.rating.price} color="text-green-400" />
+                                                    </div>
+                                                    {r.rating.exact_price > 0 && (
+                                                        <div className="flex justify-between items-center text-sm">
+                                                            <span className="text-gray-700 dark:text-gray-300">Price Paid:</span>
+                                                            <span className="font-bold text-gray-900 dark:text-white">{currencyInfo.symbol}{(r.rating.exact_price).toFixed(2)}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-between items-center text-sm">
+                                                        <span className="text-gray-700 dark:text-gray-300">Quality Rating:</span>
+                                                        <StarRating rating={r.rating.quality} color="text-amber-400" />
+                                                    </div>
                                                 </div>
                                             </div>
                                         </li>
@@ -361,6 +460,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                 </div>
             </main>
         </div>
+        </>
     );
 };
 

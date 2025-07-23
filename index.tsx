@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
+import { trackEvent } from './analytics.js';
 
 // Register Service Worker for PWA functionality
 if ('serviceWorker' in navigator) {
@@ -15,6 +16,21 @@ if ('serviceWorker' in navigator) {
       });
   });
 }
+
+// PWA Install Prompt handling
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent the default mini-infobar from appearing on mobile.
+  e.preventDefault();
+  // Dispatch a custom event so the App component can capture the prompt.
+  window.dispatchEvent(new CustomEvent('pwa-install-prompt-ready', { detail: e }));
+  trackEvent('pwa_install_prompt_available');
+});
+
+
+// Track when the PWA has been successfully installed.
+window.addEventListener('appinstalled', () => {
+    trackEvent('pwa_install_success');
+});
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

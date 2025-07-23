@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  #orientation-lock-overlay {
+    @apply fixed inset-0 z-[100] bg-gray-900 text-white flex-col items-center justify-center text-center p-8 hidden; /* hidden by default */
+  }
+}
+
+/* Show overlay and hide app only on mobile/tablet devices in landscape */
+@media (min-width: 320px) and (max-width: 1023px) and (orientation: landscape) {
+  #root, #modal-root {
+    display: none; /* Hide the app content */
+  }
+  #orientation-lock-overlay {
+    display: flex; /* Show the overlay */
+  }
+}

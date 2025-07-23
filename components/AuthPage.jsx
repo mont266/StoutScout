@@ -15,7 +15,7 @@ const AuthPage = ({ onClose }) => {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        onClose();
+        handleClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -65,6 +65,8 @@ const AuthPage = ({ onClose }) => {
       setError(err.error_description || err.message);
       if (view === 'signIn') {
         trackEvent('login_failed', { error_message: err.message });
+      } else if (view === 'signUp') {
+        trackEvent('sign_up_failed', { error_message: err.message });
       }
     } finally {
       setLoading(false);
@@ -75,6 +77,7 @@ const AuthPage = ({ onClose }) => {
     e.preventDefault();
     setLoading(true);
     resetFormState();
+    trackEvent('password_reset_request');
     
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin,
@@ -86,6 +89,15 @@ const AuthPage = ({ onClose }) => {
         setMessage('Check your email for a password reset link.');
     }
     setLoading(false);
+  };
+
+  const handleClose = () => {
+    // Only track this event if the user is actively closing the modal,
+    // not when it's closed automatically after success or on a message screen.
+    if (!message && !loading) { 
+      trackEvent('auth_modal_closed', { on_view: view });
+    }
+    onClose();
   };
   
   const renderContent = () => {
@@ -173,14 +185,14 @@ const AuthPage = ({ onClose }) => {
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-60 dark:bg-opacity-70 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
+      onClick={handleClose}
       role="dialog"
       aria-modal="true"
     >
       <div className="max-w-sm w-full" onClick={e => e.stopPropagation()}>
         <div className="relative bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl border-t-4 border-amber-400">
           <button
-              onClick={onClose}
+              onClick={handleClose}
               className="absolute top-2 right-2 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors p-2 rounded-full"
               aria-label="Close authentication"
           >

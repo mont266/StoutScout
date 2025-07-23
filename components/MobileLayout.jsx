@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 import Header from './Header.jsx';
 import FilterControls from './FilterControls.jsx';
@@ -10,9 +10,13 @@ import LeaderboardPage from './LeaderboardPage.jsx';
 import AuthPage from './AuthPage.jsx';
 import UpdatePasswordPage from './UpdatePasswordPage.jsx';
 import XPPopup from './XPPopup.jsx';
+import UpdateConfirmationPopup from './UpdateConfirmationPopup.jsx';
 import LevelUpPopup from './LevelUpPopup.jsx';
 import RankUpPopup from './RankUpPopup.jsx';
 import AvatarSelectionModal from './AvatarSelectionModal.jsx';
+import TermsOfUsePage from './TermsOfUsePage.jsx';
+import PrivacyPolicyPage from './PrivacyPolicyPage.jsx';
+import IOSInstallInstructionsModal from './IOSInstallInstructionsModal.jsx';
 
 const TabBar = ({ activeTab, onTabChange }) => {
   const tabs = [
@@ -41,9 +45,6 @@ const TabBar = ({ activeTab, onTabChange }) => {
           </button>
         ))}
       </div>
-      <div className="text-center text-xs text-gray-400 dark:text-gray-500 pb-1 px-2">
-        Stoutly is a fan project and is not sponsored by or affiliated with Guinness® or Diageo plc.
-      </div>
       <div className="pb-safe"></div>
     </nav>
   );
@@ -60,98 +61,122 @@ const MobileLayout = (props) => {
         isDbPubsLoaded, initialSearchComplete, renderProfile, session, handleViewProfile,
         handleSettingsChange, handleSetSimulatedLocation, userProfile, handleLogout,
         handleViewPub, selectedPub, existingUserRatingForSelectedPub, handleRatePub,
-        reviewPopupInfo, leveledUpInfo, rankUpInfo,
+        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, handleBackFromProfileView,
+        legalPageView, handleViewLegal, handleDataRefresh,
+        installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
 
     return (
-        <div className="w-full max-w-md mx-auto h-[100dvh] flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased relative">
+        <div className="w-full max-w-md mx-auto h-dvh flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased">
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
+            {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(false)} />}
 
             <Header activeTab={activeTab} />
 
-            <main className="flex-grow flex flex-col overflow-y-auto">
-                {activeTab === 'map' && (
-                    <div className="flex-grow flex flex-col overflow-hidden">
-                        {locationError && !(settings.developerMode && settings.simulatedLocation) && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
-                        <FilterControls
-                            currentFilter={filter}
-                            onFilterChange={handleFilterChange}
-                            onRefresh={handleRefresh}
-                            isRefreshing={isRefreshing}
-                        />
-
-                        <div className="flex-grow min-h-0 relative">
-                            <MapComponent
-                                pubs={sortedPubs} userLocation={userLocation}
-                                searchCenter={searchCenter} searchRadius={settings.radius}
-                                onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                                onPlacesFound={handlePlacesFound} theme={settings.theme} filter={filter}
-                                onCenterChange={handleCenterChange}
-                                refreshTrigger={refreshTrigger}
+            <main className="relative flex-grow flex flex-col overflow-hidden">
+                <div className={`flex-grow flex flex-col overflow-y-auto ${activeTab !== 'map' ? '' : 'hidden'}`}>
+                    {activeTab === 'profile' && renderProfile(viewedProfile ? handleBackFromProfileView : undefined)}
+                    {activeTab === 'leaderboard' && session && (
+                        <LeaderboardPage onViewProfile={handleViewProfile} />
+                    )}
+                    {activeTab === 'settings' && (() => {
+                        if (legalPageView === 'terms') {
+                            return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
+                        }
+                        if (legalPageView === 'privacy') {
+                            return <PrivacyPolicyPage onBack={() => handleViewLegal(null)} />;
+                        }
+                        return (
+                            <SettingsPage
+                                settings={settings} onSettingsChange={handleSettingsChange}
+                                onSetSimulatedLocation={handleSetSimulatedLocation}
+                                userProfile={userProfile} onLogout={handleLogout}
+                                onViewProfile={handleViewProfile}
+                                onViewLegal={handleViewLegal}
+                                onDataRefresh={handleDataRefresh}
+                                installPromptEvent={installPromptEvent}
+                                setInstallPromptEvent={setInstallPromptEvent}
+                                onShowIosInstall={() => setIsIosInstallModalOpen(true)}
                             />
-                            <button
-                                onClick={handleFindCurrentPub}
-                                title="Recenter map on your location"
-                                className="absolute bottom-4 left-4 z-20 bg-amber-500 text-black rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300"
-                                aria-label="Recenter map on your location"
-                            >
-                                <i className="fas fa-crosshairs text-2xl"></i>
-                            </button>
-                        </div>
-                        <div className={`flex-shrink-0 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out ${isListExpanded ? 'max-h-[45%]' : 'max-h-12'}`}>
-                            <PubList
-                                pubs={sortedPubs} selectedPubId={selectedPubId} onSelectPub={handleSelectPub}
-                                filter={filter} getAverageRating={getAverageRating}
-                                getDistance={(loc) => getDistance(loc, searchCenter)}
-                                distanceUnit={settings.unit} isExpanded={isListExpanded}
-                                onToggle={() => setIsListExpanded(p => !p)}
-                                resultsAreCapped={resultsAreCapped}
-                                searchRadius={settings.radius}
-                                isLoading={isInitialDataLoading || isRefreshing}
-                            />
-                        </div>
-                    </div>
-                )}
-                {activeTab === 'profile' && renderProfile(viewedProfile ? handleBackFromProfileView : undefined)}
-                {activeTab === 'leaderboard' && session && (
-                    <LeaderboardPage onViewProfile={handleViewProfile} />
-                )}
-                {activeTab === 'settings' && (
-                    <SettingsPage
-                        settings={settings} onSettingsChange={handleSettingsChange}
-                        onSetSimulatedLocation={handleSetSimulatedLocation}
-                        userProfile={userProfile} onLogout={handleLogout}
-                        onViewProfile={handleViewProfile}
+                        );
+                    })()}
+                </div>
+                
+                {/* Map View Container - kept visible to preserve map state */}
+                <div className={`flex-grow flex flex-col overflow-hidden ${activeTab === 'map' ? '' : 'hidden'}`}>
+                    {locationError && !(settings.developerMode && settings.simulatedLocation) && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
+                    <FilterControls
+                        currentFilter={filter}
+                        onFilterChange={handleFilterChange}
+                        onRefresh={handleRefresh}
+                        isRefreshing={isRefreshing}
                     />
-                )}
-            </main>
+                    <div className="flex-grow min-h-0 relative">
+                        <MapComponent
+                            pubs={sortedPubs} userLocation={userLocation}
+                            searchCenter={searchCenter} searchRadius={settings.radius}
+                            onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
+                            onPlacesFound={handlePlacesFound} theme={settings.theme} filter={filter}
+                            onCenterChange={handleCenterChange}
+                            refreshTrigger={refreshTrigger}
+                        />
+                        <button
+                            onClick={handleFindCurrentPub}
+                            title="Recenter map on your location"
+                            className="absolute bottom-4 left-4 z-20 bg-amber-500 text-black rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300"
+                            aria-label="Recenter map on your location"
+                        >
+                            <i className="fas fa-crosshairs text-2xl"></i>
+                        </button>
+                    </div>
+                    <div className={`flex-shrink-0 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out ${isListExpanded ? 'max-h-[45%]' : 'max-h-12'}`}>
+                        <PubList
+                            pubs={sortedPubs} selectedPubId={selectedPubId} onSelectPub={handleSelectPub}
+                            filter={filter} getAverageRating={getAverageRating}
+                            getDistance={(loc) => getDistance(loc, searchCenter)}
+                            distanceUnit={settings.unit} isExpanded={isListExpanded}
+                            onToggle={() => setIsListExpanded(p => !p)}
+                            resultsAreCapped={resultsAreCapped}
+                            searchRadius={settings.radius}
+                            isLoading={isInitialDataLoading || isRefreshing}
+                        />
+                    </div>
+                </div>
 
-            {activeTab === 'map' && (
-                <div className={`absolute bottom-0 left-0 right-0 z-30 transition-transform duration-500 ease-in-out ${selectedPub ? 'translate-y-0' : 'translate-y-full'}`} style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 72px)' }}>
+                {/* Full Screen Pub Details View (within main content area) */}
+                <div className={`absolute inset-0 z-30 bg-gray-100 dark:bg-gray-900 transition-transform duration-300 ease-in-out ${selectedPub ? 'translate-x-0' : 'translate-x-full'}`}>
                     {selectedPub && (
                         <PubDetails
-                            pub={selectedPub} onClose={() => handleSelectPub(null)} onRate={handleRatePub}
-                            getAverageRating={getAverageRating} existingUserRating={existingUserRatingForSelectedPub}
-                            session={session} onLoginRequest={() => setIsAuthOpen(true)}
+                            pub={selectedPub}
+                            onClose={() => handleSelectPub(null)}
+                            onRate={handleRatePub}
+                            getAverageRating={getAverageRating}
+                            existingUserRating={existingUserRatingForSelectedPub}
+                            session={session}
+                            onLoginRequest={() => setIsAuthOpen(true)}
                             onViewProfile={handleViewProfile}
+                            loggedInUserProfile={userProfile}
+                            onDataRefresh={handleDataRefresh}
                         />
                     )}
                 </div>
-            )}
+            </main>
 
             <TabBar activeTab={activeTab} onTabChange={props.handleTabChange} />
 
-            {/* Popups and Modals */}
+            {/* Popups and Modals (sit outside main content flow) */}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
+            {updateConfirmationInfo && <UpdateConfirmationPopup key={updateConfirmationInfo.key} />}
             {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
             {rankUpInfo && <RankUpPopup key={rankUpInfo.key} newRank={rankUpInfo.newRank} />}
             {isAvatarModalOpen && userProfile && (
                 <AvatarSelectionModal
+                    userProfile={userProfile}
                     currentAvatarId={userProfile.avatar_id}
                     onSelect={handleUpdateAvatar}
                     onClose={() => setIsAvatarModalOpen(false)}

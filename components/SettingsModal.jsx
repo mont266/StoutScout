@@ -5,13 +5,17 @@ import Avatar from './Avatar.jsx';
 import ModerationPage from './ModerationPage.jsx';
 import StatsPage from './StatsPage.jsx';
 import { trackEvent } from '../analytics.js';
+import { getMobileOS } from '../utils.js';
+import useIsDesktop from '../hooks/useIsDesktop.js';
+
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, userProfile, onLogout, onViewProfile }) => {
+const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, userProfile, onLogout, onViewProfile, onViewLegal, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall }) => {
   const [locationInput, setLocationInput] = useState(settings.simulatedLocation?.name || '');
   const [isLocating, setIsLocating] = useState(false);
   const [adminView, setAdminView] = useState('settings'); // 'settings', 'moderation', 'stats'
+  const isDesktop = useIsDesktop();
   
   // State for the new dev profile browser
   const [allProfiles, setAllProfiles] = useState([]);
@@ -68,24 +72,77 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
 
     fetchProfiles();
   }, [userProfile?.is_developer, settings.developerMode]);
+
+  const handleInstallClick = async () => {
+    if (!installPromptEvent) return;
+    trackEvent('pwa_install_prompt_triggered');
+    installPromptEvent.prompt();
+    const { outcome } = await installPromptEvent.userChoice;
+    trackEvent('pwa_install_prompt_result', { outcome });
+    // The prompt can only be used once.
+    setInstallPromptEvent(null);
+  };
   
+  const handleIosInstallClick = () => {
+    trackEvent('share', { method: 'Add to Home Screen', content_type: 'app' });
+    onShowIosInstall();
+  };
+
   const filteredProfiles = allProfiles.filter(p => 
     p.username.toLowerCase().includes(profileSearch.toLowerCase())
   );
 
   const radiusInMiles = (settings.radius / MILES_TO_METERS).toFixed(1);
+  const mobileOS = getMobileOS();
   
   if (userProfile?.is_developer) {
     if (adminView === 'moderation') {
-      return <ModerationPage onViewProfile={onViewProfile} onBack={() => setAdminView('settings')} />;
+      return <ModerationPage onViewProfile={onViewProfile} onBack={() => setAdminView('settings')} onDataRefresh={onDataRefresh} />;
     }
     if (adminView === 'stats') {
       return <StatsPage onBack={() => setAdminView('settings')} />;
     }
   }
 
+  const renderInstallButton = () => {
+    if (isDesktop) return null;
+
+    if (mobileOS === 'Android' && installPromptEvent) {
+      return (
+        <button
+          onClick={handleInstallClick}
+          className="w-full flex items-center justify-center space-x-2 bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
+        >
+          <i className="fas fa-download"></i>
+          <span>Install App</span>
+        </button>
+      );
+    }
+
+    if (mobileOS === 'iOS') {
+      return (
+        <button
+          onClick={handleIosInstallClick}
+          className="w-full flex items-center justify-center space-x-2 bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors"
+        >
+          <i className="fas fa-arrow-up-from-square"></i>
+          <span>Add to Home Screen</span>
+        </button>
+      );
+    }
+    return null;
+  };
+  
+  const installButton = renderInstallButton();
+
   return (
     <div className="p-4 sm:p-6 space-y-8">
+        {installButton && (
+          <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
+            {installButton}
+          </div>
+        )}
+
         {/* Theme Setting */}
         <div>
           <label className="block text-lg font-semibold text-gray-800 dark:text-white mb-2" id="theme-label">Theme</label>
@@ -275,18 +332,47 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
           </div>
         )}
 
-      {/* Sign Out Button */}
-      {userProfile && (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+        {/* Legal Section */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-2">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white px-2">Legal</h3>
             <button
-              onClick={onLogout}
-              className="w-full flex items-center justify-center space-x-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-red-500/80 hover:text-white dark:hover:bg-red-600/80 transition-colors"
+              onClick={() => onViewLegal('terms')}
+              className="w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors flex justify-between items-center text-left text-gray-700 dark:text-gray-200"
             >
-              <i className="fas fa-sign-out-alt"></i>
-              <span>Sign Out</span>
+              <span>Terms of Use</span>
+              <i className="fas fa-chevron-right text-gray-400"></i>
+            </button>
+            <button
+              onClick={() => onViewLegal('privacy')}
+              className="w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors flex justify-between items-center text-left text-gray-700 dark:text-gray-200"
+            >
+              <span>Privacy Policy</span>
+              <i className="fas fa-chevron-right text-gray-400"></i>
             </button>
         </div>
-      )}
+
+
+        {/* Footer section with Disclaimers and Sign Out */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-6">
+            <div className="text-center text-xs text-gray-500 dark:text-gray-400 space-y-2">
+                <p>
+                    Stoutly is an independent, unofficial app created by fans. It is not affiliated with, endorsed by, or sponsored by Guinness or its parent company, Diageo.
+                </p>
+                <p className="font-semibold">
+                    Please drink responsibly. This app is intended for users of legal drinking age.
+                </p>
+            </div>
+            
+            {userProfile && (
+              <button
+                onClick={onLogout}
+                className="w-full flex items-center justify-center space-x-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-red-500/80 hover:text-white dark:hover:bg-red-600/80 transition-colors"
+              >
+                <i className="fas fa-sign-out-alt"></i>
+                <span>Sign Out</span>
+              </button>
+            )}
+        </div>
     </div>
   );
 };

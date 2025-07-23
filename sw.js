@@ -12,8 +12,8 @@ const urlsToCache = [
   '/supabase.js',
   '/utils.js',
   '/analytics.js',
-  '/avatars.jsx',
   '/hooks/useIsDesktop.js',
+  '/imageUtils.js',
   '/components/Map.jsx',
   '/components/FilterControls.jsx',
   '/components/PubDetails.jsx',
@@ -37,6 +37,14 @@ const urlsToCache = [
   '/components/Icon.jsx',
   '/components/ModerationPage.jsx',
   '/components/StatsPage.jsx',
+  '/components/TermsOfUsePage.jsx',
+  '/components/PrivacyPolicyPage.jsx',
+  '/components/BannedPage.jsx',
+  '/components/BanUserModal.jsx',
+  '/components/ImageModal.jsx',
+  '/components/ImageCropper.jsx',
+  '/components/ReportImageModal.jsx',
+  '/components/IOSInstallInstructionsModal.jsx',
 ];
 
 self.addEventListener('install', event => {

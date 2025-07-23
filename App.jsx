@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { FilterType } from './types.js';
 import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
-import { getRankData } from './utils.js';
+import { getRankData, getCurrencyInfo } from './utils.js';
 import { trackEvent } from './analytics.js';
 
 import MobileLayout from './components/MobileLayout.jsx';
@@ -11,6 +11,7 @@ import DesktopLayout from './components/DesktopLayout.jsx';
 import useIsDesktop from './hooks/useIsDesktop.js';
 
 import ProfilePage from './components/ProfilePage.jsx';
+import BannedPage from './components/BannedPage.jsx';
 
 const App = () => {
   // --- STATE MANAGEMENT ---
@@ -56,6 +57,7 @@ const App = () => {
 
   // Popup states
   const [reviewPopupInfo, setReviewPopupInfo] = useState(null);
+  const [updateConfirmationInfo, setUpdateConfirmationInfo] = useState(null);
   const [leveledUpInfo, setLeveledUpInfo] = useState(null);
   const [rankUpInfo, setRankUpInfo] = useState(null);
   
@@ -67,15 +69,43 @@ const App = () => {
   const [initialSearchComplete, setInitialSearchComplete] = useState(false);
 
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  
+  // State for legal pages
+  const [legalPageView, setLegalPageView] = useState(null); // 'terms' or 'privacy'
+
+  // PWA Install prompt state
+  const [installPromptEvent, setInstallPromptEvent] = useState(null);
+  const [isIosInstallModalOpen, setIsIosInstallModalOpen] = useState(false);
 
   // --- HOOKS ---
   const isDesktop = useIsDesktop();
+  const locationPermissionTracked = useRef(false);
   
   // --- ANALYTICS ---
   
+  // More specific screen view tracking
   useEffect(() => {
-    trackEvent('screen_view', { screen_name: activeTab });
-  }, [activeTab]);
+    let screenName = activeTab;
+    const screenClass = 'StoutlyApp';
+
+    if (legalPageView) {
+      screenName = `legal_${legalPageView}`; // e.g., legal_terms
+    } else if (viewedProfile && (!userProfile || viewedProfile.id !== userProfile.id)) {
+      screenName = 'profile_other_user';
+    } else if (activeTab === 'profile' && userProfile) {
+      screenName = 'profile_own';
+    } else if (isAuthOpen) {
+      screenName = 'auth';
+    } else if (isPasswordRecovery) {
+      screenName = 'password_recovery';
+    }
+
+    trackEvent('screen_view', {
+      screen_name: screenName,
+      screen_class: screenClass, // GA4 standard parameter
+    });
+  }, [activeTab, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery]);
+
 
   useEffect(() => {
     const pub = pubs.find(p => p.id === selectedPubId);
@@ -87,7 +117,19 @@ const App = () => {
 
   // --- DATA FETCHING & AUTH ---
 
-  const fetchDbPubs = async () => {
+  useEffect(() => {
+    // Listen for the custom event fired from index.tsx
+    const handleInstallPrompt = (e) => {
+      setInstallPromptEvent(e.detail);
+    };
+    window.addEventListener('pwa-install-prompt-ready', handleInstallPrompt);
+
+    return () => {
+      window.removeEventListener('pwa-install-prompt-ready', handleInstallPrompt);
+    };
+  }, []);
+
+  const fetchDbPubs = useCallback(async () => {
     const { data, error } = await supabase.from('pubs').select('id, name, address, lat, lng');
     if (error) {
       console.error("Error fetching rated pubs from DB:", error);
@@ -101,7 +143,39 @@ const App = () => {
       setDbPubs(formatted);
     }
     setIsDbPubsLoaded(true);
-  };
+  }, []);
+
+  const fetchAllRatings = useCallback(async () => {
+      // With the new RLS policy, this will automatically exclude ratings from banned users.
+      const { data, error } = await supabase
+          .from('ratings')
+          .select('id, pub_id, price, quality, exact_price, created_at, user_id, image_url, profiles(id, username, avatar_id)')
+          .order('created_at', { ascending: false });
+
+      if (error) return;
+
+      const ratingsMap = new Map();
+      for (const rating of data || []) {
+          const existing = ratingsMap.get(rating.pub_id) || [];
+          ratingsMap.set(rating.pub_id, [...existing, { 
+              id: rating.id,
+              price: rating.price, 
+              quality: rating.quality,
+              exact_price: rating.exact_price,
+              created_at: rating.created_at,
+              image_url: rating.image_url,
+              user: rating.profiles || { id: rating.user_id, username: 'Anonymous', avatar_id: null },
+            }]);
+      }
+      setAllRatings(ratingsMap);
+  }, []);
+
+  const handleDataRefresh = useCallback(async () => {
+      await Promise.all([
+          fetchAllRatings(),
+          fetchDbPubs(),
+      ]);
+  }, [fetchAllRatings, fetchDbPubs]);
 
   useEffect(() => {
     setLoading(true);
@@ -133,7 +207,7 @@ const App = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [fetchAllRatings, fetchDbPubs]);
   
   const fetchLevelRequirements = async () => {
     const { data, error } = await supabase
@@ -147,75 +221,92 @@ const App = () => {
         setLevelRequirements(data);
     }
   };
-
-  const fetchAllRatings = async () => {
-      const { data, error } = await supabase
-          .from('ratings')
-          .select('pub_id, price, quality, exact_price, created_at, user_id, profiles(id, username, avatar_id)');
-
-      if (error) return;
-
-      const ratingsMap = new Map();
-      for (const rating of data || []) {
-          const existing = ratingsMap.get(rating.pub_id) || [];
-          ratingsMap.set(rating.pub_id, [...existing, { 
-              price: rating.price, 
-              quality: rating.quality,
-              exact_price: rating.exact_price,
-              created_at: rating.created_at,
-              user: rating.profiles || { id: rating.user_id, username: 'Anonymous', avatar_id: null },
-            }]);
-      }
-      setAllRatings(ratingsMap);
-  };
   
   const fetchUserData = async () => {
     const { data: { session: currentSession } } = await supabase.auth.getSession();
-    if (!currentSession) return { profile: null, ratings: [] };
+    if (!currentSession) {
+        setUserProfile(null);
+        setUserRatings([]);
+        return { profile: null, ratings: [] };
+    }
 
     const userId = currentSession.user.id;
 
-    let { data: profileData, error: profileError } = await supabase
+    // Step 1: Fetch user profile.
+    let { data: profile, error: fetchError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
-    
-    if (profileError && profileError.code === 'PGRST116') {
-      if (isCreatingProfile) return { profile: null, ratings: [] };
-      const newUsername = currentSession.user.user_metadata?.username;
-      if (!newUsername) return { profile: null, ratings: [] };
-      
-      setIsCreatingProfile(true);
-      try {
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert({ id: userId, username: newUsername, reviews: 0, level: 1 })
-          .select()
-          .single();
-        if (createError) return { profile: null, ratings: [] };
-        profileData = newProfile;
-      } finally { setIsCreatingProfile(false); }
-    } else if (profileError) { return { profile: null, ratings: [] }; }
-    
-    setUserProfile(profileData);
-    
-    const { data: userRatingsData } = await supabase
-        .from('ratings')
-        .select('id, pub_id, price, quality, created_at, exact_price, pubs(id, name, address, lat, lng)')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
 
-    const mappedUserRatings = (userRatingsData || []).map(r => ({
-      id: r.id, pubId: r.pub_id,
-      rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
-      timestamp: new Date(r.created_at).getTime(),
-      pubName: r.pubs?.name || 'Unknown',
-      pubAddress: r.pubs?.address || 'Unknown',
-      pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
-    }));
+    // Step 2: If profile doesn't exist (PGRST116), create it.
+    if (fetchError && fetchError.code === 'PGRST116') {
+        let usernameToCreate = currentSession.user.user_metadata?.username;
+
+        // If no username in metadata (e.g., created via backend), create a fallback.
+        if (!usernameToCreate) {
+            const emailPrefix = currentSession.user.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 15);
+            const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+            usernameToCreate = `${emailPrefix}${randomSuffix}`;
+        }
+        
+        if (usernameToCreate && !isCreatingProfile) {
+            setIsCreatingProfile(true);
+            try {
+                const { data: newProfile, error: createError } = await supabase
+                    .from('profiles')
+                    .insert({ id: userId, username: usernameToCreate, reviews: 0, level: 1 })
+                    .select()
+                    .single();
+
+                if (createError) {
+                    console.error("Error creating profile:", createError);
+                    // This could be due to a duplicate username or other constraint.
+                    // The profile will remain null.
+                } else {
+                    profile = newProfile; // Creation successful.
+                }
+            } catch (e) {
+                console.error("Unexpected error during profile creation:", e);
+            } finally {
+                setIsCreatingProfile(false);
+            }
+        }
+    } else if (fetchError) {
+        console.error("Error fetching profile:", fetchError);
+        profile = null; // Ensure profile is null on other errors.
+    }
+
+    // Step 3: Set profile state.
+    setUserProfile(profile);
+
+    // Step 4: If profile exists, fetch ratings.
+    let mappedUserRatings = [];
+    if (profile) {
+        const { data: userRatingsData, error: ratingsError } = await supabase
+            .from('ratings')
+            .select('id, pub_id, price, quality, created_at, exact_price, image_url, pubs(id, name, address, lat, lng)')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (ratingsError) {
+            console.error("Error fetching user ratings:", ratingsError);
+        } else {
+            mappedUserRatings = (userRatingsData || []).map(r => ({
+              id: r.id, pubId: r.pub_id,
+              rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
+              timestamp: new Date(r.created_at).getTime(),
+              pubName: r.pubs?.name || 'Unknown',
+              pubAddress: r.pubs?.address || 'Unknown',
+              pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
+              image_url: r.image_url,
+            }));
+        }
+    }
+    
+    // Step 5: Set ratings state.
     setUserRatings(mappedUserRatings);
-    return { profile: profileData, ratings: mappedUserRatings };
+    return { profile, ratings: mappedUserRatings };
   };
 
   useEffect(() => {
@@ -226,6 +317,23 @@ const App = () => {
       setUserRatings([]);
     }
   }, [session]);
+
+  useEffect(() => {
+    const lockOrientation = async () => {
+      // Check if the Screen Orientation API is supported
+      if (screen.orientation && typeof screen.orientation.lock === 'function') {
+        try {
+          // Attempt to lock the orientation to portrait-primary
+          await screen.orientation.lock('portrait-primary');
+        } catch (error) {
+          // Log a warning if it fails (e.g., on desktop or unsupported browsers)
+          console.warn('Failed to lock screen orientation:', error);
+        }
+      }
+    };
+
+    lockOrientation();
+  }, []);
 
 
   // --- CORE APP LOGIC & HANDLERS ---
@@ -253,6 +361,7 @@ const App = () => {
 
   // Popup visibility timers
   useEffect(() => { if (reviewPopupInfo) { const timer = setTimeout(() => setReviewPopupInfo(null), 3000); return () => clearTimeout(timer); } }, [reviewPopupInfo]);
+  useEffect(() => { if (updateConfirmationInfo) { const timer = setTimeout(() => setUpdateConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [updateConfirmationInfo]);
   useEffect(() => { if (leveledUpInfo) { const timer = setTimeout(() => setLeveledUpInfo(null), 4000); return () => clearTimeout(timer); } }, [leveledUpInfo]);
   useEffect(() => { if (rankUpInfo) { const timer = setTimeout(() => setRankUpInfo(null), 5000); return () => clearTimeout(timer); } }, [rankUpInfo]);
 
@@ -309,14 +418,30 @@ const App = () => {
   };
 
   useEffect(() => {
-    if (!navigator.geolocation) { setLocationError("Geolocation is not supported."); return; }
+    if (!navigator.geolocation) {
+        setLocationError("Geolocation is not supported.");
+        if (!locationPermissionTracked.current) {
+            trackEvent('location_permission_result', { status: 'unsupported' });
+            locationPermissionTracked.current = true;
+        }
+        return;
+    }
     const watcher = navigator.geolocation.watchPosition(
       (position) => {
+        if (!locationPermissionTracked.current) {
+            trackEvent('location_permission_result', { status: 'granted' });
+            locationPermissionTracked.current = true;
+        }
         const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
         setRealUserLocation(newLocation);
         setLocationError(null);
       },
       (error) => { 
+        if (!locationPermissionTracked.current) {
+            const status = error.code === error.PERMISSION_DENIED ? 'denied' : 'error';
+            trackEvent('location_permission_result', { status, error_code: error.code, error_message: error.message });
+            locationPermissionTracked.current = true;
+        }
         const message = error.code === error.PERMISSION_DENIED ? "Location access denied." : "Could not get location.";
         if (!settings.developerMode || !settings.simulatedLocation) {
             setLocationError(message);
@@ -371,25 +496,90 @@ const App = () => {
     });
   }, [pubs, filter, searchCenter, getDistance, getComparablePrice]);
 
-  const handleRatePub = useCallback(async (pubId, pubName, pubAddress, newRating) => {
+  const handleRatePub = useCallback(async (pubId, pubName, pubAddress, ratingData) => {
     if (!session || !userProfile || !selectedPub) return;
+
+    const { imageFile, imageWasRemoved, ...newRating } = ratingData;
     
+    // Upsert the pub data first
     await supabase.from('pubs').upsert({
       id: pubId, name: pubName, address: pubAddress,
       lat: selectedPub.location.lat, lng: selectedPub.location.lng,
     });
 
-    const isUpdating = userRatings.some(r => r.pubId === pubId);
-    trackEvent('rate_pub', { pub_id: pubId, is_update: isUpdating, quality: newRating.quality, price_rating: newRating.price, has_exact_price: !!newRating.exact_price });
+    const existingRating = userRatings.find(r => r.pubId === pubId);
+    const isUpdating = !!existingRating;
+    const currencyInfo = getCurrencyInfo(selectedPub.address);
+
+    trackEvent('rate_pub', {
+        pub_id: pubId,
+        is_update: isUpdating,
+        quality: newRating.quality,
+        price_rating: newRating.price,
+        has_exact_price: !!newRating.exact_price,
+        has_image: !!imageFile,
+        value: newRating.exact_price || 0, // GA4 standard parameter for value
+        currency: currencyInfo.code, // GA4 standard parameter for currency
+    });
     
-    const ratingPayload = { pub_id: pubId, user_id: session.user.id, price: newRating.price, quality: newRating.quality, exact_price: newRating.exact_price };
+    // --- START: Image management logic ---
+    const oldImageUrl = existingRating?.image_url;
+
+    // If we are updating a rating that has an image, and we're either removing it or replacing it, delete the old file.
+    if (isUpdating && oldImageUrl && (imageWasRemoved || imageFile)) {
+        try {
+            const imagePath = new URL(oldImageUrl).pathname.split('/pint-images/')[1];
+            if (imagePath) {
+                await supabase.storage.from('pint-images').remove([imagePath]);
+            }
+        } catch (error) {
+            console.error("Failed to delete old image from storage. It may become orphaned. Error:", error);
+            // Do not block the user flow for this.
+        }
+    }
+    
+    let imageUrl = oldImageUrl || null;
+    if (imageWasRemoved) {
+        imageUrl = null;
+    }
+    
+    if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${userProfile.id}-${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage.from('pint-images').upload(filePath, imageFile, { upsert: true });
+        if (uploadError) {
+            console.error("Image upload failed:", uploadError);
+            alert(`Image upload failed: ${uploadError.message}. Please ensure the 'pint-images' storage bucket is created as per the instructions in security.md.`);
+            return;
+        }
+        const { data: urlData } = supabase.storage.from('pint-images').getPublicUrl(filePath);
+        imageUrl = urlData.publicUrl;
+    }
+    // --- END: Image management logic ---
+
+    const ratingPayload = { 
+        pub_id: pubId, 
+        user_id: session.user.id, 
+        price: newRating.price, 
+        quality: newRating.quality, 
+        exact_price: newRating.exact_price,
+        image_url: imageUrl,
+    };
+
     isUpdating
       ? await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
       : await supabase.from('ratings').insert(ratingPayload);
     
     if (!isUpdating) {
         const oldProfile = userProfile;
-        await supabase.functions.invoke('increment-review-count');
+        const { error: incrementError } = await supabase.functions.invoke('increment-review-count');
+        if (incrementError) {
+            // This is not a critical failure for the user, but should be logged for debugging.
+            console.error("Failed to increment review count:", incrementError.context?.error || incrementError.message);
+        }
+
         const { profile: newProfile } = await fetchUserData();
         
         if (newProfile && oldProfile && newProfile.level > oldProfile.level) {
@@ -406,10 +596,11 @@ const App = () => {
         setReviewPopupInfo({ key: Date.now() });
     } else {
         await fetchUserData();
+        setUpdateConfirmationInfo({ key: Date.now() });
     }
     await fetchAllRatings();
     await fetchDbPubs();
-  }, [session, userRatings, selectedPub, userProfile]);
+  }, [session, userRatings, selectedPub, userProfile, fetchAllRatings, fetchDbPubs]);
   
   const handleSelectPub = useCallback((pubId) => {
     setSelectedPubId(pubId);
@@ -422,6 +613,14 @@ const App = () => {
   };
   
   const handleTabChange = (tab) => {
+    // On mobile, close the details panel when switching main tabs.
+    if (!isDesktop) {
+      setSelectedPubId(null);
+    }
+
+    // Reset legal page view when user explicitly navigates
+    setLegalPageView(null);
+
     // Tabs requiring auth
     if ((tab === 'profile' || tab === 'leaderboard' || tab === 'moderation' || tab === 'stats') && !session) {
       setIsAuthOpen(true);
@@ -438,6 +637,13 @@ const App = () => {
     setViewedRatings([]);
   };
 
+  const handleViewLegal = (page) => {
+    if (page) {
+        setActiveTab('settings'); // Switch to settings tab to show the legal page
+    }
+    setLegalPageView(page);
+  };
+
   const handleSettingsChange = (newSettings) => {
     if (settings.theme !== newSettings.theme) trackEvent('change_setting', { setting_name: 'theme', setting_value: newSettings.theme });
     if (settings.unit !== newSettings.unit) trackEvent('change_setting', { setting_name: 'unit', setting_value: newSettings.unit });
@@ -451,8 +657,16 @@ const App = () => {
   
   const handleSetSimulatedLocation = (locationString) => {
     return new Promise((resolve, reject) => {
-      if (!locationString) { handleSettingsChange({ ...settings, simulatedLocation: null }); resolve(); return; }
-      if (!window.google?.maps?.Geocoder) { reject(new Error("Maps API not loaded. Please try again.")); return; }
+      if (!locationString) {
+        handleSettingsChange({ ...settings, simulatedLocation: null });
+        resolve();
+        return;
+      }
+      trackEvent('search', { search_term: locationString });
+      if (!window.google?.maps?.Geocoder) {
+        reject(new Error("Maps API not loaded. Please try again."));
+        return;
+      }
       const geocoder = new window.google.maps.Geocoder();
       geocoder.geocode({ 'address': locationString }, (results, status) => {
         if (status === 'OK' && results?.[0]) {
@@ -486,7 +700,7 @@ const App = () => {
       setActiveTab('profile');
 
       const { data: profileData } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      const { data: ratingsData } = await supabase.from('ratings').select('id, pub_id, price, quality, created_at, exact_price, pubs(id, name, address, lat, lng)').eq('user_id', userId).order('created_at', { ascending: false });
+      const { data: ratingsData } = await supabase.from('ratings').select('id, pub_id, price, quality, created_at, exact_price, image_url, pubs(id, name, address, lat, lng)').eq('user_id', userId).order('created_at', { ascending: false });
 
       const mappedRatings = (ratingsData || []).map(r => ({
           id: r.id, pubId: r.pub_id,
@@ -494,6 +708,7 @@ const App = () => {
           timestamp: new Date(r.created_at).getTime(),
           pubName: r.pubs?.name || 'Unknown', pubAddress: r.pubs?.address || 'Unknown',
           pubLocation: r.pubs?.lat && r.pubs?.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
+          image_url: r.image_url,
       }));
       
       setViewedProfile(profileData);
@@ -543,8 +758,12 @@ const App = () => {
     };
 
     const handleUpdateAvatar = async (avatarId) => {
-        if (!session?.user) return;
-        trackEvent('change_avatar', { avatar_id: avatarId });
+        if (!session?.user || !avatarId) return;
+        
+        const parsed = JSON.parse(avatarId);
+        const eventParams = { avatar_type: 'dicebear', dicebear_style: parsed.style };
+        trackEvent('change_avatar', eventParams);
+
         await supabase.from('profiles').update({ avatar_id: avatarId }).eq('id', session.user.id);
         await fetchUserData();
         setIsAvatarModalOpen(false);
@@ -567,16 +786,22 @@ const App = () => {
               loggedInUserProfile={userProfile} levelRequirements={levelRequirements}
               onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
               onBack={onBack}
+              onProfileUpdate={handleViewProfile}
           />
       );
     }
   
     if (loading) {
       return (
-        <div className="w-full h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+        <div className="w-full h-dvh flex items-center justify-center bg-white dark:bg-gray-900">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-400"></div>
         </div>
       );
+    }
+
+    // Lockout banned users
+    if (userProfile?.is_banned) {
+        return <BannedPage userProfile={userProfile} onLogout={handleLogout} />;
     }
     
     const layoutProps = {
@@ -584,14 +809,15 @@ const App = () => {
       googlePlaces, pubs, allRatings, selectedPubId, setSelectedPubId, filter, setFilter, isListExpanded, setIsListExpanded,
       realUserLocation, userLocation, searchCenter, setSearchCenter, locationError, resultsAreCapped,
       isRefreshing, refreshTrigger, settings, setSettings, activeTab, setActiveTab, userProfile, userRatings,
-      viewedProfile, viewedRatings, isFetchingViewedProfile,
-      reviewPopupInfo, leveledUpInfo, rankUpInfo,
+      viewedProfile, viewedRatings, isFetchingViewedProfile, legalPageView,
+      reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo,
       levelRequirements, isDbPubsLoaded, initialSearchComplete, isAvatarModalOpen, setIsAvatarModalOpen,
+      installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
       sortedPubs, selectedPub, existingUserRatingForSelectedPub, getAverageRating, getDistance, getComparablePrice,
       handlePlacesFound, handleRefresh, handleCenterChange, handleRatePub, handleSelectPub, handleFilterChange,
       handleTabChange, handleSettingsChange, handleSetSimulatedLocation, handleViewPub, handleLogout,
       handleViewProfile, handleFindCurrentPub, handleUpdateAvatar, renderProfile,
-      handleBackFromProfileView
+      handleBackFromProfileView, handleViewLegal, handleDataRefresh
     };
 
     return isDesktop 

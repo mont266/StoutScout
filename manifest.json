@@ -4,6 +4,7 @@
   "description": "Stoutly helps you find and rate the best pints of Guinness based on price, quality, and your location.",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "scope": "/",
   "background_color": "#111827",
   "theme_color": "#2C1F17",

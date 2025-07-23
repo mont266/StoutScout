@@ -10,11 +10,14 @@ import LeaderboardPage from './LeaderboardPage.jsx';
 import AuthPage from './AuthPage.jsx';
 import UpdatePasswordPage from './UpdatePasswordPage.jsx';
 import XPPopup from './XPPopup.jsx';
+import UpdateConfirmationPopup from './UpdateConfirmationPopup.jsx';
 import LevelUpPopup from './LevelUpPopup.jsx';
 import RankUpPopup from './RankUpPopup.jsx';
 import AvatarSelectionModal from './AvatarSelectionModal.jsx';
 import ModerationPage from './ModerationPage.jsx';
 import StatsPage from './StatsPage.jsx';
+import TermsOfUsePage from './TermsOfUsePage.jsx';
+import PrivacyPolicyPage from './PrivacyPolicyPage.jsx';
 
 const BackButton = ({ onClick, text = "Back" }) => (
     <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -36,9 +39,10 @@ const DesktopLayout = (props) => {
         renderProfile, session, userProfile, handleViewProfile, handleBackFromProfileView,
         handleSettingsChange, handleSetSimulatedLocation, handleLogout,
         selectedPub, existingUserRatingForSelectedPub, handleRatePub,
-        reviewPopupInfo, leveledUpInfo, rankUpInfo,
+        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
-        handleUpdateAvatar, viewedProfile
+        handleUpdateAvatar, viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
+        installPromptEvent, setInstallPromptEvent, setIsIosInstallModalOpen,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -47,22 +51,18 @@ const DesktopLayout = (props) => {
         if (activeTab === 'map') {
             if (selectedPub) {
                 return (
-                    <div className="h-full flex flex-col">
-                        <BackButton onClick={() => handleSelectPub(null)} text="Back to List" />
-                        <div className="flex-grow overflow-y-auto">
-                            <PubDetails 
-                                pub={selectedPub} 
-                                onClose={() => handleSelectPub(null)}
-                                onRate={handleRatePub}
-                                getAverageRating={getAverageRating}
-                                existingUserRating={existingUserRatingForSelectedPub}
-                                session={session}
-                                onLoginRequest={() => setIsAuthOpen(true)}
-                                onViewProfile={handleViewProfile}
-                                showCloseButton={false}
-                            />
-                        </div>
-                    </div>
+                    <PubDetails 
+                        pub={selectedPub} 
+                        onClose={() => handleSelectPub(null)}
+                        onRate={handleRatePub}
+                        getAverageRating={getAverageRating}
+                        existingUserRating={existingUserRatingForSelectedPub}
+                        session={session}
+                        onLoginRequest={() => setIsAuthOpen(true)}
+                        onViewProfile={handleViewProfile}
+                        loggedInUserProfile={userProfile}
+                        onDataRefresh={handleDataRefresh}
+                    />
                 );
             }
             return (
@@ -110,13 +110,24 @@ const DesktopLayout = (props) => {
         }
 
         if (activeTab === 'settings') {
-             return (
+             if (legalPageView === 'terms') {
+                return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
+            }
+            if (legalPageView === 'privacy') {
+                return <PrivacyPolicyPage onBack={() => handleViewLegal(null)} />;
+            }
+            return (
                 <SettingsPage
                     settings={settings} onSettingsChange={handleSettingsChange}
                     onSetSimulatedLocation={handleSetSimulatedLocation}
                     userProfile={userProfile} 
                     onViewProfile={handleViewProfile}
                     onLogout={handleLogout}
+                    onViewLegal={handleViewLegal}
+                    onDataRefresh={handleDataRefresh}
+                    installPromptEvent={installPromptEvent}
+                    setInstallPromptEvent={setInstallPromptEvent}
+                    onShowIosInstall={() => setIsIosInstallModalOpen(true)}
                 />
             );
         }
@@ -126,19 +137,20 @@ const DesktopLayout = (props) => {
                 <ModerationPage
                     onViewProfile={handleViewProfile}
                     onBack={() => handleTabChange('settings')}
+                    onDataRefresh={handleDataRefresh}
                 />
             );
         }
 
         if (activeTab === 'stats') {
-            return <StatsPage />;
+            return <StatsPage onBack={() => handleTabChange('settings')} />;
         }
 
         return null;
     };
 
     return (
-        <div className="w-full h-screen flex bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-sans antialiased">
+        <div className="w-full h-dvh flex bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-sans antialiased">
             <DesktopNav
                 activeTab={activeTab}
                 onTabChange={handleTabChange}
@@ -177,10 +189,12 @@ const DesktopLayout = (props) => {
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
+            {updateConfirmationInfo && <UpdateConfirmationPopup key={updateConfirmationInfo.key} />}
             {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
             {rankUpInfo && <RankUpPopup key={rankUpInfo.key} newRank={rankUpInfo.newRank} />}
             {isAvatarModalOpen && userProfile && (
                 <AvatarSelectionModal
+                    userProfile={userProfile}
                     currentAvatarId={userProfile.avatar_id}
                     onSelect={handleUpdateAvatar}
                     onClose={() => setIsAvatarModalOpen(false)}

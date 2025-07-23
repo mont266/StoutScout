@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.js';
+import { getCurrencyInfo } from '../utils.js';
 
 const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString() }) => (
-    <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-xl shadow-md flex items-center space-x-4">
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center space-x-4 transition-all hover:shadow-lg hover:scale-[1.02]">
         <div className="bg-amber-100 dark:bg-amber-900/50 p-3 rounded-full">
-            <i className={`fas ${icon} text-2xl text-amber-500 dark:text-amber-400 w-8 h-8 flex items-center justify-center`}></i>
+            <i className={`fas ${icon} text-xl text-amber-500 dark:text-amber-400 w-7 h-7 flex items-center justify-center`}></i>
         </div>
         <div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">{label}</div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-white">{value !== null && value !== undefined ? format(value) : '...'}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">{label}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{value !== null && value !== undefined ? format(value) : '...'}</div>
         </div>
     </div>
 );
@@ -16,70 +17,136 @@ const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString() }) =>
 
 const StatsPage = ({ onBack }) => {
     const [stats, setStats] = useState(null);
+    const [countryStats, setCountryStats] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     const fetchStats = useCallback(async () => {
         setLoading(true);
         setError(null);
-        // trackEvent('view_stats_page'); // Event could be added here
 
-        const { data, error: rpcError } = await supabase.rpc('get_app_stats').single();
+        try {
+            const [statsResult, countryStatsResult] = await Promise.all([
+                supabase.rpc('get_app_stats').single(),
+                supabase.rpc('get_price_stats_by_country'),
+            ]);
 
-        if (rpcError) {
+            if (statsResult.error) throw new Error(`Stats fetch failed: ${statsResult.error.message}`);
+            if (countryStatsResult.error) throw new Error(`Country stats fetch failed: ${countryStatsResult.error.message}`);
+            
+            setStats(statsResult.data);
+            setCountryStats(countryStatsResult.data || []);
+
+        } catch (rpcError) {
             console.error('Error fetching app stats:', rpcError);
-            setError('Could not load statistics. Please ensure the `get_app_stats` database function is set up correctly.');
+            setError(rpcError.message || 'Could not load statistics. Please ensure the database functions are up to date.');
             setStats(null);
-        } else {
-            setStats(data);
+            setCountryStats([]);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }, []);
 
     useEffect(() => {
         fetchStats();
     }, [fetchStats]);
 
-    const renderContent = () => {
-        if (loading) {
-             return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 animate-pulse">
+    const renderLoading = () => (
+         <div className="space-y-8 animate-pulse">
+            <section>
+                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-4"></div>
+                <div className="grid grid-cols-2 gap-4">
                     {[...Array(6)].map((_, i) => (
-                        <div key={i} className="bg-gray-50 dark:bg-gray-800 p-6 rounded-xl shadow-md flex items-center space-x-4">
-                            <div className="bg-gray-200 dark:bg-gray-700 rounded-full w-14 h-14"></div>
-                            <div className="flex-1">
-                                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
-                                <div className="h-8 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
-                            </div>
-                        </div>
+                        <div key={i} className="bg-gray-200 dark:bg-gray-800 rounded-xl h-24"></div>
                     ))}
                 </div>
-            );
-        }
-
-        if (error) {
-            return (
-                 <div className="text-center text-red-500 p-6 bg-red-500/10 rounded-lg">
-                    <i className="fas fa-exclamation-triangle fa-2x mb-2"></i>
-                    <p>{error}</p>
-                    <button onClick={fetchStats} className="mt-4 px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600">Retry</button>
+            </section>
+            <section>
+                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-4"></div>
+                <div className="grid grid-cols-2 gap-4">
+                    {[...Array(3)].map((_, i) => (
+                        <div key={i} className="bg-gray-200 dark:bg-gray-800 rounded-xl h-24"></div>
+                    ))}
                 </div>
-            );
-        }
-        
-        if (!stats) return null;
+            </section>
+            <section>
+                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-4"></div>
+                <div className="space-y-4">
+                    <div className="bg-gray-200 dark:bg-gray-800 rounded-xl h-24"></div>
+                    <div className="bg-gray-200 dark:bg-gray-800 rounded-xl h-48"></div>
+                </div>
+            </section>
+        </div>
+    );
 
-        return (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <StatCard label="Total Users" value={stats.total_users} icon="fa-users" />
-                <StatCard label="Active Users (30d)" value={stats.active_users_30d} icon="fa-user-clock" />
-                <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" />
-                <StatCard label="Unique Pubs Rated" value={stats.total_pubs} icon="fa-beer" />
-                <StatCard label="Avg. Quality" value={stats.avg_quality} icon="fa-star" format={(v) => `${parseFloat(v).toFixed(2)} / 5`} />
-                <StatCard label="Avg. Price Rating" value={stats.avg_price_rating} icon="fa-tag" format={(v) => `${parseFloat(v).toFixed(2)} / 5`} />
-            </div>
-        );
-    };
+    const renderError = () => (
+         <div className="text-center text-red-500 p-6 bg-red-500/10 rounded-lg">
+            <i className="fas fa-exclamation-triangle fa-2x mb-2"></i>
+            <p>{error}</p>
+            <button onClick={fetchStats} className="mt-4 px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600">Retry</button>
+        </div>
+    );
+    
+    const renderContent = () => (
+        <div className="space-y-8">
+            <section>
+                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Platform Overview</h4>
+                <div className="grid grid-cols-2 gap-4">
+                    <StatCard label="Total Users" value={stats.total_users} icon="fa-users" />
+                    <StatCard label="Active Users (30d)" value={stats.active_users_30d} icon="fa-user-clock" />
+                    <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" />
+                    <StatCard label="Unique Pubs Rated" value={stats.total_pubs} icon="fa-beer" />
+                    <StatCard label="Avg. Quality" value={stats.avg_quality} icon="fa-star" format={(v) => `${parseFloat(v).toFixed(2)} / 5`} />
+                    <StatCard label="Avg. Price Rating" value={stats.avg_price_rating} icon="fa-tag" format={(v) => `${parseFloat(v).toFixed(2)} / 5`} />
+                </div>
+            </section>
+
+            <section>
+                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Moderation Activity</h4>
+                <div className="grid grid-cols-2 gap-4">
+                    <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
+                    <StatCard label="Hidden Reviews" value={stats.total_hidden_ratings} icon="fa-eye-slash" />
+                    <StatCard label="Removed Images" value={stats.total_removed_images} icon="fa-trash-alt" />
+                </div>
+            </section>
+            
+            <section>
+                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Pint Price Analysis</h4>
+                <div className="space-y-4">
+                     <StatCard 
+                        label="Global Avg. Price" 
+                        value={stats.global_avg_exact_price} 
+                        icon="fa-globe-europe" 
+                        // This is a rough indicator from mixed currencies.
+                        format={(v) => `~${parseFloat(v).toFixed(2)}`}
+                     />
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md">
+                       <h5 className="text-md font-semibold text-gray-700 dark:text-gray-300 p-4 border-b border-gray-200 dark:border-gray-700">Breakdown by Country</h5>
+                        {countryStats.length > 0 ? (
+                            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                                {countryStats.map(({ country, avg_price, rating_count }) => {
+                                    const currency = getCurrencyInfo(country);
+                                    return (
+                                        <li key={country} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                            <div className="font-semibold text-gray-900 dark:text-white">{country}</div>
+                                            <div className="text-right">
+                                                <div className="font-bold text-lg text-green-600 dark:text-green-400">
+                                                    {currency.symbol}{parseFloat(avg_price).toFixed(2)}
+                                                </div>
+                                                <div className="text-xs text-gray-500 dark:text-gray-400">{rating_count} ratings</div>
+                                            </div>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        ) : (
+                            <p className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">No price data available.</p>
+                        )}
+                    </div>
+                </div>
+            </section>
+        </div>
+    );
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-gray-900">
@@ -91,13 +158,13 @@ const StatsPage = ({ onBack }) => {
                     </button>
                 </div>
             )}
-            <div className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
+            <header className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-xl font-bold text-amber-500 dark:text-amber-400">Application Statistics</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">A high-level overview of app usage and data.</p>
-            </div>
-            <div className="flex-grow p-4 overflow-y-auto">
-                {renderContent()}
-            </div>
+            </header>
+            <main className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-800/50 p-4 sm:p-6">
+                {loading ? renderLoading() : error ? renderError() : stats ? renderContent() : null}
+            </main>
         </div>
     );
 };
