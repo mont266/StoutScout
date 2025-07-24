@@ -117,18 +117,22 @@ const DesktopLayout = (props) => {
                 return <PrivacyPolicyPage onBack={() => handleViewLegal(null)} />;
             }
             return (
-                <SettingsPage
-                    settings={settings} onSettingsChange={handleSettingsChange}
-                    onSetSimulatedLocation={handleSetSimulatedLocation}
-                    userProfile={userProfile} 
-                    onViewProfile={handleViewProfile}
-                    onLogout={handleLogout}
-                    onViewLegal={handleViewLegal}
-                    onDataRefresh={handleDataRefresh}
-                    installPromptEvent={installPromptEvent}
-                    setInstallPromptEvent={setInstallPromptEvent}
-                    onShowIosInstall={() => setIsIosInstallModalOpen(true)}
-                />
+                <div className="h-full flex flex-col">
+                    <div className="flex-grow overflow-y-auto">
+                        <SettingsPage
+                            settings={settings} onSettingsChange={handleSettingsChange}
+                            onSetSimulatedLocation={handleSetSimulatedLocation}
+                            userProfile={userProfile} 
+                            onViewProfile={handleViewProfile}
+                            onLogout={handleLogout}
+                            onViewLegal={handleViewLegal}
+                            onDataRefresh={handleDataRefresh}
+                            installPromptEvent={installPromptEvent}
+                            setInstallPromptEvent={setInstallPromptEvent}
+                            onShowIosInstall={() => setIsIosInstallModalOpen(true)}
+                        />
+                    </div>
+                </div>
             );
         }
         

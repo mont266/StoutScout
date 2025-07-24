@@ -9,13 +9,13 @@ const Avatar = ({ avatarId, className = 'w-24 h-24' }) => {
       const parsedAvatar = JSON.parse(avatarId);
       if (parsedAvatar && parsedAvatar.type === 'dicebear') {
         const { style, seed } = parsedAvatar;
-        const dicebearUrl = `https://api.dicebear.com/8.x/${style}/svg?seed=${encodeURIComponent(seed || 'default')}`;
+        const dicebearUrl = `https://api.dicebear.com/8.x/${style}/svg?seed=${encodeURIComponent(seed || 'default')}&radius=50`;
         avatarContent = (
-          <div className="w-full h-full rounded-full bg-gray-200 dark:bg-gray-700 p-1">
+          <div className="w-full h-full rounded-full bg-gray-200 dark:bg-gray-700">
             <img
               src={dicebearUrl}
               alt="User-generated avatar"
-              className="w-full h-full object-contain"
+              className="w-full h-full object-cover"
               // Add an error handler to fall back to the default icon
               onError={(e) => {
                 e.target.onerror = null; // prevent infinite loops
@@ -49,7 +49,7 @@ const Avatar = ({ avatarId, className = 'w-24 h-24' }) => {
   }
 
   return (
-    <div className={`${className} rounded-full`}>
+    <div className={`${className} rounded-full overflow-hidden`}>
       {avatarContent}
     </div>
   );
