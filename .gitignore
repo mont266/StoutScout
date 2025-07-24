@@ -13,6 +13,7 @@ dist-ssr
 *.local
 supabase
 .env.local
+security.md
 
 # Editor directories and files
 .vscode/*
