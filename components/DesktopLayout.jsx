@@ -118,7 +118,7 @@ const DesktopLayout = (props) => {
             }
             return (
                 <div className="h-full flex flex-col">
-                    <div className="flex-grow overflow-y-auto">
+                    <div className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-800/50">
                         <SettingsPage
                             settings={settings} onSettingsChange={handleSettingsChange}
                             onSetSimulatedLocation={handleSetSimulatedLocation}

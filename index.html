@@ -15,6 +15,22 @@
     
     <link rel="icon" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><g transform='translate(0 2)'><path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F'/><path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/></g></svg>" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
+    <!-- Google Analytics - This script is added to enable GA4 tracking -->
+    <!-- The Measurement ID is injected by Vite from your .env file (VITE_GA_MEASUREMENT_ID) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=%VITE_GA_MEASUREMENT_ID%"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      const gaId = "%VITE_GA_MEASUREMENT_ID%";
+      // Only run the config if the ID was actually injected by Vite.
+      // Vite replaces the variable with an empty string if it's not set.
+      if (gaId) {
+        gtag('config', gaId);
+      }
+    </script>
     
     <script type="module" src="/index.tsx"></script>
   <script type="importmap">

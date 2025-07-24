@@ -20,7 +20,6 @@ const App = () => {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   // App state
@@ -232,79 +231,49 @@ const App = () => {
 
     const userId = currentSession.user.id;
 
-    // Step 1: Fetch user profile.
-    let { data: profile, error: fetchError } = await supabase
+    // Fetch user profile. The profile should be created automatically by a DB trigger on sign-up.
+    const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-    // Step 2: If profile doesn't exist (PGRST116), create it.
-    if (fetchError && fetchError.code === 'PGRST116') {
-        let usernameToCreate = currentSession.user.user_metadata?.username;
-
-        // If no username in metadata (e.g., created via backend), create a fallback.
-        if (!usernameToCreate) {
-            const emailPrefix = currentSession.user.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 15);
-            const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-            usernameToCreate = `${emailPrefix}${randomSuffix}`;
+    if (profileError) {
+        console.error("Error fetching profile:", profileError);
+        // If the profile doesn't exist (PGRST116), it's a critical backend error
+        // because the trigger should have created it.
+        if (profileError.code === 'PGRST116') {
+            console.error("CRITICAL: Profile not found for logged-in user. The 'handle_new_user' DB trigger may be missing or failing.");
         }
-        
-        if (usernameToCreate && !isCreatingProfile) {
-            setIsCreatingProfile(true);
-            try {
-                const { data: newProfile, error: createError } = await supabase
-                    .from('profiles')
-                    .insert({ id: userId, username: usernameToCreate, reviews: 0, level: 1 })
-                    .select()
-                    .single();
-
-                if (createError) {
-                    console.error("Error creating profile:", createError);
-                    // This could be due to a duplicate username or other constraint.
-                    // The profile will remain null.
-                } else {
-                    profile = newProfile; // Creation successful.
-                }
-            } catch (e) {
-                console.error("Unexpected error during profile creation:", e);
-            } finally {
-                setIsCreatingProfile(false);
-            }
-        }
-    } else if (fetchError) {
-        console.error("Error fetching profile:", fetchError);
-        profile = null; // Ensure profile is null on other errors.
+        setUserProfile(null);
+        setUserRatings([]);
+        return { profile: null, ratings: [] };
     }
 
-    // Step 3: Set profile state.
     setUserProfile(profile);
 
-    // Step 4: If profile exists, fetch ratings.
-    let mappedUserRatings = [];
-    if (profile) {
-        const { data: userRatingsData, error: ratingsError } = await supabase
-            .from('ratings')
-            .select('id, pub_id, price, quality, created_at, exact_price, image_url, pubs(id, name, address, lat, lng)')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
+    // If profile exists, fetch ratings.
+    const { data: userRatingsData, error: ratingsError } = await supabase
+        .from('ratings')
+        .select('id, pub_id, price, quality, created_at, exact_price, image_url, pubs(id, name, address, lat, lng)')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-        if (ratingsError) {
-            console.error("Error fetching user ratings:", ratingsError);
-        } else {
-            mappedUserRatings = (userRatingsData || []).map(r => ({
-              id: r.id, pubId: r.pub_id,
-              rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
-              timestamp: new Date(r.created_at).getTime(),
-              pubName: r.pubs?.name || 'Unknown',
-              pubAddress: r.pubs?.address || 'Unknown',
-              pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
-              image_url: r.image_url,
-            }));
-        }
+    let mappedUserRatings = [];
+    if (ratingsError) {
+        console.error("Error fetching user ratings:", ratingsError);
+    } else {
+        mappedUserRatings = (userRatingsData || []).map(r => ({
+          id: r.id, pubId: r.pub_id,
+          rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
+          timestamp: new Date(r.created_at).getTime(),
+          pubName: r.pubs?.name || 'Unknown',
+          pubAddress: r.pubs?.address || 'Unknown',
+          pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
+          image_url: r.image_url,
+        }));
     }
     
-    // Step 5: Set ratings state.
     setUserRatings(mappedUserRatings);
     return { profile, ratings: mappedUserRatings };
   };
@@ -602,9 +571,20 @@ const App = () => {
     await fetchDbPubs();
   }, [session, userRatings, selectedPub, userProfile, fetchAllRatings, fetchDbPubs]);
   
-  const handleSelectPub = useCallback((pubId) => {
+  const handleSelectPub = useCallback((pub) => {
+    const pubId = pub ? pub.id : null;
     setSelectedPubId(pubId);
-    if (pubId && !isListExpanded) setIsListExpanded(true);
+
+    // If a pub is selected, declaratively center the map on it.
+    // If null, the map remains where it is.
+    if (pub?.location) {
+        setSearchCenter(pub.location);
+    }
+    
+    // On mobile, if a pub is selected and the list is collapsed, expand it.
+    if (pubId && !isListExpanded) {
+        setIsListExpanded(true);
+    }
   }, [isListExpanded]);
 
   const handleFilterChange = (newFilter) => {
@@ -805,7 +785,7 @@ const App = () => {
     }
     
     const layoutProps = {
-      session, loading, isAuthOpen, setIsAuthOpen, isCreatingProfile, isPasswordRecovery, setIsPasswordRecovery,
+      session, loading, isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
       googlePlaces, pubs, allRatings, selectedPubId, setSelectedPubId, filter, setFilter, isListExpanded, setIsListExpanded,
       realUserLocation, userLocation, searchCenter, setSearchCenter, locationError, resultsAreCapped,
       isRefreshing, refreshTrigger, settings, setSettings, activeTab, setActiveTab, userProfile, userRatings,

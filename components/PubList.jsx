@@ -91,7 +91,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
                   <li
                     key={pub.id}
                     ref={isSelected ? selectedItemRef : null}
-                    onClick={() => onSelectPub(pub.id)}
+                    onClick={() => onSelectPub(pub)}
                     className={`p-4 cursor-pointer transition-colors border-l-4 ${isSelected ? 'bg-amber-500/10 border-amber-500' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'}`}
                   >
                      <div className="flex items-center justify-between space-x-4">

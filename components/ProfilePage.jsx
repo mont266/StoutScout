@@ -82,7 +82,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         });
 
         if (error) {
-            alert(`Failed to ban user: ${error.context?.error?.message || error.message}.`);
+            alert(`Failed to ban user: ${error.context?.error || error.message}.`);
             trackEvent('ban_user_failed', { banned_user_id: profile.id, error: error.message });
         } else {
             setProfile(p => ({ ...p, is_banned: true, ban_reason: reason }));
@@ -103,7 +103,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         });
 
         if (error) {
-            alert(`Failed to unban user: ${error.context?.error?.message || error.message}.`);
+            alert(`Failed to unban user: ${error.context?.error || error.message}.`);
             trackEvent('unban_user_failed', { unbanned_user_id: profile.id, error: error.message });
         } else {
             setProfile(p => ({ ...p, is_banned: false, ban_reason: null, banned_at: null }));
@@ -130,7 +130,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         });
 
         if (error) {
-            alert(`Failed to update role: ${error.context?.error?.message || error.message}. Ensure the 'set-user-role' Edge Function is deployed and has the correct permissions.`);
+            alert(`Failed to update role: ${error.context?.error || error.message}. Ensure the 'set-user-role' Edge Function is deployed and has the correct permissions.`);
             trackEvent('set_role_failed', { target_user_id: profile.id, role_name: roleName, error: error.message });
         } else {
             setProfile(p => ({ ...p, [roleName]: roleValue }));
@@ -164,7 +164,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
             alert("Thank you. The image has been reported and will be reviewed.");
         } catch (error) {
             console.error("Failed to report image:", error);
-            alert(`Could not report image: ${error.context?.error?.message || error.message}`);
+            alert(`Could not report image: ${error.context?.error || error.message}`);
         }
         setReportModalInfo({ isOpen: false, rating: null });
         setImageToView(null);

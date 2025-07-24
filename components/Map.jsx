@@ -66,20 +66,6 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
   const mapRef = useRef(null);
   const searchTimeoutRef = useRef(null);
 
-  // Effect to pan the map to a selected pub, or to the user's live location
-  useEffect(() => {
-    if (!mapRef.current) return;
-
-    if (selectedPubId) {
-        const pub = pubs.find(p => p.id === selectedPubId);
-        if (pub) {
-            mapRef.current.panTo(pub.location);
-        }
-    } else {
-        mapRef.current.panTo(searchCenter);
-    }
-  }, [selectedPubId, pubs, searchCenter]);
-
   // Refactored search logic to be callable
   const searchForPubs = useCallback(async () => {
     if (!isLoaded || !mapRef.current || !window.google || !searchCenter) {
@@ -239,7 +225,7 @@ const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, sele
                 <div 
                     style={{ zIndex, cursor: 'pointer' }}
                     title={pub.name}
-                    onClick={() => onSelectPub(pub.id)}
+                    onClick={() => onSelectPub(pub)}
                 >
                     <div 
                         className="w-10 h-10 relative flex items-center justify-center"
