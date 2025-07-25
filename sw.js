@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stoutly-cache-v1';
+const CACHE_NAME = 'stoutly-cache-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -18,7 +18,7 @@ const urlsToCache = [
   '/components/FilterControls.jsx',
   '/components/PubDetails.jsx',
   '/components/PubList.jsx',
-  '/components/Header.jsx',
+  '/components/Logo.jsx',
   '/components/SettingsModal.jsx',
   '/components/ProfilePage.jsx',
   '/components/LeaderboardPage.jsx',
@@ -37,6 +37,7 @@ const urlsToCache = [
   '/components/Icon.jsx',
   '/components/ModerationPage.jsx',
   '/components/StatsPage.jsx',
+  '/components/ImageGallery.jsx',
   '/components/TermsOfUsePage.jsx',
   '/components/PrivacyPolicyPage.jsx',
   '/components/BannedPage.jsx',
@@ -45,6 +46,9 @@ const urlsToCache = [
   '/components/ImageCropper.jsx',
   '/components/ReportImageModal.jsx',
   '/components/IOSInstallInstructionsModal.jsx',
+  '/components/AddPubModal.jsx',
+  '/components/PlacementConfirmationBar.jsx',
+  '/components/DesktopPlacementConfirmation.jsx',
 ];
 
 self.addEventListener('install', event => {

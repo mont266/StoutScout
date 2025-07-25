@@ -47,20 +47,6 @@ const AuthPage = ({ onClose }) => {
             throw new Error('Username must be 3-20 characters and contain only letters, numbers, or underscores.');
         }
         
-        // Check if username is already taken before attempting to sign up
-        const { data: isTaken, error: checkError } = await supabase.rpc('is_username_taken', {
-            username_to_check: username
-        });
-
-        if (checkError) {
-            // Don't block sign-up for this, but log it. The DB constraint will be the final guard.
-            console.error("Error checking username uniqueness:", checkError);
-        }
-
-        if (isTaken) {
-            throw new Error('Username already exists. Please pick a different one.');
-        }
-        
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -209,7 +195,7 @@ const AuthPage = ({ onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-60 dark:bg-opacity-70 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black bg-opacity-60 dark:bg-opacity-70 z-[1200] flex items-center justify-center p-4"
       onClick={handleClose}
       role="dialog"
       aria-modal="true"

@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -15,6 +16,9 @@
     
     <link rel="icon" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><g transform='translate(0 2)'><path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F'/><path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/></g></svg>" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    
+    <!-- Leaflet CSS - Required for react-leaflet maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
     <!-- Google Analytics - This script is added to enable GA4 tracking -->
     <!-- The Measurement ID is injected by Vite from your .env file (VITE_GA_MEASUREMENT_ID) -->
@@ -36,13 +40,14 @@
   <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.1.0",
-    "react/": "https://esm.sh/react@^19.1.0/",
-    "react-dom": "https://esm.sh/react-dom@^19.1.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react": "https://esm.sh/react@^18.2.0",
+    "react/": "https://esm.sh/react@^18.2.0/",
+    "react-dom": "https://esm.sh/react-dom@^18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.52.0",
     "vite": "https://esm.sh/vite@^7.0.5",
-    "@react-google-maps/api": "https://esm.sh/@react-google-maps/api@^2.20.7",
+    "leaflet": "https://esm.sh/leaflet@^1.9.4",
+    "react-leaflet": "https://esm.sh/react-leaflet@^4.2.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.7.0",
     "react-easy-crop": "https://esm.sh/react-easy-crop@^5.0.7"
   }

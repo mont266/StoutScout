@@ -3,7 +3,7 @@ import { FilterType } from './types.js';
 import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
-import { getRankData, getCurrencyInfo } from './utils.js';
+import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, extractPostcode, normalizePubNameForComparison } from './utils.js';
 import { trackEvent } from './analytics.js';
 
 import MobileLayout from './components/MobileLayout.jsx';
@@ -12,6 +12,7 @@ import useIsDesktop from './hooks/useIsDesktop.js';
 
 import ProfilePage from './components/ProfilePage.jsx';
 import BannedPage from './components/BannedPage.jsx';
+import AddPubModal from './components/AddPubModal.jsx';
 
 const App = () => {
   // --- STATE MANAGEMENT ---
@@ -23,7 +24,7 @@ const App = () => {
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   // App state
-  const [googlePlaces, setGooglePlaces] = useState([]);
+  const [nominatimResults, setNominatimResults] = useState([]);
   const [pubs, setPubs] = useState([]);
   const [allRatings, setAllRatings] = useState(new Map());
   const [selectedPubId, setSelectedPubId] = useState(null);
@@ -32,15 +33,18 @@ const App = () => {
 
   // Location State
   const [realUserLocation, setRealUserLocation] = useState(DEFAULT_LOCATION);
-  const [userLocation, setUserLocation] = useState(DEFAULT_LOCATION); // This is for the blue dot
-  const [searchCenter, setSearchCenter] = useState(DEFAULT_LOCATION); // This is for the map search area
+  const [userLocation, setUserLocation] = useState(DEFAULT_LOCATION); // This is for the blue dot on the map
+  const [mapCenter, setMapCenter] = useState(DEFAULT_LOCATION); // The visual center of the map
+  const [searchOrigin, setSearchOrigin] = useState(DEFAULT_LOCATION); // The center of the last search, used for sorting
   const [locationError, setLocationError] = useState(null);
   const [resultsAreCapped, setResultsAreCapped] = useState(false);
   const [initialLocationSet, setInitialLocationSet] = useState(false);
+  const [showSearchAreaButton, setShowSearchAreaButton] = useState(false);
 
   // Refresh functionality
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [searchOnNextMoveEnd, setSearchOnNextMoveEnd] = useState(false);
 
   const [settings, setSettings] = useState(loadSettings);
 
@@ -76,6 +80,13 @@ const App = () => {
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [isIosInstallModalOpen, setIsIosInstallModalOpen] = useState(false);
 
+  // Add Pub feature state
+  const [isAddPubModalOpen, setIsAddPubModalOpen] = useState(false);
+  const [pubPlacementState, setPubPlacementState] = useState(null);
+  const [finalPlacementLocation, setFinalPlacementLocation] = useState(null);
+  const [isConfirmingLocation, setIsConfirmingLocation] = useState(false);
+
+
   // --- HOOKS ---
   const isDesktop = useIsDesktop();
   const locationPermissionTracked = useRef(false);
@@ -97,13 +108,15 @@ const App = () => {
       screenName = 'auth';
     } else if (isPasswordRecovery) {
       screenName = 'password_recovery';
+    } else if (pubPlacementState) {
+      screenName = 'add_pub_placement';
     }
 
     trackEvent('screen_view', {
       screen_name: screenName,
       screen_class: screenClass, // GA4 standard parameter
     });
-  }, [activeTab, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery]);
+  }, [activeTab, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery, pubPlacementState]);
 
 
   useEffect(() => {
@@ -307,11 +320,11 @@ const App = () => {
 
   // --- CORE APP LOGIC & HANDLERS ---
 
-  const handlePlacesFound = useCallback((places, capped) => {
+  const handleNominatimResults = useCallback((places, capped) => {
     if (!initialSearchComplete) {
       setInitialSearchComplete(true);
     }
-    setGooglePlaces(places || []);
+    setNominatimResults(places || []);
     setResultsAreCapped(capped);
     setIsRefreshing(false);
   }, [initialSearchComplete]);
@@ -319,9 +332,24 @@ const App = () => {
   const handleRefresh = useCallback(() => {
     if (isRefreshing) return;
     setIsRefreshing(true);
+    setShowSearchAreaButton(false); // Hide the button when a search starts
     setRefreshTrigger(c => c + 1);
     trackEvent('refresh_pubs');
   }, [isRefreshing]);
+
+  const handleSearchAfterMove = useCallback(() => {
+    // This function is called by the Map component after a 'flyTo' animation ends.
+    if (searchOnNextMoveEnd) {
+        handleRefresh();
+        setSearchOnNextMoveEnd(false);
+    }
+  }, [searchOnNextMoveEnd, handleRefresh]);
+
+  const handleSearchThisArea = useCallback(() => {
+      trackEvent('click_search_this_area');
+      setSearchOrigin(mapCenter); // Update the origin before searching
+      handleRefresh();
+  }, [handleRefresh, mapCenter]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -347,31 +375,59 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    const combinedPubsMap = new Map();
+    // 1. Create an index of DB pubs by their signature (normalized name + postcode)
+    // This helps us quickly check for duplicates.
+    const dbPubIndex = new Map();
     dbPubs.forEach(pub => {
-        if (pub.id && pub.name && pub.location) {
-            const distance = getDistance(pub.location, searchCenter);
+      const name = normalizePubNameForComparison(pub.name);
+      const postcode = extractPostcode(pub.address);
+      if (name && postcode) {
+        dbPubIndex.set(`${name}|${postcode}`, pub.id);
+      }
+    });
+
+    const combinedPubsMap = new Map();
+
+    // 2. Process Nominatim results.
+    // Filter out any results that are duplicates of existing rated pubs.
+    const uniqueNominatimPubs = nominatimResults.filter(place => {
+      const placeName = normalizePubNameForComparison(place.name);
+      const placePostcode = place.postcode; // Already normalized
+      if (placeName && placePostcode) {
+        const signature = `${placeName}|${placePostcode}`;
+        return !dbPubIndex.has(signature); // Keep if NOT in the db index
+      }
+      return true; // Keep if we can't create a signature
+    });
+
+    // Add unique Nominatim pubs to the display map.
+    uniqueNominatimPubs.forEach(place => {
+      combinedPubsMap.set(place.id, {
+        id: place.id,
+        name: place.name,
+        address: place.address,
+        location: place.location,
+      });
+    });
+    
+    // 3. Add all DB pubs that are within the search radius.
+    // Since we filtered duplicates from Nominatim, this is safe to do.
+    dbPubs.forEach(pub => {
+        if (pub.location) { // Ensure location exists
+            const distance = getDistance(pub.location, searchOrigin);
             if (distance <= settings.radius) {
                 combinedPubsMap.set(pub.id, { ...pub });
             }
         }
     });
-    googlePlaces.forEach(place => {
-      if (place.id && place.displayName && place.location && place.formattedAddress) {
-        combinedPubsMap.set(place.id, {
-          id: place.id,
-          name: place.displayName,
-          address: place.formattedAddress,
-          location: { lat: place.location.lat(), lng: place.location.lng() },
-        });
-      }
-    });
+
+    // 5. Finalize the list and add ratings.
     const finalPubsList = Array.from(combinedPubsMap.values()).map(pub => ({
       ...pub,
       ratings: allRatings.get(pub.id) || [],
     }));
     setPubs(finalPubsList);
-  }, [googlePlaces, dbPubs, allRatings, searchCenter, settings.radius, getDistance]);
+  }, [nominatimResults, dbPubs, allRatings, searchOrigin, settings.radius, getDistance]);
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   
@@ -422,25 +478,35 @@ const App = () => {
   }, [settings.developerMode, settings.simulatedLocation]);
 
   useEffect(() => {
-    // On first load, center the map on the user. After that, only update the blue dot.
+    // This effect now handles setting the initial location and triggering the first search.
     const effectiveLocation = (settings.developerMode && settings.simulatedLocation)
       ? settings.simulatedLocation.coords : realUserLocation;
     
     setUserLocation(effectiveLocation); // This keeps the blue dot location live
 
+    // On first load, center the map on the user and trigger a search AFTER the map moves.
     if (effectiveLocation !== DEFAULT_LOCATION && !initialLocationSet) {
-      setSearchCenter(effectiveLocation);
+      setSearchOrigin(effectiveLocation);
+      setMapCenter(effectiveLocation);
       setInitialLocationSet(true);
+      setSearchOnNextMoveEnd(true); // Signal to search after map settles
     }
   }, [settings.developerMode, settings.simulatedLocation, realUserLocation, initialLocationSet]);
   
-  const handleCenterChange = useCallback((newCenter) => {
-      const distance = getDistance(newCenter, searchCenter);
-      if (distance > 50) {
-          setSearchCenter(newCenter);
-          trackEvent('search_on_drag', { new_lat: newCenter.lat, new_lng: newCenter.lng });
-      }
-  }, [searchCenter, getDistance]);
+  const handleMapMove = useCallback((newCenter) => {
+    setMapCenter(newCenter);
+    
+    // If in placement mode, allow map movement without cancelling the flow or showing other buttons.
+    if (pubPlacementState) {
+        return;
+    }
+    
+    const distance = getDistance(newCenter, searchOrigin);
+    if (distance > 100) {
+      setShowSearchAreaButton(true);
+      trackEvent('map_dragged_show_search_button');
+    }
+  }, [searchOrigin, getDistance, pubPlacementState]);
 
   const getComparablePrice = useCallback((pub) => {
       if (!pub?.ratings?.length) return 999;
@@ -460,10 +526,10 @@ const App = () => {
       switch (filter) {
         case FilterType.Price: return getComparablePrice(a) - getComparablePrice(b);
         case FilterType.Quality: return getAverageRating(b.ratings, 'quality') - getAverageRating(a.ratings, 'quality');
-        default: return getDistance(a.location, searchCenter) - getDistance(b.location, searchCenter);
+        default: return getDistance(a.location, searchOrigin) - getDistance(b.location, searchOrigin);
       }
     });
-  }, [pubs, filter, searchCenter, getDistance, getComparablePrice]);
+  }, [pubs, filter, searchOrigin, getDistance, getComparablePrice]);
 
   const handleRatePub = useCallback(async (pubId, pubName, pubAddress, ratingData) => {
     if (!session || !userProfile || !selectedPub) return;
@@ -578,7 +644,7 @@ const App = () => {
     // If a pub is selected, declaratively center the map on it.
     // If null, the map remains where it is.
     if (pub?.location) {
-        setSearchCenter(pub.location);
+        setMapCenter(pub.location);
     }
     
     // On mobile, if a pub is selected and the list is collapsed, expand it.
@@ -596,6 +662,11 @@ const App = () => {
     // On mobile, close the details panel when switching main tabs.
     if (!isDesktop) {
       setSelectedPubId(null);
+    }
+    
+    // Cancel pub placement if user navigates away
+    if (pubPlacementState) {
+        handleCancelPubPlacement();
     }
 
     // Reset legal page view when user explicitly navigates
@@ -635,35 +706,67 @@ const App = () => {
     saveSettings(newSettings);
   };
   
-  const handleSetSimulatedLocation = (locationString) => {
-    return new Promise((resolve, reject) => {
-      if (!locationString) {
-        handleSettingsChange({ ...settings, simulatedLocation: null });
-        resolve();
-        return;
-      }
-      trackEvent('search', { search_term: locationString });
-      if (!window.google?.maps?.Geocoder) {
-        reject(new Error("Maps API not loaded. Please try again."));
-        return;
-      }
-      const geocoder = new window.google.maps.Geocoder();
-      geocoder.geocode({ 'address': locationString }, (results, status) => {
-        if (status === 'OK' && results?.[0]) {
-          const location = results[0].geometry.location;
-          handleSettingsChange({ ...settings, simulatedLocation: { name: locationString, coords: { lat: location.lat(), lng: location.lng() } } });
-          resolve();
-        } else {
-          reject(new Error('Geocode failed: ' + status));
-        }
+  const handleSetSimulatedLocation = async (locationString) => {
+    if (!locationString) {
+      handleSettingsChange({ ...settings, simulatedLocation: null });
+      return;
+    }
+
+    trackEvent('search', { search_term: locationString });
+
+    try {
+      // Nominatim API call
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationString)}&format=jsonv2&limit=1`, {
+        headers: { 'User-Agent': 'Stoutly/1.0 (https://stoutly-app.com)' }
       });
-    });
+      if (!response.ok) {
+        throw new Error(`Nominatim API failed with status: ${response.status}`);
+      }
+      const results = await response.json();
+      if (results && results.length > 0) {
+        const { lat, lon } = results[0];
+        handleSettingsChange({
+          ...settings,
+          simulatedLocation: {
+            name: results[0].display_name,
+            coords: { lat: parseFloat(lat), lng: parseFloat(lon) }
+          }
+        });
+      } else {
+        throw new Error('No results found for that location.');
+      }
+    } catch (error) {
+      console.error('Geocoding failed:', error);
+      throw error; // Re-throw to be caught in the component
+    }
   };
 
   const handleViewPub = (pub) => {
     if (!pub?.id || !pub.location) return;
     trackEvent('view_pub_from_history', { pub_id: pub.id });
-    setSearchCenter(pub.location);
+
+    // Check if the pub is already in our list of displayed pubs
+    const pubExists = pubs.some(p => p.id === pub.id);
+
+    // If the pub isn't in the list (e.g., it's outside the current search radius),
+    // we need to add it to the state so it can be selected and displayed.
+    if (!pubExists) {
+      setPubs(prevPubs => {
+        // Create a full pub object, including its ratings from the main `allRatings` map.
+        const newPub = {
+          ...pub,
+          ratings: allRatings.get(pub.id) || [],
+        };
+        // Return a new array with the existing pubs plus the new one.
+        // We also double-check for duplicates here in case of race conditions.
+        if (prevPubs.some(p => p.id === newPub.id)) {
+            return prevPubs;
+        }
+        return [...prevPubs, newPub];
+      });
+    }
+
+    setMapCenter(pub.location);
     setActiveTab('map');
     setSelectedPubId(pub.id);
   };
@@ -723,13 +826,15 @@ const App = () => {
   };
 
     const handleFindCurrentPub = () => {
-        trackEvent('recenter_on_user');
-        // This button now simply recenters the map on the user's live location.
+        trackEvent('recenter_on_user_and_search');
+        // This button now recenters the map AND sets up a search for when the move completes.
         const effectiveLocation = (settings.developerMode && settings.simulatedLocation)
             ? settings.simulatedLocation.coords : realUserLocation;
             
         if (effectiveLocation && effectiveLocation.lat !== DEFAULT_LOCATION.lat) {
-            setSearchCenter(effectiveLocation);
+            setSearchOrigin(effectiveLocation);
+            setMapCenter(effectiveLocation);
+            setSearchOnNextMoveEnd(true); // Signal to search after map settles
         } else {
             setLocationError("Your location is not available yet. Please wait or check permissions.");
             // Set a timer to clear the error
@@ -747,6 +852,90 @@ const App = () => {
         await supabase.from('profiles').update({ avatar_id: avatarId }).eq('id', session.user.id);
         await fetchUserData();
         setIsAvatarModalOpen(false);
+    };
+
+    const handleAddPubClick = () => {
+      if (!session) {
+        setIsAuthOpen(true);
+        return;
+      }
+      trackEvent('add_pub_start');
+      setIsAddPubModalOpen(true);
+    };
+
+    const handleSubmitNewPub = async ({ name, address }) => {
+        if (!session) return;
+        trackEvent('add_pub_submit', { pub_name: name });
+
+        let location = null;
+        try {
+            const geocodeResponse = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=jsonv2&limit=1`, {
+                headers: { 'User-Agent': 'Stoutly/1.0 (https://stoutly-app.com)' }
+            });
+            if (!geocodeResponse.ok) throw new Error('Geocoding service failed.');
+            const geocodeData = await geocodeResponse.json();
+            if (geocodeData && geocodeData.length > 0) {
+                location = { lat: parseFloat(geocodeData[0].lat), lng: parseFloat(geocodeData[0].lon) };
+            } else {
+                alert("Could not find that address. Please try to be more specific (e.g., add a city or postcode).");
+                return;
+            }
+        } catch (error) {
+            console.error("Geocoding failed:", error);
+            alert("There was a problem finding that address. Please check your connection and try again.");
+            return;
+        }
+
+        setIsAddPubModalOpen(false);
+        setPubPlacementState({ name, address });
+        setFinalPlacementLocation(location);
+        setMapCenter(location);
+        setActiveTab('map');
+    };
+    
+    const handlePlacementPinMove = (newLocation) => {
+        setFinalPlacementLocation(newLocation);
+    };
+
+    const handleCancelPubPlacement = () => {
+        setPubPlacementState(null);
+        setFinalPlacementLocation(null);
+    };
+
+    const handleConfirmNewPub = async () => {
+        if (!session || !pubPlacementState || !finalPlacementLocation) return;
+        setIsConfirmingLocation(true);
+        trackEvent('add_pub_confirm_location');
+
+        const payload = {
+            id: crypto.randomUUID(),
+            name: pubPlacementState.name,
+            address: pubPlacementState.address,
+            lat: finalPlacementLocation.lat,
+            lng: finalPlacementLocation.lng,
+            created_by: session.user.id,
+        };
+        const { data, error } = await supabase.from('pubs').insert(payload).select().single();
+
+        setIsConfirmingLocation(false);
+
+        if (error) {
+            console.error("Error inserting new pub:", error);
+            alert(`Could not add pub: ${error.message}`);
+            return;
+        }
+
+        setPubPlacementState(null);
+        setFinalPlacementLocation(null);
+        await fetchDbPubs();
+        
+        setTimeout(() => {
+            const newPub = {
+                ...data,
+                location: { lat: data.lat, lng: data.lng }
+            };
+            handleSelectPub(newPub);
+        }, 150);
     };
 
     const renderProfile = (onBack) => {
@@ -786,23 +975,42 @@ const App = () => {
     
     const layoutProps = {
       session, loading, isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
-      googlePlaces, pubs, allRatings, selectedPubId, setSelectedPubId, filter, setFilter, isListExpanded, setIsListExpanded,
-      realUserLocation, userLocation, searchCenter, setSearchCenter, locationError, resultsAreCapped,
+      pubs, allRatings, selectedPubId, setSelectedPubId, filter, setFilter, isListExpanded, setIsListExpanded,
+      realUserLocation, userLocation, mapCenter, searchOrigin, locationError, resultsAreCapped,
       isRefreshing, refreshTrigger, settings, setSettings, activeTab, setActiveTab, userProfile, userRatings,
       viewedProfile, viewedRatings, isFetchingViewedProfile, legalPageView,
       reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo,
       levelRequirements, isDbPubsLoaded, initialSearchComplete, isAvatarModalOpen, setIsAvatarModalOpen,
       installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
       sortedPubs, selectedPub, existingUserRatingForSelectedPub, getAverageRating, getDistance, getComparablePrice,
-      handlePlacesFound, handleRefresh, handleCenterChange, handleRatePub, handleSelectPub, handleFilterChange,
+      handleNominatimResults, handleRefresh, handleMapMove, handleRatePub, handleSelectPub, handleFilterChange,
       handleTabChange, handleSettingsChange, handleSetSimulatedLocation, handleViewPub, handleLogout,
       handleViewProfile, handleFindCurrentPub, handleUpdateAvatar, renderProfile,
-      handleBackFromProfileView, handleViewLegal, handleDataRefresh
+      handleBackFromProfileView, handleViewLegal, handleDataRefresh,
+      handleSearchThisArea, showSearchAreaButton,
+      initialLocationSet,
+      // New props for delayed search
+      searchOnNextMoveEnd, handleSearchAfterMove,
+      handleAddPubClick,
+      // New props for pub placement flow
+      pubPlacementState, finalPlacementLocation, isConfirmingLocation,
+      handleSubmitNewPub, handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement,
     };
 
-    return isDesktop 
-      ? <DesktopLayout {...layoutProps} /> 
-      : <MobileLayout {...layoutProps} />;
+    return (
+      <>
+        {isDesktop 
+          ? <DesktopLayout {...layoutProps} /> 
+          : <MobileLayout {...layoutProps} />
+        }
+        {isAddPubModalOpen && (
+          <AddPubModal
+            onClose={() => setIsAddPubModalOpen(false)}
+            onSubmit={handleSubmitNewPub}
+          />
+        )}
+      </>
+    );
 };
 
 export default App;

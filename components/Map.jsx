@@ -1,249 +1,229 @@
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
-import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
-import { FilterType } from '../types.js';
-import { DEFAULT_LOCATION } from '../constants.js';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import { normalizeNominatimResult } from '../utils.js';
 
 const containerStyle = {
   width: '100%',
   height: '100%',
 };
 
-const mapStylesDark = [
-  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-  { featureType: "poi", elementType: "labels.icon", stylers: [{ "visibility": "off" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6b9a76" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
-  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#f3d19c" }] },
-  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
-  { featureType: "transit.station", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
-  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] },
-];
+// --- Custom Markers ---
+const userLocationIcon = L.divIcon({
+  html: `<div class="w-4 h-4 rounded-full bg-[#4285F4] border-2 border-white dark:border-gray-800 shadow-md animate-pulse-blue-dot"></div>`,
+  className: '',
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+});
 
-const mapStylesLight = [
-  { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
-  { featureType: "administrative.land_parcel", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
-  { featureType: "poi", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-  { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#dadada" }] },
-  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-  { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-  { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
-  { featureType: "transit.station", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9c9c9" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-];
-
-
-const libraries = ['places', 'marker'];
-
-const Map = ({ pubs, userLocation, searchCenter, searchRadius, onSelectPub, selectedPubId, onPlacesFound, theme, filter, onCenterChange, refreshTrigger }) => {
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
-    libraries,
-  });
-
-  const mapRef = useRef(null);
-  const searchTimeoutRef = useRef(null);
-
-  // Refactored search logic to be callable
-  const searchForPubs = useCallback(async () => {
-    if (!isLoaded || !mapRef.current || !window.google || !searchCenter) {
-      return;
-    }
-    
-    const request = {
-      fields: ['id', 'displayName', 'formattedAddress', 'location'],
-      textQuery: 'pub OR bar',
-      locationBias: {
-        center: new window.google.maps.LatLng(searchCenter.lat, searchCenter.lng),
-        radius: searchRadius,
-      },
-      maxResultCount: 20,
-    };
-
-    try {
-      const { places } = await window.google.maps.places.Place.searchByText(request);
-      const wasCapped = places?.length === 20;
-      onPlacesFound(places || [], wasCapped);
-    } catch (error) {
-      console.error('Places search failed:', error);
-      onPlacesFound([], false);
-    }
-  }, [isLoaded, searchCenter, searchRadius, onPlacesFound]);
-
-  // Use a ref to hold the latest search function to avoid stale closures in effects
-  const searchForPubsRef = useRef(searchForPubs);
-  useEffect(() => {
-    searchForPubsRef.current = searchForPubs;
-  });
-
-  // Effect to perform a debounced search when the map is dragged
-  useEffect(() => {
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    
-    searchTimeoutRef.current = setTimeout(() => {
-      searchForPubsRef.current();
-    }, 500); // 500ms debounce
-
-    return () => {
-        if (searchTimeoutRef.current) {
-            clearTimeout(searchTimeoutRef.current);
-        }
-    };
-  }, [searchCenter, searchRadius]);
-
-  // Effect to perform an immediate search when the refresh button is clicked
-  useEffect(() => {
-    if (refreshTrigger > 0) {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-      searchForPubsRef.current();
-    }
-  }, [refreshTrigger]);
-
-  const onLoad = useCallback(function callback(map) {
-    mapRef.current = map;
-  }, []);
-
-  const onUnmount = useCallback(function callback() {
-    mapRef.current = null;
-  }, []);
-  
-  const handleIdle = useCallback(() => {
-      if (mapRef.current && onCenterChange) {
-          const newCenter = mapRef.current.getCenter();
-          if (newCenter) {
-              onCenterChange({ lat: newCenter.lat(), lng: newCenter.lng() });
-          }
-      }
-  }, [onCenterChange]);
-  
-  const mapOptions = useMemo(() => ({
-    styles: theme === 'dark' ? mapStylesDark : mapStylesLight,
-    disableDefaultUI: true,
-    zoomControl: true,
-    clickableIcons: false,
-  }), [theme]);
-
-  const top3RatedPubsInDistanceOrder = useMemo(() => {
-    if (filter !== FilterType.Distance) return [];
-    return pubs
-        .filter(p => p.ratings.length > 0)
-        .slice(0, 3)
-        .map(p => p.id);
-  }, [pubs, filter]);
-
-  if (loadError) {
-    return (
-      <div className="flex items-center justify-center w-full h-full bg-red-900/50 text-white p-4 text-center">
-        Error loading maps. Please check your internet connection and ensure your API key is correct and has the Maps JavaScript and Places APIs enabled.
+const createPubIcon = (fillColor, strokeColor) => L.divIcon({
+  html: `
+    <div class="w-10 h-10 relative flex items-center justify-center" style="transform: translate(-50%, -100%);">
+      <svg viewBox="0 0 24 24" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1" class="w-full h-full drop-shadow-lg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+      </svg>
+      <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-3">
+        <i class="fas fa-beer text-base" style="color: ${strokeColor}"></i>
       </div>
-    );
-  }
+    </div>
+  `,
+  className: '',
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+});
 
-  return isLoaded ? (
-    <GoogleMap
-      mapContainerStyle={containerStyle}
-      center={searchCenter}
-      zoom={14}
-      onLoad={onLoad}
-      onUnmount={onUnmount}
-      options={mapOptions}
-      onIdle={handleIdle}
-    >
-      {userLocation && userLocation.lat !== DEFAULT_LOCATION.lat && (
-        <OverlayView
-          position={userLocation}
-          mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-        >
-          <div style={{ transform: 'translate(-50%, -50%)', zIndex: 100 }} title="Your Location">
-             <div className="w-4 h-4 rounded-full bg-[#4285F4] border-2 border-white dark:border-gray-800 shadow-md animate-pulse-blue-dot"></div>
-          </div>
-        </OverlayView>
-      )}
+const placementIcon = L.divIcon({
+  html: `
+    <div class="w-12 h-12 relative flex items-center justify-center animate-pulse" style="transform: translate(-50%, -100%);">
+      <svg viewBox="0 0 24 24" fill="#FBBF24" stroke="#1A202C" stroke-width="1.5" class="w-full h-full drop-shadow-2xl">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+      </svg>
+      <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-3">
+        <i class="fas fa-plus text-lg text-black"></i>
+      </div>
+    </div>
+  `,
+  className: '',
+  iconSize: [48, 48],
+  iconAnchor: [24, 48],
+});
 
-      {pubs.map((pub, index) => {
-        const isSelected = pub.id === selectedPubId;
-        const strokeColor = theme === 'dark' ? '#FFFFFF' : '#1F2937'; // White for dark, Gray-800 for light
-        let fillColor = theme === 'dark' ? '#4B5563' : '#9CA3AF'; // Default gray
 
-        let highlightRank = -1;
-        if (filter === FilterType.Distance) {
-            highlightRank = top3RatedPubsInDistanceOrder.indexOf(pub.id);
-        } else {
-            // For price and quality, the top 3 are the first in the sorted list.
-            if (index < 3) highlightRank = index;
-        }
-        
-        if (highlightRank === 0) {
-            fillColor = '#FFD700'; // Gold
-        } else if (highlightRank === 1) {
-            fillColor = '#C0C0C0'; // Silver
-        } else if (highlightRank === 2) {
-            fillColor = '#CD7F32'; // Bronze
-        }
-
-        if (isSelected) {
-            fillColor = '#FBBF24'; // Selected Amber-400 overrides highlight
-        }
-        
-        let zIndex = 1;
-        if (isSelected) {
-            zIndex = 50;
-        } else if (highlightRank !== -1) {
-            zIndex = 10 - highlightRank; // Gold=10, Silver=9, Bronze=8
-        }
-        
-        return (
-            <OverlayView
-              key={pub.id}
-              position={pub.location}
-              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-            >
-                <div 
-                    style={{ zIndex, cursor: 'pointer' }}
-                    title={pub.name}
-                    onClick={() => onSelectPub(pub)}
-                >
-                    <div 
-                        className="w-10 h-10 relative flex items-center justify-center"
-                        style={{ transform: 'translate(-50%, -100%)' }}
-                    >
-                        <svg viewBox="0 0 24 24" fill={fillColor} stroke={strokeColor} strokeWidth="1" className="w-full h-full drop-shadow-lg">
-                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
-                        </svg>
-                        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-3">
-                           <i className="fas fa-beer text-base" style={{ color: strokeColor }}></i>
-                        </div>
-                    </div>
-                </div>
-            </OverlayView>
-        );
-      })}
-    </GoogleMap>
-  ) : null;
+// --- Map Logic Components ---
+const MapEvents = ({ onMapMove }) => {
+  useMapEvents({
+    dragend: (e) => {
+      onMapMove(e.target.getCenter());
+    },
+  });
+  return null;
 };
 
-export default Map;
+const MapController = ({ center }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (map && center) {
+        map.flyTo(center, map.getZoom());
+    }
+  }, [center, map]);
+  return null;
+};
+
+const SearchOnFlyEndController = ({ enabled, onFlyEnd }) => {
+    useMapEvents({
+        moveend: () => {
+            if (enabled) {
+                onFlyEnd();
+            }
+        },
+    });
+    return null;
+};
+
+const MapComponent = ({
+  pubs, userLocation, center, onSelectPub, selectedPubId, onNominatimResults, theme, onMapMove,
+  refreshTrigger, showSearchAreaButton, onSearchThisArea,
+  searchOnNextMoveEnd, onSearchAfterMove,
+  // Props for pub placement flow
+  pubPlacementState, finalPlacementLocation, onPlacementPinMove,
+}) => {
+  const mapRef = useRef(null);
+
+  const searchForPubs = useCallback(async (map) => {
+    if (!map) return;
+    
+    const bounds = map.getBounds();
+    const viewbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+    const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
+    // Search for amenities that are pubs OR bars. Tavern is less common and often duplicates.
+    const searchTerms = ['pub', 'bar'];
+    
+    try {
+        const searchPromises = searchTerms.map(term => {
+            // This is a structured query for a specific amenity type, confined to the map view.
+            // It's more precise than a generic text search (`q=...`).
+            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&viewbox=${viewbox}&bounded=1&limit=50&amenity=${term}`;
+            return fetch(url, { headers: { 'User-Agent': userAgent } });
+        });
+
+        const responses = await Promise.all(searchPromises);
+        
+        const results = await Promise.all(responses.map(res => {
+            if (!res.ok) {
+                 console.warn(`A Nominatim search request for a term failed with status: ${res.status}`);
+                 return []; // Return empty array for failed requests
+            }
+            return res.json();
+        }));
+
+        const allPlaces = [].concat(...results);
+        
+        // De-duplicate results based on osm_id, as a pub can be tagged as both a pub and a bar.
+        const uniquePlaces = Array.from(new window.Map(allPlaces.map(place => [place.osm_id, place])).values());
+
+        const normalizedPlaces = uniquePlaces.map(normalizeNominatimResult);
+        
+        // Nominatim's hard limit is 50 results per query. If the combined unique results
+        // are close to this limit for any of the search terms, we can assume the results were capped.
+        const isCapped = uniquePlaces.length >= 49;
+
+        onNominatimResults(normalizedPlaces, isCapped);
+
+    } catch (error) {
+        console.error('Nominatim search failed:', error);
+        onNominatimResults([], false);
+    }
+  }, [onNominatimResults]);
+  
+  // This handles manual refreshes from the refresh button or "Search this Area"
+  useEffect(() => {
+    if (refreshTrigger > 0 && mapRef.current) {
+      searchForPubs(mapRef.current);
+    }
+  }, [refreshTrigger, searchForPubs]);
+
+  const lightTiles = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const lightAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+  const darkTiles = 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png';
+  const darkAttribution = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+  const icons = useMemo(() => {
+    const strokeColor = theme === 'dark' ? '#1A202C' : '#FFFFFF';
+    return {
+      unrated: createPubIcon('#6B7280', strokeColor),   // gray-500
+      rated: createPubIcon('#F59E0B', strokeColor),     // amber-600 (Gold)
+      selected: createPubIcon('#FBBF24', strokeColor),  // amber-400 (Brighter Gold)
+    }
+  }, [theme]);
+
+  return (
+    <div className="w-full h-full relative">
+      <MapContainer
+        ref={mapRef}
+        center={center}
+        zoom={14}
+        style={containerStyle}
+        zoomControl={false}
+      >
+        <MapController center={center} />
+        {theme === 'dark' ? (
+          <TileLayer url={darkTiles} attribution={darkAttribution} />
+        ) : (
+          <TileLayer url={lightTiles} attribution={lightAttribution} />
+        )}
+
+        <MapEvents onMapMove={onMapMove} />
+        <SearchOnFlyEndController enabled={searchOnNextMoveEnd} onFlyEnd={onSearchAfterMove} />
+
+        {userLocation && <Marker position={userLocation} icon={userLocationIcon} />}
+
+        {pubs.map(pub => {
+          let icon;
+          if (pub.id === selectedPubId) {
+            icon = icons.selected;
+          } else if (pub.ratings?.length > 0) {
+            icon = icons.rated;
+          } else {
+            icon = icons.unrated;
+          }
+
+          return (
+            <Marker 
+                key={pub.id} 
+                position={pub.location} 
+                icon={icon}
+                eventHandlers={{ click: () => onSelectPub(pub) }} 
+            />
+          );
+        })}
+
+        {pubPlacementState && finalPlacementLocation && (
+          <Marker
+            position={finalPlacementLocation}
+            icon={placementIcon}
+            draggable={true}
+            eventHandlers={{
+                dragend: (e) => onPlacementPinMove(e.target.getLatLng()),
+            }}
+            zIndexOffset={1000}
+          />
+        )}
+      </MapContainer>
+      
+      {showSearchAreaButton && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
+          <button
+            onClick={onSearchThisArea}
+            className="px-4 py-2 bg-amber-500 text-black font-bold rounded-full shadow-lg hover:bg-amber-400 transition-colors flex items-center space-x-2 animate-fade-in-down"
+          >
+            <i className="fas fa-search-location"></i>
+            <span>Search This Area</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MapComponent;

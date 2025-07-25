@@ -17,7 +17,7 @@ const RankUpPopup = ({ newRank }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-modal-fade-in"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[1500] animate-modal-fade-in"
       aria-live="polite"
       role="alert"
     >

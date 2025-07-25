@@ -17,7 +17,7 @@ const Confetti = () => {
 const LevelUpPopup = ({ newLevel }) => {
   return (
     <div
-      className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 animate-modal-fade-in"
+      className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[1500] animate-modal-fade-in"
       aria-live="polite"
       role="alert"
     >

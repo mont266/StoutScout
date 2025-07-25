@@ -40,7 +40,7 @@ const UpdatePasswordPage = ({ onSuccess }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-60 dark:bg-opacity-70 z-50 flex items-center justify-center p-4 animate-modal-fade-in"
+      className="fixed inset-0 bg-black bg-opacity-60 dark:bg-opacity-70 z-[1200] flex items-center justify-center p-4 animate-modal-fade-in"
       role="dialog"
       aria-modal="true"
       aria-labelledby="update-password-title"

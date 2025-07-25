@@ -108,7 +108,7 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
       return <ModerationPage onViewProfile={onViewProfile} onBack={() => setAdminView('settings')} onDataRefresh={onDataRefresh} />;
     }
     if (adminView === 'stats') {
-      return <StatsPage onBack={() => setAdminView('settings')} />;
+      return <StatsPage onBack={() => setAdminView('settings')} onViewProfile={onViewProfile} />;
     }
   }
 

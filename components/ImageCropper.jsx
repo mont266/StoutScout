@@ -39,7 +39,7 @@ const ImageCropper = ({ imageSrc, onCropComplete, onClose }) => {
 
   return (
     <div 
-        className="fixed inset-0 bg-black/90 z-[60] flex flex-col items-center justify-center p-4 animate-modal-fade-in"
+        className="fixed inset-0 bg-black/90 z-[1400] flex flex-col items-center justify-center p-4 animate-modal-fade-in"
         role="dialog"
         aria-modal="true"
         aria-labelledby="crop-image-title"

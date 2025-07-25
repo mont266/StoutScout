@@ -2,9 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.js';
 import { getCurrencyInfo } from '../utils.js';
 import { trackEvent } from '../analytics.js';
+import ImageGallery from './ImageGallery.jsx';
 
-const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString() }) => (
-    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center space-x-4 transition-all hover:shadow-lg hover:scale-[1.02]">
+const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString(), onClick }) => (
+    <div
+        onClick={onClick}
+        className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center space-x-4 transition-all hover:shadow-lg hover:scale-[1.02] ${onClick ? 'cursor-pointer' : ''}`}
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : -1}
+        onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); } : undefined}
+    >
         <div className="bg-amber-100 dark:bg-amber-900/50 p-3 rounded-full">
             <i className={`fas ${icon} text-xl text-amber-500 dark:text-amber-400 w-7 h-7 flex items-center justify-center`}></i>
         </div>
@@ -16,15 +23,19 @@ const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString() }) =>
 );
 
 
-const StatsPage = ({ onBack }) => {
+const StatsPage = ({ onBack, onViewProfile }) => {
     const [stats, setStats] = useState(null);
     const [countryStats, setCountryStats] = useState([]);
+    const [processedStats, setProcessedStats] = useState([]);
+    const [isUkExpanded, setIsUkExpanded] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [view, setView] = useState('main'); // 'main' or 'image_gallery'
 
     const fetchStats = useCallback(async () => {
         setLoading(true);
         setError(null);
+        trackEvent('view_stats_page');
 
         try {
             const [statsResult, countryStatsResult] = await Promise.all([
@@ -49,12 +60,53 @@ const StatsPage = ({ onBack }) => {
     }, []);
 
     useEffect(() => {
-        fetchStats();
-    }, [fetchStats]);
+        if (view === 'main') {
+            fetchStats();
+        }
+    }, [view, fetchStats]);
+    
+    useEffect(() => {
+        if (!countryStats || countryStats.length === 0) {
+            setProcessedStats([]);
+            return;
+        }
+
+        const ukNations = ['England', 'Scotland', 'Wales', 'Northern Ireland', 'UK (unspecified)'];
+        const ukStats = countryStats.filter(stat => ukNations.includes(stat.country));
+        const otherStats = countryStats.filter(stat => !ukNations.includes(stat.country));
+
+        let finalStats = [...otherStats];
+
+        if (ukStats.length > 0) {
+            const totalUkRatings = ukStats.reduce((acc, stat) => acc + Number(stat.rating_count), 0);
+            const totalUkValue = ukStats.reduce((acc, stat) => acc + (Number(stat.avg_price) * Number(stat.rating_count)), 0);
+            const overallUkAvgPrice = totalUkRatings > 0 ? totalUkValue / totalUkRatings : 0;
+
+            const aggregatedUkStat = {
+                country: 'UK',
+                avg_price: overallUkAvgPrice,
+                rating_count: totalUkRatings,
+                isAggregated: true,
+                subStats: ukStats.sort((a,b) => Number(b.rating_count) - Number(a.rating_count))
+            };
+            
+            finalStats.push(aggregatedUkStat);
+        }
+        
+        finalStats.sort((a, b) => Number(b.rating_count) - Number(a.rating_count));
+        setProcessedStats(finalStats);
+
+    }, [countryStats]);
+
 
     const handleRefresh = () => {
         trackEvent('refresh_stats');
         fetchStats();
+    };
+
+    const handleViewImageGallery = () => {
+        trackEvent('view_image_gallery');
+        setView('image_gallery');
     };
 
     const renderLoading = () => (
@@ -110,7 +162,7 @@ const StatsPage = ({ onBack }) => {
             <section>
                 <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Content &amp; Moderation Activity</h4>
                 <div className="grid grid-cols-2 gap-4">
-                    <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" />
+                    <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={handleViewImageGallery} />
                     <StatCard label="Removed Images" value={stats.total_removed_images} icon="fa-trash-alt" />
                     <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
                     <StatCard label="Hidden Reviews" value={stats.total_hidden_ratings} icon="fa-eye-slash" />
@@ -129,18 +181,58 @@ const StatsPage = ({ onBack }) => {
                      />
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md">
                        <h5 className="text-md font-semibold text-gray-700 dark:text-gray-300 p-4 border-b border-gray-200 dark:border-gray-700">Breakdown by Country</h5>
-                        {countryStats.length > 0 ? (
+                        {processedStats.length > 0 ? (
                             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                                {countryStats.map(({ country, avg_price, rating_count }) => {
-                                    const currency = getCurrencyInfo(country);
+                                {processedStats.map((stat) => {
+                                    // Render expandable UK row
+                                    if (stat.isAggregated) {
+                                        const currency = getCurrencyInfo('UK');
+                                        return (
+                                            <React.Fragment key="uk-aggregated">
+                                                <li
+                                                    onClick={() => setIsUkExpanded(p => !p)}
+                                                    className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                                                    aria-expanded={isUkExpanded}
+                                                >
+                                                    <div className="flex items-center space-x-3">
+                                                        <i className={`fas fa-chevron-right text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isUkExpanded ? 'rotate-90' : ''}`}></i>
+                                                        <span className="font-semibold text-gray-900 dark:text-white">{stat.country}</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="font-bold text-lg text-green-600 dark:text-green-400">
+                                                            {currency.symbol}{parseFloat(stat.avg_price).toFixed(2)}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">{stat.rating_count} ratings</div>
+                                                    </div>
+                                                </li>
+                                                {isUkExpanded && stat.subStats.map(subStat => {
+                                                    const subCurrency = getCurrencyInfo(subStat.country); // All will be £
+                                                    return (
+                                                        <li key={subStat.country} className="flex items-center justify-between pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50">
+                                                            <div className="font-medium text-gray-700 dark:text-gray-300">{subStat.country}</div>
+                                                            <div className="text-right">
+                                                                <div className="font-semibold text-md text-green-600 dark:text-green-400">
+                                                                    {subCurrency.symbol}{parseFloat(subStat.avg_price).toFixed(2)}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500 dark:text-gray-400">{subStat.rating_count} ratings</div>
+                                                            </div>
+                                                        </li>
+                                                    )
+                                                })}
+                                            </React.Fragment>
+                                        );
+                                    }
+
+                                    // Render normal, non-expandable row
+                                    const currency = getCurrencyInfo(stat.country);
                                     return (
-                                        <li key={country} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                            <div className="font-semibold text-gray-900 dark:text-white">{country}</div>
+                                        <li key={stat.country} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                            <div className="font-semibold text-gray-900 dark:text-white">{stat.country}</div>
                                             <div className="text-right">
                                                 <div className="font-bold text-lg text-green-600 dark:text-green-400">
-                                                    {currency.symbol}{parseFloat(avg_price).toFixed(2)}
+                                                    {currency.symbol}{parseFloat(stat.avg_price).toFixed(2)}
                                                 </div>
-                                                <div className="text-xs text-gray-500 dark:text-gray-400">{rating_count} ratings</div>
+                                                <div className="text-xs text-gray-500 dark:text-gray-400">{stat.rating_count} ratings</div>
                                             </div>
                                         </li>
                                     );
@@ -154,6 +246,10 @@ const StatsPage = ({ onBack }) => {
             </section>
         </div>
     );
+
+    if (view === 'image_gallery') {
+        return <ImageGallery totalImages={stats?.total_uploaded_images || 0} onBack={() => setView('main')} onViewProfile={onViewProfile} />;
+    }
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-gray-900">

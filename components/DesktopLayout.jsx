@@ -18,6 +18,7 @@ import ModerationPage from './ModerationPage.jsx';
 import StatsPage from './StatsPage.jsx';
 import TermsOfUsePage from './TermsOfUsePage.jsx';
 import PrivacyPolicyPage from './PrivacyPolicyPage.jsx';
+import DesktopPlacementConfirmation from './DesktopPlacementConfirmation.jsx';
 
 const BackButton = ({ onClick, text = "Back" }) => (
     <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -32,8 +33,8 @@ const DesktopLayout = (props) => {
     const {
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
         activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
-        handleRefresh, isRefreshing, sortedPubs, userLocation, searchCenter,
-        handleSelectPub, selectedPubId, handlePlacesFound, handleCenterChange,
+        handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
+        handleSelectPub, selectedPubId, handleNominatimResults, handleMapMove,
         refreshTrigger, handleFindCurrentPub, getDistance,
         getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
         renderProfile, session, userProfile, handleViewProfile, handleBackFromProfileView,
@@ -43,11 +44,26 @@ const DesktopLayout = (props) => {
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
         installPromptEvent, setInstallPromptEvent, setIsIosInstallModalOpen,
+        showSearchAreaButton, handleSearchThisArea,
+        searchOnNextMoveEnd, handleSearchAfterMove,
+        handleAddPubClick, pubPlacementState, finalPlacementLocation, isConfirmingLocation,
+        handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
 
     const renderContentPanel = () => {
+        if (pubPlacementState) {
+            return (
+                <DesktopPlacementConfirmation
+                    pubName={pubPlacementState.name}
+                    onConfirm={handleConfirmNewPub}
+                    onCancel={handleCancelPubPlacement}
+                    isLoading={isConfirmingLocation}
+                />
+            );
+        }
+
         if (activeTab === 'map') {
             if (selectedPub) {
                 return (
@@ -73,6 +89,15 @@ const DesktopLayout = (props) => {
                         onRefresh={handleRefresh}
                         isRefreshing={isRefreshing}
                     />
+                     <div className="p-2 border-t border-gray-200 dark:border-gray-700">
+                        <button
+                            onClick={handleAddPubClick}
+                            className="w-full bg-amber-500 text-black font-bold py-3 px-4 rounded-lg hover:bg-amber-400 transition-colors flex items-center justify-center space-x-2"
+                        >
+                            <i className="fas fa-plus"></i>
+                            <span>Add a Missing Pub</span>
+                        </button>
+                    </div>
                     <div className="flex-grow overflow-y-auto">
                          <PubList 
                             pubs={sortedPubs}
@@ -80,7 +105,7 @@ const DesktopLayout = (props) => {
                             onSelectPub={handleSelectPub}
                             filter={filter}
                             getAverageRating={getAverageRating}
-                            getDistance={(loc) => getDistance(loc, searchCenter)}
+                            getDistance={(loc) => getDistance(loc, searchOrigin)}
                             distanceUnit={settings.unit}
                             isExpanded={true}
                             showToggleHeader={false}
@@ -147,7 +172,7 @@ const DesktopLayout = (props) => {
         }
 
         if (activeTab === 'stats') {
-            return <StatsPage onBack={() => handleTabChange('settings')} />;
+            return <StatsPage onBack={() => handleTabChange('settings')} onViewProfile={handleViewProfile} />;
         }
 
         return null;
@@ -170,22 +195,29 @@ const DesktopLayout = (props) => {
             <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
                 <MapComponent
                     pubs={sortedPubs} userLocation={userLocation}
-                    searchCenter={searchCenter} searchRadius={settings.radius}
+                    center={mapCenter}
                     onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                    onPlacesFound={handlePlacesFound} theme={settings.theme} filter={filter}
-                    onCenterChange={handleCenterChange}
+                    onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
+                    onMapMove={handleMapMove}
                     refreshTrigger={refreshTrigger}
+                    showSearchAreaButton={showSearchAreaButton}
+                    onSearchThisArea={handleSearchThisArea}
+                    searchOnNextMoveEnd={searchOnNextMoveEnd}
+                    onSearchAfterMove={handleSearchAfterMove}
+                    pubPlacementState={pubPlacementState}
+                    finalPlacementLocation={finalPlacementLocation}
+                    onPlacementPinMove={handlePlacementPinMove}
                 />
                  {locationError && !(settings.developerMode && settings.simulatedLocation) && 
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
                 }
                 <button
                     onClick={handleFindCurrentPub}
                     title="Recenter map on your location"
-                    className="absolute bottom-4 left-4 z-10 bg-amber-500 text-black rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300"
+                    className={`absolute bottom-4 left-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
                     aria-label="Recenter map on your location"
                 >
-                    <i className="fas fa-crosshairs text-2xl"></i>
+                    <i className="fas fa-location-arrow text-2xl"></i>
                 </button>
             </main>
             

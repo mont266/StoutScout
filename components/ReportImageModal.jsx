@@ -21,7 +21,7 @@ const ReportImageModal = ({ onClose, onSubmit }) => {
 
     return (
         <div 
-            className="fixed inset-0 bg-black/60 z-[60] flex items-end sm:items-center justify-center p-4 animate-modal-fade-in"
+            className="fixed inset-0 bg-black/60 z-[1400] flex items-end sm:items-center justify-center p-4 animate-modal-fade-in"
             onClick={onClose}
             role="dialog"
             aria-modal="true"

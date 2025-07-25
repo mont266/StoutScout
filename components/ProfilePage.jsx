@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RANK_DETAILS } from '../constants.js';
-import { getRankData, formatTimeAgo, formatLocationDisplay, getCurrencyInfo } from '../utils.js';
+import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import { supabase } from '../supabase.js';
 import StarRating from './StarRating.jsx';
 import Avatar from './Avatar.jsx';
@@ -430,13 +430,13 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                         <li key={r.id} className={`bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md`}>
                                             <div 
                                                 className={r.pubLocation ? 'cursor-pointer' : ''}
-                                                onClick={() => r.pubLocation && onViewPub({ id: r.pubId, location: r.pubLocation })}
+                                                onClick={() => r.pubLocation && onViewPub({ id: r.pubId, name: r.pubName, address: r.pubAddress, location: r.pubLocation })}
                                                 role={r.pubLocation ? "button" : undefined}
                                             >
                                                 <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                                                     <div className="flex-grow pr-4 min-w-0">
                                                         <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{r.pubName}</p>
-                                                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{formatLocationDisplay(r.pubAddress)}</p>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{r.pubAddress}</p>
                                                     </div>
                                                     <div className="flex-shrink-0 text-right">
                                                         <p className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(r.timestamp)}</p>

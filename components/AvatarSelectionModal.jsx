@@ -64,7 +64,7 @@ const AvatarSelectionModal = ({ userProfile, currentAvatarId, onSelect, onClose 
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-modal-fade-in"
+      className="fixed inset-0 bg-black/60 z-[1200] flex items-center justify-center p-4 animate-modal-fade-in"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

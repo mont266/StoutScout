@@ -20,7 +20,7 @@ const ImageModal = ({ rating, onClose, onReport, canReport, canAdminRemove, onAd
 
     const modalContent = (
         <div 
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-modal-fade-in"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1300] flex items-center justify-center p-4 animate-modal-fade-in"
             onClick={onClose}
             role="dialog"
             aria-modal="true"

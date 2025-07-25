@@ -17,6 +17,7 @@ import AvatarSelectionModal from './AvatarSelectionModal.jsx';
 import TermsOfUsePage from './TermsOfUsePage.jsx';
 import PrivacyPolicyPage from './PrivacyPolicyPage.jsx';
 import IOSInstallInstructionsModal from './IOSInstallInstructionsModal.jsx';
+import PlacementConfirmationBar from './PlacementConfirmationBar.jsx';
 
 const TabBar = ({ activeTab, onTabChange }) => {
   const tabs = [
@@ -54,8 +55,8 @@ const MobileLayout = (props) => {
     const {
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
         activeTab, locationError, settings, filter, handleFilterChange,
-        handleRefresh, isRefreshing, sortedPubs, userLocation, searchCenter,
-        handleSelectPub, selectedPubId, handlePlacesFound, handleCenterChange,
+        handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
+        handleSelectPub, selectedPubId, handleNominatimResults, handleMapMove,
         refreshTrigger, handleFindCurrentPub, getDistance, isListExpanded,
         setIsListExpanded, getAverageRating, resultsAreCapped,
         isDbPubsLoaded, initialSearchComplete, renderProfile, session, handleViewProfile,
@@ -66,6 +67,10 @@ const MobileLayout = (props) => {
         handleUpdateAvatar, viewedProfile, handleBackFromProfileView,
         legalPageView, handleViewLegal, handleDataRefresh,
         installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
+        showSearchAreaButton, handleSearchThisArea,
+        searchOnNextMoveEnd, handleSearchAfterMove,
+        handleAddPubClick, pubPlacementState, handleConfirmNewPub, handleCancelPubPlacement,
+        isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -109,7 +114,8 @@ const MobileLayout = (props) => {
                 
                 {/* Map View Container - kept visible to preserve map state */}
                 <div className={`flex-grow flex flex-col overflow-hidden ${activeTab === 'map' ? '' : 'hidden'}`}>
-                    {locationError && !(settings.developerMode && settings.simulatedLocation) && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
+                    {(locationError && !(settings.developerMode && settings.simulatedLocation)) && <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>}
+                    
                     <FilterControls
                         currentFilter={filter}
                         onFilterChange={handleFilterChange}
@@ -119,26 +125,42 @@ const MobileLayout = (props) => {
                     <div className="flex-grow min-h-0 relative">
                         <MapComponent
                             pubs={sortedPubs} userLocation={userLocation}
-                            searchCenter={searchCenter} searchRadius={settings.radius}
+                            center={mapCenter}
                             onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                            onPlacesFound={handlePlacesFound} theme={settings.theme} filter={filter}
-                            onCenterChange={handleCenterChange}
+                            onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
+                            onMapMove={handleMapMove}
                             refreshTrigger={refreshTrigger}
+                            showSearchAreaButton={showSearchAreaButton}
+                            onSearchThisArea={handleSearchThisArea}
+                            searchOnNextMoveEnd={searchOnNextMoveEnd}
+                            onSearchAfterMove={handleSearchAfterMove}
+                            pubPlacementState={pubPlacementState}
+                            finalPlacementLocation={finalPlacementLocation}
+                            onPlacementPinMove={handlePlacementPinMove}
                         />
-                        <button
+                         <button
                             onClick={handleFindCurrentPub}
                             title="Recenter map on your location"
-                            className="absolute bottom-4 left-4 z-20 bg-amber-500 text-black rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300"
+                            className={`absolute bottom-4 left-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
                             aria-label="Recenter map on your location"
                         >
-                            <i className="fas fa-crosshairs text-2xl"></i>
+                            <i className="fas fa-location-arrow text-2xl"></i>
+                        </button>
+                        
+                        <button
+                            onClick={handleAddPubClick}
+                            title="Add a missing pub"
+                            className={`absolute bottom-4 right-4 z-[1000] bg-amber-500 text-black rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
+                            aria-label="Add a missing pub"
+                        >
+                            <i className="fas fa-plus text-2xl"></i>
                         </button>
                     </div>
                     <div className={`flex-shrink-0 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out ${isListExpanded ? 'max-h-[45%]' : 'max-h-12'}`}>
                         <PubList
                             pubs={sortedPubs} selectedPubId={selectedPubId} onSelectPub={handleSelectPub}
                             filter={filter} getAverageRating={getAverageRating}
-                            getDistance={(loc) => getDistance(loc, searchCenter)}
+                            getDistance={(loc) => getDistance(loc, searchOrigin)}
                             distanceUnit={settings.unit} isExpanded={isListExpanded}
                             onToggle={() => setIsListExpanded(p => !p)}
                             resultsAreCapped={resultsAreCapped}
@@ -149,7 +171,7 @@ const MobileLayout = (props) => {
                 </div>
 
                 {/* Full Screen Pub Details View (within main content area) */}
-                <div className={`absolute inset-0 z-30 bg-gray-100 dark:bg-gray-900 transition-transform duration-300 ease-in-out ${selectedPub ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className={`absolute inset-0 z-[1100] bg-gray-100 dark:bg-gray-900 transition-transform duration-300 ease-in-out ${selectedPub ? 'translate-x-0' : 'translate-x-full'}`}>
                     {selectedPub && (
                         <PubDetails
                             pub={selectedPub}
@@ -165,6 +187,14 @@ const MobileLayout = (props) => {
                         />
                     )}
                 </div>
+
+                {pubPlacementState && (
+                    <PlacementConfirmationBar
+                        onConfirm={handleConfirmNewPub}
+                        onCancel={handleCancelPubPlacement}
+                        isLoading={isConfirmingLocation}
+                    />
+                )}
             </main>
 
             <TabBar activeTab={activeTab} onTabChange={props.handleTabChange} />
