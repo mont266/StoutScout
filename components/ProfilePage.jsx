@@ -56,7 +56,10 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         }
         
         const ratingsForThisLevel = nextLevelInfo.total_ratings_required - currentLevelInfo.total_ratings_required;
-        const progressIntoThisLevel = reviews - currentLevelInfo.total_ratings_required;
+        // Clamp progress to be a minimum of 0. This handles cases where a user's review count
+        // might be lower than the current requirement for their level (e.g., due to requirement changes),
+        // preventing negative progress from being displayed.
+        const progressIntoThisLevel = Math.max(0, reviews - currentLevelInfo.total_ratings_required);
         
         const percentage = ratingsForThisLevel > 0 ? (progressIntoThisLevel / ratingsForThisLevel) * 100 : 0;
         
@@ -217,43 +220,49 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                             Banned
                         </div>
                     )}
-                    <div className="absolute top-4 right-4 flex flex-col sm:flex-row items-end sm:items-center gap-2">
-                        {is_early_bird && (
-                            <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full dark:bg-green-900 dark:text-green-200 uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow flex items-center gap-1.5" title="This user joined during the launch period!">
-                                <i className="fas fa-certificate"></i>
-                                <span>Early Bird</span>
-                            </span>
-                        )}
-                        {is_developer && (
-                            <span className="bg-amber-500 text-black text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
-                                Developer
-                            </span>
-                        )}
-                        {is_beta_tester && (
-                            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full dark:bg-blue-900 dark:text-blue-200 uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
-                                Beta Tester
-                            </span>
-                        )}
-                    </div>
 
-                    <div className="flex justify-center mb-4">
-                        {isViewingOwnProfile ? (
-                            <button
-                                onClick={onAvatarChangeClick}
-                                className="relative rounded-full focus:outline-none focus:ring-4 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                                aria-label="Change avatar"
-                            >
+                    {/* Badges & Avatar Section */}
+                    <div className="flex flex-col items-center">
+                        {/* Badges Container */}
+                        <div className="flex flex-row flex-wrap items-center justify-center gap-2 mb-4 min-h-[4rem]">
+                            {is_early_bird && (
+                                <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full dark:bg-green-900 dark:text-green-200 uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow flex items-center gap-1.5" title="Been here since the beginning!">
+                                    <i className="fas fa-feather-alt"></i>
+                                    <span>Early Bird</span>
+                                </span>
+                            )}
+                            {is_developer && (
+                                <span className="bg-amber-500 text-black text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
+                                    Developer
+                                </span>
+                            )}
+                            {is_beta_tester && (
+                                <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full dark:bg-blue-900 dark:text-blue-200 uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
+                                    Beta Tester
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Avatar */}
+                        <div className="relative inline-block">
+                            {isViewingOwnProfile ? (
+                                <button
+                                    onClick={onAvatarChangeClick}
+                                    className="relative rounded-full focus:outline-none focus:ring-4 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                                    aria-label="Change avatar"
+                                >
+                                    <Avatar avatarId={avatar_id} className="w-28 h-28" />
+                                    <div className="absolute bottom-0 right-0 bg-amber-500 text-black rounded-full w-8 h-8 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:bg-amber-400 transition-colors">
+                                        <i className="fas fa-pen text-sm"></i>
+                                    </div>
+                                </button>
+                            ) : (
                                 <Avatar avatarId={avatar_id} className="w-28 h-28" />
-                                <div className="absolute bottom-0 right-0 bg-amber-500 text-black rounded-full w-8 h-8 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:bg-amber-400 transition-colors">
-                                    <i className="fas fa-pen text-sm"></i>
-                                </div>
-                            </button>
-                        ) : (
-                            <Avatar avatarId={avatar_id} className="w-28 h-28" />
-                        )}
+                            )}
+                        </div>
                     </div>
                     
-                    <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{username}</h2>
+                    <h2 className="text-4xl font-bold text-gray-900 dark:text-white mt-4">{username}</h2>
                     
                     <div className="flex items-center justify-center space-x-3 mt-2">
                         <i className={`fas ${rankData.icon} text-2xl text-amber-500 dark:text-amber-400`} aria-label={`Rank icon for ${rankData.name}`}></i>

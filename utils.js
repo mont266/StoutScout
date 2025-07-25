@@ -124,6 +124,22 @@ export const getCurrencyInfo = (address = '') => {
 };
 
 /**
+ * Converts a price star rating into a human-readable price range string.
+ * This logic should mirror the star calculation in RatingForm.jsx and sorting in App.jsx.
+ * @param {number} avgStarRating The average star rating for price (1-5).
+ * @param {string} currencySymbol The currency symbol to use (e.g., '£', '€', '$').
+ * @returns {string} A formatted price range string, e.g., "£5.50 - £5.99".
+ */
+export const getPriceRangeFromStars = (avgStarRating, currencySymbol) => {
+    if (avgStarRating > 4.5) return `< ${currencySymbol}4.50`;
+    if (avgStarRating > 3.5) return `${currencySymbol}4.50 - ${currencySymbol}5.49`;
+    if (avgStarRating > 2.5) return `${currencySymbol}5.50 - ${currencySymbol}5.99`;
+    if (avgStarRating > 1.5) return `${currencySymbol}6.00 - ${currencySymbol}6.99`;
+    if (avgStarRating > 0) return `> ${currencySymbol}7.00`;
+    return ''; // Return empty string if no rating
+};
+
+/**
  * Detects the user's mobile operating system.
  * @returns {'iOS' | 'Android' | 'unknown'}
  */

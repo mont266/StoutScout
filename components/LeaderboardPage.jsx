@@ -36,6 +36,11 @@ const LeaderboardPage = ({ onViewProfile }) => {
         setActivePeriod(id);
         trackEvent('change_leaderboard_filter', { period: id });
     };
+    
+    const handleRefresh = () => {
+        trackEvent('refresh_leaderboard');
+        fetchLeaderboardData();
+    };
 
     const renderMedal = (rank) => {
         const medals = {
@@ -57,16 +62,28 @@ const LeaderboardPage = ({ onViewProfile }) => {
     return (
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
             <div className="p-2 bg-gray-100 dark:bg-gray-800/50 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
-                 {/* Period Filters */}
-                <div className="flex justify-around">
-                    {periodFilters.map(({ id, label }) => (
-                        <button key={id} onClick={() => handlePeriodChange(id)}
-                            className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${
-                                activePeriod === id ? 'bg-amber-500 text-black' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                            }`}>
-                            {label}
-                        </button>
-                    ))}
+                <div className="flex justify-between items-center">
+                    {/* Period Filters */}
+                    <div className="flex justify-around flex-grow">
+                        {periodFilters.map(({ id, label }) => (
+                            <button key={id} onClick={() => handlePeriodChange(id)}
+                                className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${
+                                    activePeriod === id ? 'bg-amber-500 text-black' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                }`}>
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                     {/* Refresh Button */}
+                    <button
+                        onClick={handleRefresh}
+                        disabled={loading}
+                        className="ml-2 w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
+                        aria-label="Refresh leaderboard"
+                        title="Refresh leaderboard"
+                    >
+                        <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
+                    </button>
                 </div>
             </div>
 

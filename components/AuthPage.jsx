@@ -7,6 +7,7 @@ const AuthPage = ({ onClose }) => {
   const [view, setView] = useState('signIn'); // 'signIn', 'signUp', 'forgotPassword'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -28,6 +29,7 @@ const AuthPage = ({ onClose }) => {
     setError(null);
     setMessage(null);
     setPassword('');
+    setConfirmPassword('');
     // keep email and username for convenience
   };
 
@@ -38,8 +40,25 @@ const AuthPage = ({ onClose }) => {
 
     try {
       if (view === 'signUp') {
+        if (password !== confirmPassword) {
+            throw new Error('Passwords do not match.');
+        }
         if (!username || username.length < 3 || username.length > 20 || !/^[a-zA-Z0-9_]+$/.test(username)) {
             throw new Error('Username must be 3-20 characters and contain only letters, numbers, or underscores.');
+        }
+        
+        // Check if username is already taken before attempting to sign up
+        const { data: isTaken, error: checkError } = await supabase.rpc('is_username_taken', {
+            username_to_check: username
+        });
+
+        if (checkError) {
+            // Don't block sign-up for this, but log it. The DB constraint will be the final guard.
+            console.error("Error checking username uniqueness:", checkError);
+        }
+
+        if (isTaken) {
+            throw new Error('Username already exists. Please pick a different one.');
         }
         
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -160,6 +179,12 @@ const AuthPage = ({ onClose }) => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="password">Password</label>
                     <input id="password" className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </div>
+                {view === 'signUp' && (
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="confirm-password">Confirm Password</label>
+                        <input id="confirm-password" className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                    </div>
+                )}
                 {error && <p className="text-red-500 text-sm text-center">{error}</p>}
                 <button type="submit" disabled={loading} className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-amber-300 flex items-center justify-center">
                     {loading && <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-black mr-2"></div>}

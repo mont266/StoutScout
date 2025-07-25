@@ -69,7 +69,7 @@ const TermsOfUsePage = ({ onBack }) => {
             <p>We may modify these Terms at any time. We will do our best to notify you of any changes, but it is your responsibility to review these Terms periodically. Your continued use of the Service after any modification constitutes your acceptance of the new Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">9. Contact Us</h2>
-            <p>If you have any questions about these Terms, please contact us at scottmontford@gmail.com.</p>
+            <p>If you have any questions about these Terms, please contact us at [Your Support Email Address].</p>
         </LegalPageWrapper>
     );
 };

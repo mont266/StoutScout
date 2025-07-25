@@ -92,7 +92,15 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
     p.username.toLowerCase().includes(profileSearch.toLowerCase())
   );
 
-  const radiusInMiles = (settings.radius / MILES_TO_METERS).toFixed(1);
+  const isKm = settings.unit === 'km';
+  const radiusInMilesRaw = settings.radius / MILES_TO_METERS;
+
+  // Values for the slider labels
+  const displayRadius = isKm ? (radiusInMilesRaw * 1.60934).toFixed(1) : radiusInMilesRaw.toFixed(1);
+  const minDisplayRadius = isKm ? (MIN_RADIUS_MI * 1.60934).toFixed(1) : MIN_RADIUS_MI.toFixed(1);
+  const maxDisplayRadius = isKm ? (MAX_RADIUS_MI * 1.60934).toFixed(1) : MAX_RADIUS_MI.toFixed(1);
+  const displayUnit = isKm ? 'km' : 'mi';
+  
   const mobileOS = getMobileOS();
   
   if (userProfile?.is_developer) {
@@ -197,18 +205,18 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
               min={MIN_RADIUS_MI}
               max={MAX_RADIUS_MI}
               step="0.1"
-              value={settings.radius / MILES_TO_METERS}
+              value={radiusInMilesRaw}
               onChange={handleRadiusChange}
               className="w-full h-2 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
               aria-valuemin={MIN_RADIUS_MI}
               aria-valuemax={MAX_RADIUS_MI}
-              aria-valuenow={parseFloat(radiusInMiles)}
-              aria-valuetext={`${radiusInMiles} miles`}
+              aria-valuenow={radiusInMilesRaw}
+              aria-valuetext={`${displayRadius} ${displayUnit}`}
             />
             <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                <span>{MIN_RADIUS_MI} mi</span>
-                <span className="text-base font-bold text-amber-500 dark:text-amber-400">{radiusInMiles} mi</span>
-                <span>{MAX_RADIUS_MI} mi</span>
+                <span>{minDisplayRadius} {displayUnit}</span>
+                <span className="text-base font-bold text-amber-500 dark:text-amber-400">{displayRadius} {displayUnit}</span>
+                <span>{maxDisplayRadius} {displayUnit}</span>
             </div>
           </div>
         </div>

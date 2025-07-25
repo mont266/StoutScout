@@ -80,6 +80,14 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
             fetchReportedImages();
         }
     }, [activeTab, fetchFlaggedUsers, fetchReportedImages]);
+
+    const handleRefresh = () => {
+        if (activeTab === 'users') {
+            fetchFlaggedUsers();
+        } else {
+            fetchReportedImages();
+        }
+    };
     
     const handleResolveReport = async (report, action) => {
         if (!window.confirm(`Are you sure you want to '${action}' this image? This action is permanent.`)) return;
@@ -239,6 +247,8 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
             </ul>
         );
     }
+    
+    const isLoading = activeTab === 'users' ? loading.users : loading.images;
 
     return (
         <div className="flex flex-col h-full">
@@ -251,7 +261,18 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
               </div>
             )}
             <div className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="text-xl font-bold text-red-500 dark:text-red-400">Moderation Center</h3>
+                <div className="flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-red-500 dark:text-red-400">Moderation Center</h3>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isLoading}
+                        className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-wait"
+                        aria-label="Refresh list"
+                        title="Refresh list"
+                    >
+                        <i className={`fas fa-sync-alt ${isLoading ? 'animate-spin' : ''}`}></i>
+                    </button>
+                </div>
                 <div className="mt-2 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex">
                         <TabButton label="Flagged Users" isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />

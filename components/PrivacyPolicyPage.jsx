@@ -84,7 +84,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
             <p>We may update this Privacy Policy from time to time. If we make changes, we will notify you by revising the date at the top of the policy.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Contact Us</h2>
-            <p>If you have any questions about this Privacy Policy, please contact us at scottmontford@gmail.com.</p>
+            <p>If you have any questions about this Privacy Policy, please contact us at [Your Support Email Address].</p>
         </LegalPageWrapper>
     );
 };

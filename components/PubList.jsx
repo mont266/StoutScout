@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { FilterType } from '../types.js';
 import StarRating from './StarRating.jsx';
-import { getCurrencyInfo } from '../utils.js';
+import { getCurrencyInfo, getPriceRangeFromStars } from '../utils.js';
 
 const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading, showToggleHeader = true }) => {
   const selectedItemRef = useRef(null);
@@ -20,18 +20,33 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
     switch(filter) {
         case FilterType.Price:
             const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
+            const currencyInfo = getCurrencyInfo(pub.address);
+
             if (ratingsWithPrice.length > 0) {
                 const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
                 const average = total / ratingsWithPrice.length;
-                const currencySymbol = getCurrencyInfo(pub.address).symbol;
-                return <span className="text-lg font-semibold text-green-600 dark:text-green-400">{currencySymbol}{average.toFixed(2)}</span>
+                return <span className="text-lg font-semibold text-green-600 dark:text-green-400">{currencyInfo.symbol}{average.toFixed(2)}</span>
             }
             
             const avgPrice = getAverageRating(pub.ratings, 'price');
-            return <div className="flex flex-col items-end">
-                <StarRating rating={avgPrice} color="text-green-400" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">{avgPrice > 0 ? `${avgPrice.toFixed(1)} stars` : 'No rating'}</span>
-            </div>;
+
+            if (avgPrice > 0) {
+                const priceRange = getPriceRangeFromStars(avgPrice, currencyInfo.symbol);
+                return (
+                    <div className="flex flex-col items-end">
+                        <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-0.5">{priceRange}</span>
+                        <StarRating rating={avgPrice} color="text-green-400" />
+                    </div>
+                );
+            }
+            
+            // Fallback for no price rating at all
+            return (
+                <div className="flex flex-col items-end">
+                    <StarRating rating={0} color="text-green-400" />
+                    <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">No rating</span>
+                </div>
+            );
         case FilterType.Quality:
             const avgQuality = getAverageRating(pub.ratings, 'quality');
             return <div className="flex flex-col items-end">

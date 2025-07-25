@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.js';
 import { getCurrencyInfo } from '../utils.js';
+import { trackEvent } from '../analytics.js';
 
 const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString() }) => (
     <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center space-x-4 transition-all hover:shadow-lg hover:scale-[1.02]">
@@ -51,6 +52,11 @@ const StatsPage = ({ onBack }) => {
         fetchStats();
     }, [fetchStats]);
 
+    const handleRefresh = () => {
+        trackEvent('refresh_stats');
+        fetchStats();
+    };
+
     const renderLoading = () => (
          <div className="space-y-8 animate-pulse">
             <section>
@@ -64,7 +70,7 @@ const StatsPage = ({ onBack }) => {
             <section>
                 <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-4"></div>
                 <div className="grid grid-cols-2 gap-4">
-                    {[...Array(3)].map((_, i) => (
+                    {[...Array(4)].map((_, i) => (
                         <div key={i} className="bg-gray-200 dark:bg-gray-800 rounded-xl h-24"></div>
                     ))}
                 </div>
@@ -102,11 +108,12 @@ const StatsPage = ({ onBack }) => {
             </section>
 
             <section>
-                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Moderation Activity</h4>
+                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Content &amp; Moderation Activity</h4>
                 <div className="grid grid-cols-2 gap-4">
+                    <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" />
+                    <StatCard label="Removed Images" value={stats.total_removed_images} icon="fa-trash-alt" />
                     <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
                     <StatCard label="Hidden Reviews" value={stats.total_hidden_ratings} icon="fa-eye-slash" />
-                    <StatCard label="Removed Images" value={stats.total_removed_images} icon="fa-trash-alt" />
                 </div>
             </section>
             
@@ -159,8 +166,21 @@ const StatsPage = ({ onBack }) => {
                 </div>
             )}
             <header className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="text-xl font-bold text-amber-500 dark:text-amber-400">Application Statistics</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">A high-level overview of app usage and data.</p>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="text-xl font-bold text-amber-500 dark:text-amber-400">Application Statistics</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">A high-level overview of app usage and data.</p>
+                    </div>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={loading}
+                        className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
+                        aria-label="Refresh statistics"
+                        title="Refresh statistics"
+                    >
+                        <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
+                    </button>
+                </div>
             </header>
             <main className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-800/50 p-4 sm:p-6">
                 {loading ? renderLoading() : error ? renderError() : stats ? renderContent() : null}
