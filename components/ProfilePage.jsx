@@ -28,7 +28,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         setProfile(userProfile);
     }, [userProfile]);
 
-    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count } = profile;
+    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count, is_early_bird } = profile;
     const reviews = profile.reviews || 0;
     
     const rankData = getRankData(level);
@@ -170,6 +170,12 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         setImageToView(null);
     };
 
+    const getProfileBorderColor = () => {
+        if (is_beta_tester) return 'border-blue-500'; // Blue takes precedence for Beta Testers
+        if (is_early_bird) return 'border-green-500';
+        return 'border-amber-400';
+    };
+
 
     return (
         <>
@@ -205,13 +211,19 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
             )}
             <main className="flex-grow p-4 overflow-y-auto">
                 {/* Profile Card */}
-                <div className={`relative bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6 text-center border-t-4 ${is_beta_tester ? 'border-blue-500' : 'border-amber-400'}`}>
+                <div className={`relative bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6 text-center border-t-4 ${getProfileBorderColor()}`}>
                     {is_banned && (
                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white font-bold px-4 py-1 rounded-full text-sm uppercase tracking-wider shadow-lg">
                             Banned
                         </div>
                     )}
                     <div className="absolute top-4 right-4 flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                        {is_early_bird && (
+                            <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full dark:bg-green-900 dark:text-green-200 uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow flex items-center gap-1.5" title="This user joined during the launch period!">
+                                <i className="fas fa-certificate"></i>
+                                <span>Early Bird</span>
+                            </span>
+                        )}
                         {is_developer && (
                             <span className="bg-amber-500 text-black text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
                                 Developer
