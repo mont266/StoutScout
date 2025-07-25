@@ -182,7 +182,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
             {pub.ratings.length > 0 ? (
                 <Section>
                     <div className="flex space-x-3">
-                        <StatCard label="Quality" value={`${avgQuality.toFixed(1)} / 5`} icon="fa-star" color="text-amber-500" />
+                        <StatCard label="Quality" value={`${avgQuality.toFixed(1)} / 5`} icon="fa-beer" color="text-amber-500" />
                         <StatCard label="Avg. Price" value={priceInfo.text} icon="fa-tag" color="text-green-500" />
                         <StatCard label="Ratings" value={pub.ratings.length} icon="fa-users" color="text-blue-500" />
                     </div>
@@ -249,7 +249,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                             <StarRating rating={rating.price} color="text-green-400" />
                                         </div>
                                          <div className="flex items-center space-x-1 text-sm" title="Quality">
-                                            <i className="fas fa-star text-amber-500/80"></i>
+                                            <i className="fas fa-beer text-amber-500/80"></i>
                                             <StarRating rating={rating.quality} color="text-amber-400" />
                                         </div>
                                     </div>

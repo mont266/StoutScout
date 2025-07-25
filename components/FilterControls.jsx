@@ -5,7 +5,7 @@ const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing
   const filters = [
     { key: FilterType.Distance, label: 'Nearest', icon: 'fa-map-marker-alt' },
     { key: FilterType.Price, label: 'Best Price', icon: 'fa-tag' },
-    { key: FilterType.Quality, label: 'Best Quality', icon: 'fa-star' },
+    { key: FilterType.Quality, label: 'Best Quality', icon: 'fa-beer' },
   ];
 
   return (
