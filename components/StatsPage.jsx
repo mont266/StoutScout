@@ -73,31 +73,38 @@ const StatsPage = ({ onBack, onViewProfile }) => {
             return;
         }
 
-        const ukNations = ['England', 'Scotland', 'Wales', 'Northern Ireland', 'UK (unspecified)', 'United Kingdom'];
-        
-        // Correctly separate UK nations from all other countries
-        const otherCountryStats = countryStats.filter(stat => !ukNations.includes(stat.country));
-        const ukSubStats = countryStats.filter(stat => ukNations.includes(stat.country));
+        // The new SQL function handles the country name normalization.
+        // We now just need to group the UK stats for the expandable UI.
+        const otherCountries = countryStats.filter(stat => stat.country_group !== 'United Kingdom' && stat.country_group !== 'Uncategorized');
+        const ukStats = countryStats.filter(stat => stat.country_group === 'United Kingdom');
 
-        // Start the list with all non-UK countries
-        const finalStats = [...otherCountryStats];
+        const finalStats = otherCountries.map(s => ({
+            country: s.country_display_name,
+            avg_price: s.avg_price,
+            rating_count: s.rating_count,
+            isAggregated: false,
+        }));
 
-        // If any UK nations were found, aggregate them and add them to the list
-        if (ukSubStats.length > 0) {
-            const totalUkRatings = ukSubStats.reduce((acc, stat) => acc + Number(stat.rating_count), 0);
-            const totalUkValue = ukSubStats.reduce((acc, stat) => acc + (Number(stat.avg_price) * Number(stat.rating_count)), 0);
+        if (ukStats.length > 0) {
+            const totalUkRatings = ukStats.reduce((acc, stat) => acc + Number(stat.rating_count), 0);
+            const totalUkValue = ukStats.reduce((acc, stat) => acc + (Number(stat.avg_price) * Number(stat.rating_count)), 0);
             const overallUkAvgPrice = totalUkRatings > 0 ? totalUkValue / totalUkRatings : 0;
+            
+            const subStats = ukStats.map(s => ({
+                country: s.country_display_name,
+                avg_price: s.avg_price,
+                rating_count: s.rating_count,
+            })).sort((a,b) => Number(b.rating_count) - Number(a.rating_count));
 
             finalStats.push({
-                country: 'UK',
+                country: 'United Kingdom',
                 avg_price: overallUkAvgPrice,
                 rating_count: totalUkRatings,
                 isAggregated: true,
-                subStats: ukSubStats.sort((a,b) => Number(b.rating_count) - Number(a.rating_count))
+                subStats: subStats,
             });
         }
         
-        // Sort the final list by rating count so the most popular locations are at the top
         finalStats.sort((a, b) => Number(b.rating_count) - Number(a.rating_count));
         setProcessedStats(finalStats);
 

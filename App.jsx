@@ -31,6 +31,7 @@ const App = () => {
   const [selectedPubId, setSelectedPubId] = useState(null);
   const [filter, setFilter] = useState(FilterType.Distance);
   const [isListExpanded, setIsListExpanded] = useState(true);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   // Location State
   const [realUserLocation, setRealUserLocation] = useState(DEFAULT_LOCATION);
@@ -62,6 +63,7 @@ const App = () => {
   // Popup states
   const [reviewPopupInfo, setReviewPopupInfo] = useState(null);
   const [updateConfirmationInfo, setUpdateConfirmationInfo] = useState(null);
+  const [deleteConfirmationInfo, setDeleteConfirmationInfo] = useState(null);
   const [leveledUpInfo, setLeveledUpInfo] = useState(null);
   const [rankUpInfo, setRankUpInfo] = useState(null);
   
@@ -90,6 +92,9 @@ const App = () => {
   // Social Features State
   const [friendships, setFriendships] = useState([]);
   const [userLikes, setUserLikes] = useState(new Set());
+  const [viewingFriendsOf, setViewingFriendsOf] = useState(null); // The user whose friends list is being viewed
+  const [friendsList, setFriendsList] = useState([]); // The actual list of friends
+  const [isFetchingFriendsList, setIsFetchingFriendsList] = useState(false);
 
 
   // --- HOOKS ---
@@ -103,7 +108,9 @@ const App = () => {
     let screenName = activeTab;
     const screenClass = 'StoutlyApp';
 
-    if (legalPageView) {
+    if (viewingFriendsOf) {
+      screenName = 'friends_list';
+    } else if (legalPageView) {
       screenName = `legal_${legalPageView}`; // e.g., legal_terms
     } else if (viewedProfile && (!userProfile || viewedProfile.id !== userProfile.id)) {
       screenName = 'profile_other_user';
@@ -121,7 +128,7 @@ const App = () => {
       screen_name: screenName,
       screen_class: screenClass, // GA4 standard parameter
     });
-  }, [activeTab, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery, pubPlacementState]);
+  }, [activeTab, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery, pubPlacementState, viewingFriendsOf]);
 
 
   useEffect(() => {
@@ -147,7 +154,7 @@ const App = () => {
   }, []);
 
   const fetchDbPubs = useCallback(async () => {
-    const { data, error } = await supabase.from('pubs').select('id, name, address, lat, lng');
+    const { data, error } = await supabase.from('pubs').select('id, name, address, lat, lng, country_code, country_name');
     if (error) {
       console.error("Error fetching rated pubs from DB:", error);
     } else {
@@ -155,6 +162,8 @@ const App = () => {
         id: p.id,
         name: p.name,
         address: p.address,
+        country_code: p.country_code,
+        country_name: p.country_name,
         location: { lat: p.lat, lng: p.lng },
       }));
       setDbPubs(formatted);
@@ -282,17 +291,15 @@ const App = () => {
 
     const userId = currentSession.user.id;
 
-    // Fetch user profile. The profile should be created automatically by a DB trigger on sign-up.
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+    // Fetch user profile and friend count in parallel
+    const [profileResult, friendCountResult] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.rpc('get_friends_count', { user_id_param: userId }).single()
+    ]);
 
+    const { data: profile, error: profileError } = profileResult;
     if (profileError) {
         console.error("Error fetching profile:", profileError);
-        // If the profile doesn't exist (PGRST116), it's a critical backend error
-        // because the trigger should have created it.
         if (profileError.code === 'PGRST116') {
             console.error("CRITICAL: Profile not found for logged-in user. The 'handle_new_user' DB trigger may be missing or failing.");
         }
@@ -301,12 +308,16 @@ const App = () => {
         return { profile: null, ratings: [] };
     }
 
+    // Add friend count to the profile object
+    profile.friends_count = friendCountResult.data || 0;
+    if (friendCountResult.error) console.error("Error fetching friend count:", friendCountResult.error);
+
     setUserProfile(profile);
 
     // If profile exists, fetch ratings.
     const { data: userRatingsData, error: ratingsError } = await supabase
         .from('ratings')
-        .select('id, pub_id, price, quality, created_at, exact_price, image_url, pubs(id, name, address, lat, lng)')
+        .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, pubs(id, name, address, lat, lng)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -322,6 +333,7 @@ const App = () => {
           pubAddress: r.pubs?.address || 'Unknown',
           pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
           image_url: r.image_url,
+          is_private: r.is_private || false,
         }));
     }
     
@@ -400,6 +412,7 @@ const App = () => {
   // Popup visibility timers
   useEffect(() => { if (reviewPopupInfo) { const timer = setTimeout(() => setReviewPopupInfo(null), 3000); return () => clearTimeout(timer); } }, [reviewPopupInfo]);
   useEffect(() => { if (updateConfirmationInfo) { const timer = setTimeout(() => setUpdateConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [updateConfirmationInfo]);
+  useEffect(() => { if (deleteConfirmationInfo) { const timer = setTimeout(() => setDeleteConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [deleteConfirmationInfo]);
   useEffect(() => { if (leveledUpInfo) { const timer = setTimeout(() => setLeveledUpInfo(null), 4000); return () => clearTimeout(timer); } }, [leveledUpInfo]);
   useEffect(() => { if (rankUpInfo) { const timer = setTimeout(() => setRankUpInfo(null), 5000); return () => clearTimeout(timer); } }, [rankUpInfo]);
 
@@ -448,6 +461,8 @@ const App = () => {
         name: place.name,
         address: place.address,
         location: place.location,
+        country_code: place.country_code,
+        country_name: place.country_name,
       });
     });
     
@@ -574,109 +589,161 @@ const App = () => {
 
   const handleRatePub = useCallback(async (pubId, pubName, pubAddress, ratingData) => {
     if (!session || !userProfile || !selectedPub) return;
+    setIsSubmittingRating(true);
 
-    const { imageFile, imageWasRemoved, ...newRating } = ratingData;
-    
-    // Upsert the pub data first
-    await supabase.from('pubs').upsert({
-      id: pubId, name: pubName, address: pubAddress,
-      lat: selectedPub.location.lat, lng: selectedPub.location.lng,
-    });
-
-    const existingRating = userRatings.find(r => r.pubId === pubId);
-    const isUpdating = !!existingRating;
-    const currencyInfo = getCurrencyInfo(selectedPub.address);
-
-    trackEvent('rate_pub', {
-        pub_id: pubId,
-        is_update: isUpdating,
-        quality: newRating.quality,
-        price_rating: newRating.price,
-        has_exact_price: !!newRating.exact_price,
-        has_image: !!imageFile,
-        value: newRating.exact_price || 0, // GA4 standard parameter for value
-        currency: currencyInfo.code, // GA4 standard parameter for currency
-    });
-    
-    // --- START: Image management logic ---
-    const oldImageUrl = existingRating?.image_url;
-
-    // If we are updating a rating that has an image, and we're either removing it or replacing it, delete the old file.
-    if (isUpdating && oldImageUrl && (imageWasRemoved || imageFile)) {
-        try {
-            const imagePath = new URL(oldImageUrl).pathname.split('/pint-images/')[1];
-            if (imagePath) {
-                await supabase.storage.from('pint-images').remove([imagePath]);
-            }
-        } catch (error) {
-            console.error("Failed to delete old image from storage. It may become orphaned. Error:", error);
-            // Do not block the user flow for this.
-        }
-    }
-    
-    let imageUrl = oldImageUrl || null;
-    if (imageWasRemoved) {
-        imageUrl = null;
-    }
-    
-    if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${userProfile.id}-${Date.now()}.${fileExt}`;
-        const filePath = `${fileName}`;
+    try {
+        const { imageFile, imageWasRemoved, ...newRating } = ratingData;
         
-        const { error: uploadError } = await supabase.storage.from('pint-images').upload(filePath, imageFile, { upsert: true });
-        if (uploadError) {
-            console.error("Image upload failed:", uploadError);
-            alert(`Image upload failed: ${uploadError.message}. Please ensure the 'pint-images' storage bucket is created as per the instructions in security.md.`);
-            return;
-        }
-        const { data: urlData } = supabase.storage.from('pint-images').getPublicUrl(filePath);
-        imageUrl = urlData.publicUrl;
-    }
-    // --- END: Image management logic ---
+        // Upsert the pub data first, including new country info if available
+        await supabase.from('pubs').upsert({
+          id: pubId,
+          name: pubName,
+          address: pubAddress,
+          lat: selectedPub.location.lat,
+          lng: selectedPub.location.lng,
+          country_code: selectedPub.country_code,
+          country_name: selectedPub.country_name,
+        });
 
-    const ratingPayload = { 
-        pub_id: pubId, 
-        user_id: session.user.id, 
-        price: newRating.price, 
-        quality: newRating.quality, 
-        exact_price: newRating.exact_price,
-        image_url: imageUrl,
-    };
+        const existingRating = userRatings.find(r => r.pubId === pubId);
+        const isUpdating = !!existingRating;
+        const currencyInfo = getCurrencyInfo(selectedPub.address);
 
-    isUpdating
-      ? await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
-      : await supabase.from('ratings').insert(ratingPayload);
-    
-    if (!isUpdating) {
-        const oldProfile = userProfile;
-        const { error: incrementError } = await supabase.functions.invoke('increment-review-count');
-        if (incrementError) {
-            // This is not a critical failure for the user, but should be logged for debugging.
-            console.error("Failed to increment review count:", incrementError.context?.error || incrementError.message);
-        }
-
-        const { profile: newProfile } = await fetchUserData();
+        trackEvent('rate_pub', {
+            pub_id: pubId,
+            is_update: isUpdating,
+            quality: newRating.quality,
+            price_rating: newRating.price,
+            has_exact_price: !!newRating.exact_price,
+            has_image: !!imageFile,
+            is_private: newRating.is_private,
+            value: newRating.exact_price || 0, // GA4 standard parameter for value
+            currency: currencyInfo.code, // GA4 standard parameter for currency
+        });
         
-        if (newProfile && oldProfile && newProfile.level > oldProfile.level) {
-            const oldRank = getRankData(oldProfile.level);
-            const newRank = getRankData(newProfile.level);
-            if (newRank.name !== oldRank.name) {
-                setRankUpInfo({ key: Date.now(), newRank });
-                trackEvent('rank_up', { new_rank: newRank.name, level: newProfile.level });
-            } else {
-                setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
-                trackEvent('level_up', { level: newProfile.level });
+        // --- START: Image management logic ---
+        const oldImageUrl = existingRating?.image_url;
+
+        // If we are updating a rating that has an image, and we're either removing it or replacing it, delete the old file.
+        if (isUpdating && oldImageUrl && (imageWasRemoved || imageFile)) {
+            try {
+                const imagePath = new URL(oldImageUrl).pathname.split('/pint-images/')[1];
+                if (imagePath) {
+                    await supabase.storage.from('pint-images').remove([imagePath]);
+                }
+            } catch (error) {
+                console.error("Failed to delete old image from storage. It may become orphaned. Error:", error);
+                // Do not block the user flow for this.
             }
         }
-        setReviewPopupInfo({ key: Date.now() });
-    } else {
-        await fetchUserData();
-        setUpdateConfirmationInfo({ key: Date.now() });
+        
+        let imageUrl = oldImageUrl || null;
+        if (imageWasRemoved) {
+            imageUrl = null;
+        }
+        
+        if (imageFile) {
+            const fileExt = imageFile.name.split('.').pop();
+            const fileName = `${userProfile.id}-${Date.now()}.${fileExt}`;
+            const filePath = `${fileName}`;
+            
+            const { error: uploadError } = await supabase.storage.from('pint-images').upload(filePath, imageFile, { upsert: true });
+            if (uploadError) {
+                console.error("Image upload failed:", uploadError);
+                alert(`Image upload failed: ${uploadError.message}. Please ensure the 'pint-images' storage bucket is created as per the instructions in security.md.`);
+                return;
+            }
+            const { data: urlData } = supabase.storage.from('pint-images').getPublicUrl(filePath);
+            imageUrl = urlData.publicUrl;
+        }
+        // --- END: Image management logic ---
+
+        const ratingPayload = { 
+            pub_id: pubId, 
+            user_id: session.user.id, 
+            price: newRating.price, 
+            quality: newRating.quality, 
+            exact_price: newRating.exact_price,
+            is_private: newRating.is_private,
+            image_url: imageUrl,
+        };
+
+        isUpdating
+          ? await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
+          : await supabase.from('ratings').insert(ratingPayload);
+        
+        if (!isUpdating) {
+            const oldProfile = userProfile;
+            const { profile: newProfile } = await fetchUserData();
+            
+            if (newProfile && oldProfile && newProfile.level > oldProfile.level) {
+                const oldRank = getRankData(oldProfile.level);
+                const newRank = getRankData(newProfile.level);
+                if (newRank.name !== oldRank.name) {
+                    setRankUpInfo({ key: Date.now(), newRank });
+                    trackEvent('rank_up', { new_rank: newRank.name, level: newProfile.level });
+                } else {
+                    setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
+                    trackEvent('level_up', { level: newProfile.level });
+                }
+            }
+            setReviewPopupInfo({ key: Date.now() });
+        } else {
+            await fetchUserData();
+            setUpdateConfirmationInfo({ key: Date.now() });
+        }
+        await fetchAllRatings();
+        await fetchDbPubs();
+    } finally {
+        setIsSubmittingRating(false);
     }
-    await fetchAllRatings();
-    await fetchDbPubs();
-  }, [session, userRatings, selectedPub, userProfile, fetchAllRatings, fetchDbPubs]);
+  }, [session, userRatings, selectedPub, userProfile, fetchAllRatings, fetchDbPubs, fetchUserData]);
+  
+  const handleDeleteRating = useCallback(async (ratingToDelete) => {
+    if (!session || !userProfile || !ratingToDelete) return;
+
+    // Check if the rating belongs to the logged-in user
+    const ratingInUserRatings = userRatings.find(r => r.id === ratingToDelete.id);
+    if (!ratingInUserRatings) {
+        console.error("Attempted to delete a rating that does not belong to the current user.");
+        return;
+    }
+
+    trackEvent('delete_rating', { rating_id: ratingToDelete.id, pub_id: ratingToDelete.pubId });
+
+    try {
+        // 1. If there's an image, delete it from storage first.
+        if (ratingToDelete.image_url) {
+            try {
+                const imagePath = new URL(ratingToDelete.image_url).pathname.split('/pint-images/')[1];
+                if (imagePath) {
+                    await supabase.storage.from('pint-images').remove([imagePath]);
+                }
+            } catch (error) {
+                console.error("Failed to delete image from storage. It might be orphaned.", error);
+                // Non-critical, so we don't block the rating deletion.
+            }
+        }
+        
+        // 2. Delete the rating record from the database.
+        // The `on_rating_deleted` trigger will handle decrementing the user's review count.
+        const { error: deleteError } = await supabase.from('ratings').delete().eq('id', ratingToDelete.id);
+        if (deleteError) throw deleteError;
+
+        // 3. Show success popup
+        setDeleteConfirmationInfo({ key: Date.now() });
+
+        // 4. Re-fetch all data to update the UI
+        await Promise.all([
+            fetchAllRatings(),
+            fetchUserData()
+        ]);
+
+    } catch (error) {
+        console.error("Error deleting rating:", error);
+        alert(`Could not delete rating: ${error.message}`);
+    }
+}, [session, userProfile, userRatings, fetchAllRatings, fetchUserData]);
   
   const handleSelectPub = useCallback((pub) => {
     const pubId = pub ? pub.id : null;
@@ -702,20 +769,65 @@ const App = () => {
     setFilter(newFilter);
     trackEvent('change_filter', { filter_type: newFilter });
   };
+
+  const handleToggleLike = useCallback(async (ratingId) => {
+    if (!session) {
+      setIsAuthOpen(true);
+      return;
+    }
+
+    const userId = session.user.id;
+    const isLiked = userLikes.has(ratingId);
+    
+    trackEvent('toggle_like', { rating_id: ratingId, action: isLiked ? 'unlike' : 'like' });
+
+    const newLikes = new Set(userLikes);
+    if (isLiked) {
+      newLikes.delete(ratingId);
+    } else {
+      newLikes.add(ratingId);
+    }
+    setUserLikes(newLikes);
+
+    try {
+      if (isLiked) {
+        const { error } = await supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: userId });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: userId });
+        if (error) throw error;
+      }
+      await fetchAllRatings();
+    } catch (error) {
+        console.error("Error toggling like:", error);
+        const revertedLikes = new Set(userLikes);
+        if (isLiked) {
+          revertedLikes.add(ratingId);
+        } else {
+          revertedLikes.delete(ratingId);
+        }
+        setUserLikes(revertedLikes);
+    }
+  }, [session, userLikes, fetchAllRatings]);
   
   const handleTabChange = (tab) => {
     // On mobile, close the details panel when switching main tabs.
     if (!isDesktop) {
-      setSelectedPubId(null);
+        setSelectedPubId(null);
     }
-    
+
     // Cancel pub placement if user navigates away
     if (pubPlacementState) {
         handleCancelPubPlacement();
     }
 
-    // Reset legal page view when user explicitly navigates
+    // When user explicitly changes tabs, reset all sub-view states
     setLegalPageView(null);
+    setViewingFriendsOf(null);
+    setFriendsList([]);
+    setViewedProfile(null);
+    setViewedRatings([]);
+    setProfileViewOrigin(null);
 
     // Tabs requiring auth
     if ((tab === 'profile' || tab === 'community' || tab === 'moderation' || tab === 'stats') && !session) {
@@ -727,448 +839,253 @@ const App = () => {
         setActiveTab('map'); // Fail silently to map
         return;
     }
-    
+
     setActiveTab(tab);
-    setViewedProfile(null);
-    setViewedRatings([]);
   };
 
   const handleViewLegal = (page) => {
-    if (page) {
-        setActiveTab('settings'); // Switch to settings tab to show the legal page
-    }
+    trackEvent('view_legal_page', { page_name: page });
     setLegalPageView(page);
+    // Ensure other full-screen views are closed
+    setSelectedPubId(null);
   };
 
-  const handleSettingsChange = (newSettings) => {
-    if (settings.theme !== newSettings.theme) trackEvent('change_setting', { setting_name: 'theme', setting_value: newSettings.theme });
-    if (settings.unit !== newSettings.unit) trackEvent('change_setting', { setting_name: 'unit', setting_value: newSettings.unit });
-    if (settings.radius !== newSettings.radius) trackEvent('change_setting', { setting_name: 'radius_meters', setting_value: newSettings.radius });
-    if (settings.developerMode !== newSettings.developerMode) trackEvent('change_setting', { setting_name: 'developer_mode', setting_value: newSettings.developerMode });
-    const oldSim = settings.simulatedLocation?.name || null, newSim = newSettings.simulatedLocation?.name || null;
-    if (oldSim !== newSim) trackEvent('change_setting', { setting_name: 'simulated_location', setting_value: newSim || 'cleared' });
-    setSettings(newSettings);
-    saveSettings(newSettings);
-  };
-  
-  const handleSetSimulatedLocation = async (locationString) => {
-    if (!locationString) {
-      handleSettingsChange({ ...settings, simulatedLocation: null });
-      return;
+  const handlePlacementPinMove = useCallback((newLocation) => {
+    setFinalPlacementLocation(newLocation);
+  }, []);
+
+  const handleViewProfile = async (userId, origin) => {
+    if (!userId) return;
+    // Special case: If user clicks their own profile, use handleTabChange to ensure a clean reset to their own view.
+    if (userProfile && userId === userProfile.id) {
+        handleTabChange('profile');
+        return;
     }
-
-    trackEvent('search', { search_term: locationString });
+    
+    trackEvent('view_profile', { viewed_user_id: userId, origin: origin || 'unknown' });
+    
+    // We must hide the Friends List page before we can show the Profile page.
+    setViewingFriendsOf(null);
+    setFriendsList([]);
+    
+    setIsFetchingViewedProfile(true);
+    // Clear the old viewed profile to show a loading state
+    setViewedProfile(null); 
+    setViewedRatings([]);
+    setProfileViewOrigin(origin); // store where the view was initiated from
 
     try {
-      // Nominatim API call
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationString)}&format=jsonv2&limit=1`, {
-        headers: { 'User-Agent': 'Stoutly/1.0 (https://stoutly-app.com)' }
-      });
-      if (!response.ok) {
-        throw new Error(`Nominatim API failed with status: ${response.status}`);
-      }
-      const results = await response.json();
-      if (results && results.length > 0) {
-        const { lat, lon } = results[0];
-        handleSettingsChange({
-          ...settings,
-          simulatedLocation: {
-            name: results[0].display_name,
-            coords: { lat: parseFloat(lat), lng: parseFloat(lon) }
-          }
-        });
-      } else {
-        throw new Error('No results found for that location.');
-      }
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+        if (profileError) throw profileError;
+        
+        // Correctly fetch the friend count
+        const { data: friendCount, error: friendCountError } = await supabase.rpc('get_friends_count', { user_id_param: userId }).single();
+        if (friendCountError) console.error("Error fetching friend count for viewed profile:", friendCountError);
+        // Correctly assign the direct result of the RPC call.
+        profile.friends_count = friendCount || 0;
+
+        setViewedProfile(profile);
+
+        // Fetch ratings for the viewed user
+        // We only fetch non-private ratings for other users.
+        const { data: ratings, error: ratingsError } = await supabase
+            .from('ratings')
+            .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, pubs(id, name, address, lat, lng)')
+            .eq('user_id', userId)
+            .eq('is_private', false) // Important: respect privacy
+            .order('created_at', { ascending: false });
+
+        if (ratingsError) throw ratingsError;
+
+        const mappedRatings = (ratings || []).map(r => ({
+            id: r.id, pubId: r.pub_id,
+            rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
+            timestamp: new Date(r.created_at).getTime(),
+            pubName: r.pubs?.name || 'Unknown',
+            pubAddress: r.pubs?.address || 'Unknown',
+            pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
+            image_url: r.image_url,
+            is_private: r.is_private,
+        }));
+        setViewedRatings(mappedRatings);
+        
+        // This is the key. The profile page is shown when the 'profile' tab is active.
+        // We set this directly to avoid `handleTabChange` which would clear `viewedProfile`.
+        setActiveTab('profile');
+
     } catch (error) {
-      console.error('Geocoding failed:', error);
-      throw error; // Re-throw to be caught in the component
+        console.error("Error fetching viewed profile:", error);
+        alert(`Could not load profile: ${error.message}`);
+        setViewedProfile(null); // Clear on error
+    } finally {
+        setIsFetchingViewedProfile(false);
     }
   };
 
-  const handleViewPub = (pub) => {
-    if (!pub?.id || !pub.location) return;
-    trackEvent('view_pub_from_history', { pub_id: pub.id });
-
-    // Check if the pub is already in our list of displayed pubs
-    const pubExists = pubs.some(p => p.id === pub.id);
-
-    // If the pub isn't in the list (e.g., it's outside the current search radius),
-    // we need to add it to the state so it can be selected and displayed.
-    if (!pubExists) {
-      setPubs(prevPubs => {
-        // Create a full pub object, including its ratings from the main `allRatings` map.
-        const newPub = {
-          ...pub,
-          ratings: allRatings.get(pub.id) || [],
-        };
-        // Return a new array with the existing pubs plus the new one.
-        // We also double-check for duplicates here in case of race conditions.
-        if (prevPubs.some(p => p.id === newPub.id)) {
-            return prevPubs;
-        }
-        return [...prevPubs, newPub];
-      });
-    }
-
-    setMapCenter(pub.location);
-    setActiveTab('map');
-    setSelectedPubId(pub.id);
-  };
-
-  const handleLogout = async () => {
-    trackEvent('logout');
-    await supabase.auth.signOut();
-  };
-  
-  const handleViewProfile = async (userId, origin) => {
-      if (userProfile?.id !== userId) trackEvent('view_another_profile', { viewed_user_id: userId, origin });
-      setIsFetchingViewedProfile(true);
-      setProfileViewOrigin(origin); // Store where the user came from
-      setActiveTab('profile');
-
-      const { data: profileData } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      const { data: ratingsData } = await supabase.from('ratings').select('id, pub_id, price, quality, created_at, exact_price, image_url, pubs(id, name, address, lat, lng)').eq('user_id', userId).order('created_at', { ascending: false });
-
-      const mappedRatings = (ratingsData || []).map(r => ({
-          id: r.id, pubId: r.pub_id,
-          rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
-          timestamp: new Date(r.created_at).getTime(),
-          pubName: r.pubs?.name || 'Unknown', pubAddress: r.pubs?.address || 'Unknown',
-          pubLocation: r.pubs?.lat && r.pubs?.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
-          image_url: r.image_url,
-      }));
-      
-      setViewedProfile(profileData);
-      setViewedRatings(mappedRatings);
-      setIsFetchingViewedProfile(false);
-  };
-  
   const handleBackFromProfileView = () => {
-    const origin = profileViewOrigin;
     setViewedProfile(null);
-    setViewedRatings([]);
+    // Go back to the origin tab if specified
+    if (profileViewOrigin && profileViewOrigin.startsWith('community')) {
+      setActiveTab('community');
+    } else if (profileViewOrigin && profileViewOrigin.startsWith('leaderboard')) {
+      setActiveTab('leaderboard');
+    }
     setProfileViewOrigin(null);
+  };
+  
+  const handleFriendRequest = async (targetUserId) => {
+    if (!session) {
+      setIsAuthOpen(true);
+      return;
+    }
+    trackEvent('send_friend_request', { target_user_id: targetUserId });
+    const { error } = await supabase.from('friendships').insert({
+        user_id_1: session.user.id,
+        user_id_2: targetUserId,
+        action_user_id: session.user.id,
+        status: 'pending',
+    });
 
-    switch (origin) {
-        case 'leaderboard':
-        case 'community':
-            setActiveTab('community');
-            break;
-        case 'pubDetails':
-            setActiveTab('map'); // The selected pub context is preserved
-            break;
-        case 'settings':
-            setActiveTab('settings');
-            break;
-        case 'moderation':
-            setActiveTab('moderation');
-            break;
-        default:
-             // Fallback to the user's own profile page, which is the default for the 'profile' tab.
-            setActiveTab('profile');
-            break;
+    if (error) {
+        if (error.code === '23505') { // unique_violation
+            alert('A friend request between you and this user already exists.');
+        } else {
+            alert(`Error sending friend request: ${error.message}`);
+        }
+    } else {
+        // Re-fetch social data to update friendship status
+        await fetchSocialData(session.user.id);
+    }
+  };
+  
+  const handleFriendAction = async (friendshipId, newStatus) => {
+      trackEvent('friend_request_action', { friendship_id: friendshipId, action: newStatus });
+      const { error } = await supabase
+          .from('friendships')
+          .update({ 
+              status: newStatus, 
+              action_user_id: session.user.id,
+              updated_at: new Date().toISOString()
+          })
+          .eq('id', friendshipId);
+      
+      if (error) {
+          alert(`Error updating friendship: ${error.message}`);
+      } else {
+          await Promise.all([
+              fetchSocialData(session.user.id),
+              fetchUserData(), // To update friend count
+          ]);
+      }
+  };
+  
+  const handleProfileUpdate = (profileId) => {
+      // Re-fetch the profile data if it's the currently viewed one
+      if (viewedProfile && viewedProfile.id === profileId) {
+          handleViewProfile(profileId, 'moderation_update');
+      }
+      // Also re-fetch own profile data if we updated it
+      if(userProfile && userProfile.id === profileId) {
+          fetchUserData();
+      }
+  };
+
+  const handleViewFriends = async (targetUser) => {
+    if (!targetUser) return;
+    trackEvent('view_friends_list', { target_user_id: targetUser.id });
+    
+    // Set state to show the friends list UI
+    setViewingFriendsOf(targetUser);
+    setIsFetchingFriendsList(true);
+    setFriendsList([]); // Clear previous list
+
+    try {
+        const { data, error } = await supabase.rpc('get_friends_list', {
+            user_id_param: targetUser.id,
+        });
+
+        if (error) {
+            throw error;
+        }
+        
+        setFriendsList(data || []);
+    } catch (error) {
+        console.error("Error fetching friends list:", error);
+        alert(`Could not load friends list: ${error.message}`);
+        // Go back if the fetch fails to avoid a broken state
+        setViewingFriendsOf(null); 
+    } finally {
+        setIsFetchingFriendsList(false);
     }
   };
 
-    const handleFindCurrentPub = () => {
-        trackEvent('recenter_on_user_and_search');
-        // This button now recenters the map AND sets up a search for when the move completes.
-        const effectiveLocation = (settings.developerMode && settings.simulatedLocation)
-            ? settings.simulatedLocation.coords : realUserLocation;
-            
-        if (effectiveLocation && effectiveLocation.lat !== DEFAULT_LOCATION.lat) {
-            setSearchOrigin(effectiveLocation);
-            setMapCenter(effectiveLocation);
-            setSearchOnNextMoveEnd(true); // Signal to search after map settles
-        } else {
-            setLocationError("Your location is not available yet. Please wait or check permissions.");
-            // Set a timer to clear the error
-            setTimeout(() => setLocationError(null), 3500);
-        }
-    };
-
-    const handleUpdateAvatar = async (avatarId) => {
-        if (!session?.user || !avatarId) return;
-        
-        const parsed = JSON.parse(avatarId);
-        const eventParams = { avatar_type: 'dicebear', dicebear_style: parsed.style };
-        trackEvent('change_avatar', eventParams);
-
-        await supabase.from('profiles').update({ avatar_id: avatarId }).eq('id', session.user.id);
-        await fetchUserData();
-        setIsAvatarModalOpen(false);
-    };
-
-    const handleAddPubClick = () => {
-      if (!session) {
-        setIsAuthOpen(true);
-        return;
-      }
-      trackEvent('add_pub_start');
-      setIsAddPubModalOpen(true);
-    };
-
-    const handleSubmitNewPub = async ({ name, address }) => {
-        if (!session) return;
-        trackEvent('add_pub_submit', { pub_name: name });
-
-        let location = null;
-        try {
-            const geocodeResponse = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=jsonv2&limit=1`, {
-                headers: { 'User-Agent': 'Stoutly/1.0 (https://stoutly-app.com)' }
-            });
-            if (!geocodeResponse.ok) throw new Error('Geocoding service failed.');
-            const geocodeData = await geocodeResponse.json();
-            if (geocodeData && geocodeData.length > 0) {
-                location = { lat: parseFloat(geocodeData[0].lat), lng: parseFloat(geocodeData[0].lon) };
-            } else {
-                alert("Could not find that address. Please try to be more specific (e.g., add a city or postcode).");
-                return;
-            }
-        } catch (error) {
-            console.error("Geocoding failed:", error);
-            alert("There was a problem finding that address. Please check your connection and try again.");
-            return;
-        }
-
-        setIsAddPubModalOpen(false);
-        setPubPlacementState({ name, address });
-        setFinalPlacementLocation(location);
-        setMapCenter(location);
-        setActiveTab('map');
-    };
-    
-    const handlePlacementPinMove = (newLocation) => {
-        setFinalPlacementLocation(newLocation);
-    };
-
-    const handleCancelPubPlacement = () => {
-        setPubPlacementState(null);
-        setFinalPlacementLocation(null);
-    };
-
-    const handleConfirmNewPub = async () => {
-        if (!session || !pubPlacementState || !finalPlacementLocation) return;
-        setIsConfirmingLocation(true);
-        trackEvent('add_pub_confirm_location');
-
-        const payload = {
-            id: crypto.randomUUID(),
-            name: pubPlacementState.name,
-            address: pubPlacementState.address,
-            lat: finalPlacementLocation.lat,
-            lng: finalPlacementLocation.lng,
-            created_by: session.user.id,
-        };
-        const { data, error } = await supabase.from('pubs').insert(payload).select().single();
-
-        setIsConfirmingLocation(false);
-
-        if (error) {
-            console.error("Error inserting new pub:", error);
-            alert(`Could not add pub: ${error.message}`);
-            return;
-        }
-
-        setPubPlacementState(null);
-        setFinalPlacementLocation(null);
-        await fetchDbPubs();
-        
-        setTimeout(() => {
-            const newPub = {
-                ...data,
-                location: { lat: data.lat, lng: data.lng }
-            };
-            handleSelectPub(newPub);
-        }, 150);
-    };
-
-    // --- SOCIAL FEATURE HANDLERS ---
-    const handleFriendRequest = async (targetUserId) => {
-        if (!session?.user) return;
-        trackEvent('send_friend_request', { target_user_id: targetUserId });
-        
-        const { data, error } = await supabase
-            .from('friendships')
-            .insert({
-                user_id_1: session.user.id,
-                user_id_2: targetUserId,
-                action_user_id: session.user.id,
-                status: 'pending'
-            })
-            .select()
-            .single();
-        
-        if (error) {
-            console.error("Error sending friend request:", error);
-            alert("Could not send friend request. They may have already sent you one!");
-        } else {
-            setFriendships(prev => [...prev, data]);
-        }
-    };
-
-    const handleFriendAction = async (friendshipId, action) => {
-        if (!session?.user) return;
-        trackEvent('respond_friend_request', { action });
-
-        const { data, error } = await supabase
-            .from('friendships')
-            .update({
-                status: action,
-                action_user_id: session.user.id
-            })
-            .eq('id', friendshipId)
-            .select()
-            .single();
-
-        if (error) {
-            console.error(`Error ${action}ing friend request:`, error);
-        } else {
-            // Update local state for immediate feedback
-            setFriendships(prev => prev.map(f => f.id === friendshipId ? data : f));
-        }
-    };
-    
-    const handleToggleLike = async (ratingId) => {
-        if (!session?.user) {
-            setIsAuthOpen(true);
-            return;
-        }
-    
-        const isLiked = userLikes.has(ratingId);
-        trackEvent('toggle_like', { rating_id: ratingId, action: isLiked ? 'unlike' : 'like' });
-    
-        // --- Start Optimistic UI Update ---
-        // 1. Update the set of liked ratings for instant heart color change.
-        const newLikes = new Set(userLikes);
-        if (isLiked) {
-            newLikes.delete(ratingId);
-        } else {
-            newLikes.add(ratingId);
-        }
-        setUserLikes(newLikes);
-    
-        // 2. Optimistically update the like_count in the global allRatings map for instant count change.
-        setAllRatings(prevAllRatings => {
-            const newAllRatings = new Map(prevAllRatings);
-            // We need to find the rating across all pubs in the map.
-            for (const [pubId, ratings] of newAllRatings.entries()) {
-                const ratingIndex = ratings.findIndex(r => r.id === ratingId);
-                if (ratingIndex !== -1) {
-                    // Create a new ratings array for the pub to ensure immutability.
-                    const newRatings = [...ratings];
-                    // Create a new rating object with the updated count.
-                    const oldRating = newRatings[ratingIndex];
-                    newRatings[ratingIndex] = {
-                        ...oldRating,
-                        like_count: isLiked ? (oldRating.like_count || 1) - 1 : (oldRating.like_count || 0) + 1,
-                    };
-                    // Update the map with the new ratings array.
-                    newAllRatings.set(pubId, newRatings);
-                    break; // Exit loop once the rating is found and updated.
-                }
-            }
-            return newAllRatings;
-        });
-        // --- End Optimistic UI Update ---
-    
-        // API call to the backend.
-        try {
-            if (isLiked) {
-                await supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: session.user.id });
-            } else {
-                await supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: session.user.id });
-            }
-        } catch (error) {
-            console.error("Failed to toggle like:", error);
-            // If the API call fails, revert the optimistic update by refetching all data.
-            fetchAllRatings(); 
-            fetchSocialData(session.user.id);
-        }
-        // No full refetch needed on success due to the optimistic update.
-    };
-
-    const renderProfile = (onBack) => {
-      if (isFetchingViewedProfile) {
-          return (
-              <div className="w-full h-full flex items-center justify-center p-4">
-                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-400"></div>
-              </div>
-          );
-      }
-      const profileToDisplay = viewedProfile || userProfile;
-      const ratingsToDisplay = viewedProfile ? viewedRatings : userRatings;
-      if (!profileToDisplay) return null;
-      return (
-          <ProfilePage 
-              userProfile={profileToDisplay} userRatings={ratingsToDisplay} onViewPub={handleViewPub}
-              loggedInUserProfile={userProfile} levelRequirements={levelRequirements}
-              onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
-              onBack={onBack}
-              onProfileUpdate={handleViewProfile}
-              // Social props
-              friendships={friendships}
-              onFriendRequest={handleFriendRequest}
-              onFriendAction={handleFriendAction}
-          />
-      );
-    }
+  const renderProfile = (onBackHandler) => (
+      <ProfilePage
+          userProfile={viewedProfile || userProfile}
+          userRatings={viewedProfile ? viewedRatings : userRatings}
+          onBack={onBackHandler}
+          onViewPub={handleSelectPub}
+          loggedInUserProfile={userProfile}
+          levelRequirements={levelRequirements}
+          onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
+          onProfileUpdate={handleProfileUpdate}
+          friendships={friendships}
+          onFriendRequest={handleFriendRequest}
+          onFriendAction={handleFriendAction}
+          onViewFriends={handleViewFriends}
+          onDeleteRating={handleDeleteRating}
+      />
+  );
   
-    if (loading) {
-      return (
-        <div className="w-full h-dvh flex items-center justify-center bg-white dark:bg-gray-900">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-400"></div>
-        </div>
-      );
-    }
-
-    // Lockout banned users
-    if (userProfile?.is_banned) {
-        return <BannedPage userProfile={userProfile} onLogout={handleLogout} />;
-    }
-    
-    const layoutProps = {
-      session, loading, isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
-      pubs, allRatings, selectedPubId, setSelectedPubId, filter, setFilter, isListExpanded, setIsListExpanded,
-      realUserLocation, userLocation, mapCenter, searchOrigin, locationError, resultsAreCapped,
-      isRefreshing, refreshTrigger, settings, setSettings, activeTab, setActiveTab, userProfile, userRatings,
-      viewedProfile, viewedRatings, isFetchingViewedProfile, legalPageView,
+  const layoutProps = {
+      isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
+      activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
+      handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
+      handleSelectPub, selectedPubId, handleNominatimResults, handleMapMove,
+      refreshTrigger, getDistance, isListExpanded, setIsListExpanded,
+      getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
+      renderProfile, session, userProfile, handleLogout: () => supabase.auth.signOut(),
+      selectedPub, existingUserRatingForSelectedPub, handleRatePub,
       reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo,
-      levelRequirements, isDbPubsLoaded, initialSearchComplete, isAvatarModalOpen, setIsAvatarModalOpen,
+      isAvatarModalOpen, setIsAvatarModalOpen,
+      viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
       installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
-      sortedPubs, selectedPub, existingUserRatingForSelectedPub, getAverageRating, getDistance, getComparablePrice,
-      handleNominatimResults, handleRefresh, handleMapMove, handleRatePub, handleSelectPub, handleFilterChange,
-      handleTabChange, handleSettingsChange, handleSetSimulatedLocation, handleViewPub, handleLogout,
-      handleViewProfile, handleFindCurrentPub, handleUpdateAvatar, renderProfile,
-      handleBackFromProfileView, handleViewLegal, handleDataRefresh,
-      handleSearchThisArea, showSearchAreaButton,
-      initialLocationSet,
-      // New props for delayed search
+      showSearchAreaButton, handleSearchThisArea,
       searchOnNextMoveEnd, handleSearchAfterMove,
-      handleAddPubClick,
-      // New props for pub placement flow
-      pubPlacementState, finalPlacementLocation, isConfirmingLocation,
-      handleSubmitNewPub, handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement,
-      // New props for Community Features
-      CommunityPage, friendships, userLikes,
-      handleFriendRequest, handleFriendAction, handleToggleLike,
-    };
+      isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove, isSubmittingRating,
+      CommunityPage, friendships, userLikes, onToggleLike: handleToggleLike, allRatings,
+      viewingFriendsOf, friendsList, isFetchingFriendsList,
+      deleteConfirmationInfo,
+      
+      // Implemented handlers
+      handleViewProfile,
+      handleFriendRequest,
+      handleFriendAction,
+      handleViewFriends,
+      onProfileUpdate: handleProfileUpdate,
+      handleBackFromProfileView,
+      handleBackFromFriendsList: () => setViewingFriendsOf(null),
+      
+      // Stubs
+      handleSettingsChange: setSettings,
+      handleSetSimulatedLocation: () => {},
+      handleUpdateAvatar: () => {},
+      handleAddPubClick: () => {},
+      handleConfirmNewPub: () => {},
+      handleCancelPubPlacement: () => {},
+      handleFindCurrentPub: () => {},
+  };
 
-    return (
-      <>
-        {isDesktop 
-          ? <DesktopLayout {...layoutProps} /> 
-          : <MobileLayout {...layoutProps} />
-        }
-        {isAddPubModalOpen && (
-          <AddPubModal
-            onClose={() => setIsAddPubModalOpen(false)}
-            onSubmit={handleSubmitNewPub}
-          />
-        )}
-      </>
-    );
+  if (isDesktop) {
+      return <DesktopLayout {...layoutProps} />;
+  }
+
+  return <MobileLayout {...layoutProps} />;
 };
 
 export default App;

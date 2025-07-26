@@ -10,6 +10,7 @@ import AuthPage from './AuthPage.jsx';
 import UpdatePasswordPage from './UpdatePasswordPage.jsx';
 import XPPopup from './XPPopup.jsx';
 import UpdateConfirmationPopup from './UpdateConfirmationPopup.jsx';
+import DeleteConfirmationPopup from './DeleteConfirmationPopup.jsx';
 import LevelUpPopup from './LevelUpPopup.jsx';
 import RankUpPopup from './RankUpPopup.jsx';
 import AvatarSelectionModal from './AvatarSelectionModal.jsx';
@@ -18,6 +19,8 @@ import StatsPage from './StatsPage.jsx';
 import TermsOfUsePage from './TermsOfUsePage.jsx';
 import PrivacyPolicyPage from './PrivacyPolicyPage.jsx';
 import DesktopPlacementConfirmation from './DesktopPlacementConfirmation.jsx';
+import FriendsListPage from './FriendsListPage.jsx';
+import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 
 const BackButton = ({ onClick, text = "Back" }) => (
     <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -46,14 +49,31 @@ const DesktopLayout = (props) => {
         showSearchAreaButton, handleSearchThisArea,
         searchOnNextMoveEnd, handleSearchAfterMove,
         handleAddPubClick, pubPlacementState, finalPlacementLocation, isConfirmingLocation,
-        handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement,
+        handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
         // Community props
-        CommunityPage, friendships, userLikes, handleToggleLike, handleFriendAction, allRatings
+        CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings,
+        // Friends List props
+        viewingFriendsOf, friendsList, isFetchingFriendsList, handleBackFromFriendsList,
+        deleteConfirmationInfo,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
 
     const renderContentPanel = () => {
+        if (viewingFriendsOf) {
+            return (
+                <FriendsListPage
+                    targetUser={viewingFriendsOf}
+                    loggedInUser={userProfile}
+                    friendsList={friendsList}
+                    isLoading={isFetchingFriendsList}
+                    onBack={handleBackFromFriendsList}
+                    onViewProfile={handleViewProfile}
+                    onFriendAction={handleFriendAction}
+                />
+            );
+        }
+
         if (pubPlacementState) {
             return (
                 <DesktopPlacementConfirmation
@@ -80,7 +100,8 @@ const DesktopLayout = (props) => {
                         loggedInUserProfile={userProfile}
                         onDataRefresh={handleDataRefresh}
                         userLikes={userLikes}
-                        onToggleLike={handleToggleLike}
+                        onToggleLike={onToggleLike}
+                        isSubmittingRating={isSubmittingRating}
                     />
                 );
             }
@@ -131,9 +152,10 @@ const DesktopLayout = (props) => {
                     userProfile={userProfile}
                     onViewProfile={handleViewProfile}
                     friendships={friendships}
+                    onFriendRequest={handleFriendRequest}
                     onFriendAction={handleFriendAction}
                     userLikes={userLikes}
-                    onToggleLike={handleToggleLike}
+                    onToggleLike={onToggleLike}
                     onLoginRequest={() => setIsAuthOpen(true)}
                     allRatings={allRatings}
                     onDataRefresh={handleDataRefresh}
@@ -237,10 +259,12 @@ const DesktopLayout = (props) => {
             </main>
             
             {/* Popups and Modals */}
+            <SubmittingRatingModal isVisible={isSubmittingRating} />
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
             {updateConfirmationInfo && <UpdateConfirmationPopup key={updateConfirmationInfo.key} />}
+            {deleteConfirmationInfo && <DeleteConfirmationPopup key={deleteConfirmationInfo.key} />}
             {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
             {rankUpInfo && <RankUpPopup key={rankUpInfo.key} newRank={rankUpInfo.newRank} />}
             {isAvatarModalOpen && userProfile && (

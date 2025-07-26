@@ -56,6 +56,10 @@ const urlsToCache = [
   '/components/FriendsFeed.jsx',
   '/components/FriendRequestsPage.jsx',
   '/components/RatingCard.jsx',
+  '/components/FriendsListPage.jsx',
+  '/components/ConfirmDeleteModal.jsx',
+  '/components/DeleteConfirmationPopup.jsx',
+  '/components/SubmittingRatingModal.jsx',
 ];
 
 self.addEventListener('install', event => {

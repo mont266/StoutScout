@@ -32,7 +32,7 @@ const Section = ({ title, children, ...props }) => (
 );
 
 
-const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike }) => {
+const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating }) => {
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
   const [isRatingFormExpanded, setIsRatingFormExpanded] = useState(!existingUserRating && !!session);
@@ -140,6 +140,8 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                         existingRating={existingUserRating?.rating}
                         currencySymbol={currencyInfo.symbol}
                         existingImageUrl={existingUserRating?.image_url}
+                        existingIsPrivate={existingUserRating?.is_private}
+                        isSubmitting={isSubmittingRating}
                     />
                 )}
             </div>

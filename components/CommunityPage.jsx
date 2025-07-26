@@ -6,26 +6,7 @@ import FriendsFeed from './FriendsFeed.jsx';
 import FriendRequestsPage from './FriendRequestsPage.jsx';
 import ImageModal from './ImageModal.jsx';
 
-const CommunityTabButton = ({ label, icon, isActive, onClick, notificationCount = 0 }) => (
-    <button
-        onClick={onClick}
-        className={`relative flex-1 py-3 text-sm font-bold transition-all duration-300 border-b-2 flex items-center justify-center space-x-2 ${
-            isActive 
-                ? 'text-amber-500 border-amber-500' 
-                : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-amber-500/70 hover:border-amber-500/30'
-        }`}
-    >
-        <i className={`fas ${icon}`}></i>
-        <span>{label}</span>
-        {notificationCount > 0 && (
-            <span className="absolute top-1 right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                {notificationCount}
-            </span>
-        )}
-    </button>
-);
-
-const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh }) => {
+const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh }) => {
     const [activeSubTab, setActiveSubTab] = useState('community'); // community, friends, leaderboard, requests
     const [imageToView, setImageToView] = useState(null);
 
@@ -50,38 +31,56 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendAction
 
     return (
         <>
-        {imageToView && (
-            <ImageModal 
-                rating={imageToView}
-                onClose={() => setImageToView(null)}
-                canReport={userProfile && userProfile.id !== imageToView.user.id}
-            />
-        )}
-        <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
-            {/* Sub-navigation Header */}
-            <header className="p-2 bg-gray-100 dark:bg-gray-800/50 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex justify-around">
-                    {subTabs.map(tab => (
-                        <CommunityTabButton 
-                            key={tab.id}
-                            label={tab.label}
-                            icon={tab.icon}
-                            isActive={activeSubTab === tab.id}
-                            onClick={() => handleTabChange(tab.id)}
-                            notificationCount={tab.notificationCount}
-                        />
-                    ))}
-                </div>
-            </header>
+            {imageToView && (
+                <ImageModal 
+                    rating={imageToView}
+                    onClose={() => setImageToView(null)}
+                    canReport={userProfile && userProfile.id !== imageToView.user.id}
+                />
+            )}
+            <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
+                {/* Responsive Tab Bar */}
+                <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <nav className="flex justify-around -mb-px">
+                        {subTabs.map(tab => {
+                            const isActive = tab.id === activeSubTab;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => handleTabChange(tab.id)}
+                                    className={`relative flex-grow text-center border-b-4 p-1 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:z-10 ${
+                                        isActive
+                                            ? 'border-amber-500 text-amber-600 dark:text-amber-400'
+                                            : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400'
+                                    }`}
+                                    aria-current={isActive ? 'page' : undefined}
+                                    aria-label={tab.label}
+                                >
+                                    {/* Responsive content container */}
+                                    <div className="flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2 py-2">
+                                        <i className={`fas ${tab.icon} text-lg md:text-base`}></i>
+                                        <span className="text-xs md:text-sm font-semibold">{tab.label}</span>
+                                    </div>
 
-            {/* Content Area */}
-            <main className="flex-grow overflow-y-auto">
-                {activeSubTab === 'community' && <CommunityFeed onViewProfile={onViewProfile} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} />}
-                {activeSubTab === 'friends' && <FriendsFeed onViewProfile={onViewProfile} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} allRatings={allRatings} />}
-                {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={onViewProfile} />}
-                {activeSubTab === 'requests' && <FriendRequestsPage requests={pendingRequests} onFriendAction={onFriendAction} onViewProfile={onViewProfile} onDataRefresh={onDataRefresh} />}
-            </main>
-        </div>
+                                    {tab.notificationCount > 0 && (
+                                        <span className="absolute top-1 right-2 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-gray-800">
+                                            {tab.notificationCount > 9 ? '9+' : tab.notificationCount}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </nav>
+                </div>
+
+                {/* Content Area */}
+                <main className="flex-grow overflow-y-auto">
+                    {activeSubTab === 'community' && <CommunityFeed onViewProfile={onViewProfile} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} />}
+                    {activeSubTab === 'friends' && <FriendsFeed onViewProfile={onViewProfile} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} />}
+                    {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={onViewProfile} />}
+                    {activeSubTab === 'requests' && <FriendRequestsPage requests={pendingRequests} onFriendAction={onFriendAction} onViewProfile={onViewProfile} onDataRefresh={onDataRefresh} />}
+                </main>
+            </div>
         </>
     );
 };

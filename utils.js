@@ -76,7 +76,7 @@ export const formatNominatimAddress = (addressObj) => {
 /**
  * Normalizes a result from the Nominatim API into the app's internal Pub object format.
  * @param {object} nominatimResult A single result object from the Nominatim API.
- * @returns {object} A pub object `{id, name, address, location}`.
+ * @returns {object} A pub object `{id, name, address, location, country_code, country_name}`.
  */
 export const normalizeNominatimResult = (nominatimResult) => {
     const { osm_id, display_name, lat, lon, address } = nominatimResult;
@@ -102,6 +102,9 @@ export const normalizeNominatimResult = (nominatimResult) => {
         address: formattedAddress || 'Address unknown',
         // Add postcode, trying the structured object first, then falling back to parsing the name.
         postcode: address?.postcode ? address.postcode.toUpperCase().replace(/\s+/g, '') : extractPostcode(display_name),
+        // Add country code and name for better data quality and stats
+        country_code: address?.country_code,
+        country_name: address?.country,
         location: {
             lat: parseFloat(lat),
             lng: parseFloat(lon),

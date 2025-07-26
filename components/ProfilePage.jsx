@@ -8,6 +8,7 @@ import ImageModal from './ImageModal.jsx';
 import ReportImageModal from './ReportImageModal.jsx';
 import { trackEvent } from '../analytics.js';
 import BanUserModal from './BanUserModal.jsx';
+import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 
 const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendRequest, onFriendAction }) => {
     const [status, setStatus] = useState('loading');
@@ -86,7 +87,7 @@ const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendReque
     }
 }
 
-const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction }) => {
+const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating }) => {
     // Component now manages its own profile state to update it after a moderation action.
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
@@ -98,14 +99,15 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     const [isBanModalOpen, setIsBanModalOpen] = useState(false);
     const [imageToView, setImageToView] = useState(null);
     const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
-
+    const [ratingToDelete, setRatingToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Keep state in sync with props from App.jsx
     useEffect(() => {
         setProfile(userProfile);
     }, [userProfile]);
 
-    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count, is_early_bird } = profile;
+    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count, is_early_bird, friends_count } = profile;
     const reviews = profile.reviews || 0;
     
     const rankData = getRankData(level);
@@ -250,6 +252,14 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         setImageToView(null);
     };
 
+    const handleDeleteConfirm = async () => {
+        if (!ratingToDelete || !onDeleteRating) return;
+        setIsDeleting(true);
+        await onDeleteRating(ratingToDelete);
+        setIsDeleting(false);
+        setRatingToDelete(null);
+    };
+
     const getProfileBorderColor = () => {
         if (is_beta_tester) return 'border-blue-500'; // Blue takes precedence for Beta Testers
         if (is_early_bird) return 'border-green-500';
@@ -278,6 +288,14 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
             <ReportImageModal 
                 onClose={() => setReportModalInfo({isOpen: false, rating: null})}
                 onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)}
+            />
+        )}
+        {ratingToDelete && (
+            <ConfirmDeleteModal
+                isLoading={isDeleting}
+                onClose={() => setRatingToDelete(null)}
+                onConfirm={handleDeleteConfirm}
+                message="This rating and any associated photo will be permanently deleted."
             />
         )}
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
@@ -356,6 +374,15 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                             <p className="font-bold text-gray-900 dark:text-white">{reviews}</p>
                             <p className="text-sm text-gray-500 dark:text-gray-400">{reviews === 1 ? 'Rating' : 'Ratings'}</p>
                         </div>
+                         <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>
+                        <button
+                            onClick={() => onViewFriends && onViewFriends(profile)}
+                            className="text-left hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-md p-1 -m-1"
+                            disabled={!onViewFriends}
+                        >
+                            <p className="font-bold text-gray-900 dark:text-white">{friends_count || 0}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{friends_count === 1 ? 'Friend' : 'Friends'}</p>
+                        </button>
                          {loggedInUserProfile?.is_developer && removed_image_count > 0 && (
                             <>
                                 <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>
@@ -516,19 +543,29 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                         const ratingForModal = { ...r, user: { id: profile.id, username: profile.username } };
                                         return (
                                         <li key={r.id} className={`bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md`}>
-                                            <div 
-                                                className={r.pubLocation ? 'cursor-pointer' : ''}
-                                                onClick={() => r.pubLocation && onViewPub({ id: r.pubId, name: r.pubName, address: r.pubAddress, location: r.pubLocation })}
-                                                role={r.pubLocation ? "button" : undefined}
-                                            >
-                                                <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                                    <div className="flex-grow pr-4 min-w-0">
-                                                        <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{r.pubName}</p>
-                                                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{r.pubAddress}</p>
-                                                    </div>
-                                                    <div className="flex-shrink-0 text-right">
-                                                        <p className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(r.timestamp)}</p>
-                                                        {r.pubLocation && <i className="fas fa-map-pin text-amber-500 dark:text-amber-400 mt-2" title="View on map"></i>}
+                                            <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                                                <div 
+                                                    className={`flex-grow pr-4 min-w-0 ${r.pubLocation ? 'cursor-pointer' : ''}`}
+                                                    onClick={() => r.pubLocation && onViewPub({ id: r.pubId, name: r.pubName, address: r.pubAddress, location: r.pubLocation })}
+                                                    role={r.pubLocation ? "button" : undefined}
+                                                >
+                                                    <p className="font-bold text-lg text-gray-900 dark:text-white truncate">{r.pubName}</p>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{r.pubAddress}</p>
+                                                </div>
+                                                <div className="flex-shrink-0 text-right">
+                                                    <p className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(r.timestamp)}</p>
+                                                    <div className="flex items-center justify-end space-x-4 mt-2">
+                                                        {r.pubLocation && <i className="fas fa-map-pin text-amber-500 dark:text-amber-400" title="View on map"></i>}
+                                                        {isViewingOwnProfile && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setRatingToDelete(r); }}
+                                                                className="text-gray-400 hover:text-red-500 transition-colors text-lg w-6 h-6 flex items-center justify-center rounded"
+                                                                aria-label="Delete rating"
+                                                                title="Delete rating"
+                                                            >
+                                                                <i className="fas fa-trash-alt"></i>
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

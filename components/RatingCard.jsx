@@ -1,13 +1,14 @@
 import React from 'react';
 import Avatar from './Avatar.jsx';
 import StarRating from './StarRating.jsx';
-import { formatTimeAgo } from '../utils.js';
+import { formatTimeAgo, getCurrencyInfo } from '../utils.js';
 
 const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage }) => {
 
-    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id } = rating;
+    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price } = rating;
 
     const isLiked = userLikes && userLikes.has(id);
+    const currencyInfo = getCurrencyInfo(pub_address);
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
@@ -61,6 +62,17 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                           <span>{like_count || 0}</span>
                       </button>
                  </div>
+                 
+                 {exact_price > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700/50">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 flex justify-between items-center">
+                            <span>Price Paid:</span>
+                            <span className="font-bold text-lg text-gray-800 dark:text-white bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded">
+                                {currencyInfo.symbol}{exact_price.toFixed(2)}
+                            </span>
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

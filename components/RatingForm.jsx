@@ -12,10 +12,11 @@ const getStarRatingFromPrice = (price) => {
     return 1; // Very Expensive
 };
 
-const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingImageUrl }) => {
+const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingImageUrl, isSubmitting, existingIsPrivate }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
   const [priceInput, setPriceInput] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -40,12 +41,13 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
     setPrice(existingRating?.price || 0);
     setQuality(existingRating?.quality || 0);
     setPriceInput(existingRating?.exact_price?.toString() || '');
+    setIsPrivate(existingIsPrivate || false);
     setImagePreview(existingImageUrl || null);
     setImageFile(null);
     setImageWasRemoved(false);
     setImageToCrop(null);
     setIsCropperOpen(false);
-  }, [existingRating, existingImageUrl]);
+  }, [existingRating, existingImageUrl, existingIsPrivate]);
 
   const handlePriceInputChange = (e) => {
     const newPrice = e.target.value;
@@ -95,12 +97,13 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
   const handleSubmit = (e) => {
     e.preventDefault();
     if (price > 0 && quality > 0) {
-      onSubmit({ price, quality, exact_price: parseFloat(priceInput) || null, imageFile, imageWasRemoved });
+      onSubmit({ price, quality, exact_price: parseFloat(priceInput) || null, imageFile, imageWasRemoved, is_private: isPrivate });
       // Don't reset form on update, but do on initial submit
       if (!existingRating) {
         setPrice(0);
         setQuality(0);
         setPriceInput('');
+        setIsPrivate(false);
         handleRemoveImage();
       }
     } else {
@@ -187,16 +190,43 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
           )}
       </div>
 
+      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+        <label htmlFor="is-private-toggle" className="flex items-center justify-between cursor-pointer p-1">
+          <span className="flex flex-col">
+              <span className="font-medium text-gray-700 dark:text-gray-300">Keep this rating private</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Private ratings won't appear on community feeds.</span>
+          </span>
+          <div className="relative">
+            <input
+              id="is-private-toggle"
+              type="checkbox"
+              className="sr-only peer"
+              checked={isPrivate}
+              onChange={() => setIsPrivate(p => !p)}
+            />
+            <div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
+            <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
+          </div>
+        </label>
+      </div>
+
       <div>
         <p className="text-xs text-center text-gray-700 dark:text-yellow-200 italic mb-3 p-2 rounded-md bg-yellow-100 dark:bg-yellow-900/50 border border-yellow-200 dark:border-yellow-800/60">
           How was the pint of Guinness? Honest ratings help keep Stoutly accurate for everyone.
         </p>
         <button
           type="submit"
-          disabled={price === 0 || quality === 0}
-          className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+          disabled={price === 0 || quality === 0 || isSubmitting}
+          className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center"
         >
-          {buttonText}
+          {isSubmitting ? (
+              <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-black mr-2"></div>
+                  <span>{existingRating ? 'Updating...' : 'Submitting...'}</span>
+              </>
+          ) : (
+              buttonText
+          )}
         </button>
       </div>
     </form>

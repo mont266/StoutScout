@@ -10,6 +10,7 @@ import AuthPage from './AuthPage.jsx';
 import UpdatePasswordPage from './UpdatePasswordPage.jsx';
 import XPPopup from './XPPopup.jsx';
 import UpdateConfirmationPopup from './UpdateConfirmationPopup.jsx';
+import DeleteConfirmationPopup from './DeleteConfirmationPopup.jsx';
 import LevelUpPopup from './LevelUpPopup.jsx';
 import RankUpPopup from './RankUpPopup.jsx';
 import AvatarSelectionModal from './AvatarSelectionModal.jsx';
@@ -17,6 +18,8 @@ import TermsOfUsePage from './TermsOfUsePage.jsx';
 import PrivacyPolicyPage from './PrivacyPolicyPage.jsx';
 import IOSInstallInstructionsModal from './IOSInstallInstructionsModal.jsx';
 import PlacementConfirmationBar from './PlacementConfirmationBar.jsx';
+import FriendsListPage from './FriendsListPage.jsx';
+import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 
 const TabBar = ({ activeTab, onTabChange }) => {
   const tabs = [
@@ -33,15 +36,15 @@ const TabBar = ({ activeTab, onTabChange }) => {
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`flex flex-col items-center justify-center w-24 h-14 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+            className={`flex items-center justify-center w-20 h-14 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
               activeTab === tab.id
                 ? 'text-amber-500 dark:text-amber-400'
                 : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
             }`}
+            aria-label={tab.label}
             aria-current={activeTab === tab.id ? 'page' : undefined}
           >
-            <i className={`fas ${tab.icon} fa-lg`}></i>
-            <span className="text-xs mt-1.5 font-medium">{tab.label}</span>
+            <i className={`fas ${tab.icon} fa-2x`}></i>
           </button>
         ))}
       </div>
@@ -69,9 +72,12 @@ const MobileLayout = (props) => {
         showSearchAreaButton, handleSearchThisArea,
         searchOnNextMoveEnd, handleSearchAfterMove,
         handleAddPubClick, pubPlacementState, handleConfirmNewPub, handleCancelPubPlacement,
-        isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove,
+        isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove, isSubmittingRating,
         // Community props
-        CommunityPage, friendships, userLikes, handleToggleLike, handleFriendAction, allRatings
+        CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings,
+        // Friends List props
+        viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
+        deleteConfirmationInfo,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -81,6 +87,7 @@ const MobileLayout = (props) => {
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
             {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(false)} />}
+            <SubmittingRatingModal isVisible={isSubmittingRating} />
 
             <Header activeTab={activeTab} />
 
@@ -92,9 +99,10 @@ const MobileLayout = (props) => {
                             userProfile={userProfile}
                             onViewProfile={handleViewProfile}
                             friendships={friendships}
+                            onFriendRequest={handleFriendRequest}
                             onFriendAction={handleFriendAction}
                             userLikes={userLikes}
-                            onToggleLike={handleToggleLike}
+                            onToggleLike={onToggleLike}
                             onLoginRequest={() => setIsAuthOpen(true)}
                             allRatings={allRatings}
                             onDataRefresh={handleDataRefresh}
@@ -196,10 +204,27 @@ const MobileLayout = (props) => {
                             loggedInUserProfile={userProfile}
                             onDataRefresh={handleDataRefresh}
                             userLikes={userLikes}
-                            onToggleLike={handleToggleLike}
+                            onToggleLike={onToggleLike}
+                            isSubmittingRating={isSubmittingRating}
                         />
                     )}
                 </div>
+
+                {/* Full Screen Friends List View */}
+                 <div className={`absolute inset-0 z-[1150] bg-gray-100 dark:bg-gray-900 transition-transform duration-300 ease-in-out ${viewingFriendsOf ? 'translate-x-0' : 'translate-x-full'}`}>
+                    {viewingFriendsOf && (
+                        <FriendsListPage
+                            targetUser={viewingFriendsOf}
+                            loggedInUser={userProfile}
+                            friendsList={friendsList}
+                            isLoading={isFetchingFriendsList}
+                            onBack={handleBackFromFriendsList}
+                            onViewProfile={handleViewProfile}
+                            onFriendAction={handleFriendAction}
+                        />
+                    )}
+                </div>
+
 
                 {pubPlacementState && (
                     <PlacementConfirmationBar
@@ -215,6 +240,7 @@ const MobileLayout = (props) => {
             {/* Popups and Modals (sit outside main content flow) */}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
             {updateConfirmationInfo && <UpdateConfirmationPopup key={updateConfirmationInfo.key} />}
+            {deleteConfirmationInfo && <DeleteConfirmationPopup key={deleteConfirmationInfo.key} />}
             {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
             {rankUpInfo && <RankUpPopup key={rankUpInfo.key} newRank={rankUpInfo.newRank} />}
             {isAvatarModalOpen && userProfile && (
