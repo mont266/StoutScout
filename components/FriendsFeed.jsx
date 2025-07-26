@@ -11,11 +11,19 @@ const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFrien
     
     const [status, setStatus] = useState(friendship_status);
     const [friendshipId, setFriendshipId] = useState(friendship_id);
+    const [localActionUserId, setLocalActionUserId] = useState(action_user_id);
+
+    useEffect(() => {
+        setStatus(targetUser.friendship_status);
+        setFriendshipId(targetUser.friendship_id);
+        setLocalActionUserId(targetUser.action_user_id);
+    }, [targetUser]);
     
     // Optimistic updates
     const handleAddFriend = async () => {
         await onFriendRequest(targetUser.id);
         setStatus('pending');
+        setLocalActionUserId(loggedInUser.id);
     };
 
     const handleAcceptRequest = async () => {
@@ -33,7 +41,7 @@ const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFrien
     }
 
     if (status === 'pending') {
-        if (action_user_id === loggedInUser.id) {
+        if (localActionUserId === loggedInUser.id) {
             return <button disabled className="bg-gray-400 dark:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg text-xs cursor-not-allowed">Request Sent</button>;
         } else {
             return (
