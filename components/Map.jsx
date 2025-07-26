@@ -177,7 +177,12 @@ const MapComponent = ({
       >
         <MapController center={center} />
         {/* Use a key on TileLayer to force re-render when theme changes */}
-        <TileLayer key={theme} url={mapTiles} attribution={mapAttribution} />
+        <TileLayer
+          key={theme}
+          url={mapTiles}
+          attribution={mapAttribution}
+          className={theme === 'dark' ? 'map-tiles-dark' : ''}
+        />
 
         <MapEvents onMapMove={onMapMove} />
         <SearchOnFlyEndController enabled={searchOnNextMoveEnd} onFlyEnd={onSearchAfterMove} />
