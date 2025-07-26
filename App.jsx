@@ -642,16 +642,20 @@ const App = () => {
     setSelectedPubId(pubId);
 
     // If a pub is selected, declaratively center the map on it.
-    // If null, the map remains where it is.
     if (pub?.location) {
         setMapCenter(pub.location);
+    }
+    
+    // On desktop, if a pub is selected, switch to the map tab to show details.
+    if (pubId) {
+      setActiveTab('map');
     }
     
     // On mobile, if a pub is selected and the list is collapsed, expand it.
     if (pubId && !isListExpanded) {
         setIsListExpanded(true);
     }
-  }, [isListExpanded]);
+  }, [isListExpanded, setActiveTab]);
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);

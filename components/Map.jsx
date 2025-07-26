@@ -142,11 +142,20 @@ const MapComponent = ({
     }
   }, [refreshTrigger, searchForPubs]);
 
-  const lightTiles = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  const lightAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  const mapTiles = useMemo(() => {
+    if (theme === 'dark') {
+      return 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    }
+    return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  }, [theme]);
 
-  const darkTiles = 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png';
-  const darkAttribution = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  const mapAttribution = useMemo(() => {
+    if (theme === 'dark') {
+      return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+    }
+    return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  }, [theme]);
+
 
   const icons = useMemo(() => {
     const strokeColor = theme === 'dark' ? '#1A202C' : '#FFFFFF';
@@ -167,11 +176,8 @@ const MapComponent = ({
         zoomControl={false}
       >
         <MapController center={center} />
-        {theme === 'dark' ? (
-          <TileLayer url={darkTiles} attribution={darkAttribution} />
-        ) : (
-          <TileLayer url={lightTiles} attribution={lightAttribution} />
-        )}
+        {/* Use a key on TileLayer to force re-render when theme changes */}
+        <TileLayer key={theme} url={mapTiles} attribution={mapAttribution} />
 
         <MapEvents onMapMove={onMapMove} />
         <SearchOnFlyEndController enabled={searchOnNextMoveEnd} onFlyEnd={onSearchAfterMove} />
