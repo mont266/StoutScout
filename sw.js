@@ -51,6 +51,11 @@ const urlsToCache = [
   '/components/DesktopPlacementConfirmation.jsx',
   '/components/UserListPage.jsx',
   '/components/AllRatingsPage.jsx',
+  '/components/CommunityPage.jsx',
+  '/components/CommunityFeed.jsx',
+  '/components/FriendsFeed.jsx',
+  '/components/FriendRequestsPage.jsx',
+  '/components/RatingCard.jsx',
 ];
 
 self.addEventListener('install', event => {

@@ -9,7 +9,84 @@ import ReportImageModal from './ReportImageModal.jsx';
 import { trackEvent } from '../analytics.js';
 import BanUserModal from './BanUserModal.jsx';
 
-const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onBack, onProfileUpdate }) => {
+const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendRequest, onFriendAction }) => {
+    const [status, setStatus] = useState('loading');
+    const [friendshipId, setFriendshipId] = useState(null);
+
+    useEffect(() => {
+        if (!loggedInUser || !targetUser || !friendships) {
+            setStatus('hidden');
+            return;
+        }
+
+        if (loggedInUser.id === targetUser.id) {
+            setStatus('hidden');
+            return;
+        }
+
+        const f = friendships.find(fs =>
+            (fs.user_id_1 === loggedInUser.id && fs.user_id_2 === targetUser.id) ||
+            (fs.user_id_1 === targetUser.id && fs.user_id_2 === loggedInUser.id)
+        );
+
+        if (f) {
+            setFriendshipId(f.id);
+            if (f.status === 'accepted') {
+                setStatus('friends');
+            } else if (f.status === 'pending') {
+                if (f.action_user_id === loggedInUser.id) {
+                    setStatus('request_sent');
+                } else {
+                    setStatus('request_received');
+                }
+            } else {
+                setStatus('add');
+            }
+        } else {
+            setStatus('add');
+        }
+    }, [loggedInUser, targetUser, friendships]);
+
+    const handleAction = (action) => {
+        if (action === 'add') {
+            onFriendRequest(targetUser.id);
+            setStatus('request_sent'); // Optimistic update
+        } else if (action === 'accept' && friendshipId) {
+            onFriendAction(friendshipId, 'accepted');
+            setStatus('friends'); // Optimistic update
+        } else if (action === 'decline' && friendshipId) {
+            onFriendAction(friendshipId, 'declined');
+            setStatus('add'); // Optimistic update
+        } else if (action === 'unfriend' && friendshipId) {
+            if (window.confirm(`Are you sure you want to remove ${targetUser.username} as a friend?`)) {
+                onFriendAction(friendshipId, 'declined'); // 'declined' effectively deletes the friendship
+                setStatus('add'); // Optimistic update
+            }
+        }
+    };
+
+    switch (status) {
+        case 'loading':
+            return <div className="animate-pulse bg-gray-300 dark:bg-gray-600 h-11 w-32 rounded-lg"></div>;
+        case 'add':
+            return <button onClick={() => handleAction('add')} className="w-full bg-blue-500 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"><i className="fas fa-user-plus"></i><span>Add Friend</span></button>;
+        case 'request_sent':
+            return <button disabled className="w-full bg-gray-400 dark:bg-gray-600 text-white font-bold py-2.5 px-4 rounded-lg cursor-not-allowed flex items-center justify-center space-x-2"><i className="fas fa-paper-plane"></i><span>Request Sent</span></button>;
+        case 'request_received':
+            return (
+                <div className="flex gap-2">
+                    <button onClick={() => handleAction('accept')} className="flex-1 bg-green-500 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-green-600 transition-colors">Accept</button>
+                    <button onClick={() => handleAction('decline')} className="flex-1 bg-gray-300 dark:bg-gray-600 text-black dark:text-white font-bold py-2.5 px-4 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors">Decline</button>
+                </div>
+            );
+        case 'friends':
+            return <button onClick={() => handleAction('unfriend')} className="w-full bg-green-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-red-500 transition-colors flex items-center justify-center space-x-2 group"><i className="fas fa-user-check group-hover:hidden"></i><i className="fas fa-user-times hidden group-hover:inline-block"></i><span className="group-hover:hidden">Friends</span><span className="hidden group-hover:inline-block">Unfriend</span></button>;
+        default:
+            return null; // 'hidden' case
+    }
+}
+
+const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction }) => {
     // Component now manages its own profile state to update it after a moderation action.
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
@@ -305,6 +382,17 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                         <p className="text-xs text-amber-600 dark:text-amber-300 mt-1 text-center">
                             {reviewsForNextLevelText}
                         </p>
+                    </div>
+
+                    {/* Friendship Button */}
+                    <div className="mt-6">
+                        <FriendshipButton 
+                            loggedInUser={loggedInUserProfile}
+                            targetUser={profile}
+                            friendships={friendships}
+                            onFriendRequest={onFriendRequest}
+                            onFriendAction={onFriendAction}
+                        />
                     </div>
                 </div>
 

@@ -196,12 +196,34 @@ const App = () => {
       setAllRatings(ratingsMap);
   }, []);
 
+  const fetchSocialData = useCallback(async (userId) => {
+    if (!userId) return;
+    
+    // Fetch user's likes
+    const { data: likesData, error: likesError } = await supabase
+      .from('rating_likes')
+      .select('rating_id')
+      .eq('user_id', userId);
+    if (likesError) console.error("Error fetching user likes:", likesError);
+    else setUserLikes(new Set((likesData || []).map(l => l.rating_id)));
+
+    // Fetch user's friendships
+    const { data: friendsData, error: friendsError } = await supabase
+      .from('friendships')
+      .select('*')
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+    if (friendsError) console.error("Error fetching friendships:", friendsError);
+    else setFriendships(friendsData || []);
+
+  }, []);
+
   const handleDataRefresh = useCallback(async () => {
       await Promise.all([
           fetchAllRatings(),
           fetchDbPubs(),
+          session?.user?.id ? fetchSocialData(session.user.id) : Promise.resolve(),
       ]);
-  }, [fetchAllRatings, fetchDbPubs]);
+  }, [fetchAllRatings, fetchDbPubs, fetchSocialData, session]);
 
   useEffect(() => {
     setLoading(true);
@@ -306,27 +328,6 @@ const App = () => {
     setUserRatings(mappedUserRatings);
     return { profile, ratings: mappedUserRatings };
   };
-
-  const fetchSocialData = useCallback(async (userId) => {
-    if (!userId) return;
-    
-    // Fetch user's likes
-    const { data: likesData, error: likesError } = await supabase
-      .from('rating_likes')
-      .select('rating_id')
-      .eq('user_id', userId);
-    if (likesError) console.error("Error fetching user likes:", likesError);
-    else setUserLikes(new Set((likesData || []).map(l => l.rating_id)));
-
-    // Fetch user's friendships
-    const { data: friendsData, error: friendsError } = await supabase
-      .from('friendships')
-      .select('*')
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
-    if (friendsError) console.error("Error fetching friendships:", friendsError);
-    else setFriendships(friendsData || []);
-
-  }, []);
 
   useEffect(() => {
     if (session?.user) {
@@ -1034,11 +1035,12 @@ const App = () => {
             setIsAuthOpen(true);
             return;
         }
-        
+    
         const isLiked = userLikes.has(ratingId);
         trackEvent('toggle_like', { rating_id: ratingId, action: isLiked ? 'unlike' : 'like' });
-
-        // Optimistic UI update
+    
+        // --- Start Optimistic UI Update ---
+        // 1. Update the set of liked ratings for instant heart color change.
         const newLikes = new Set(userLikes);
         if (isLiked) {
             newLikes.delete(ratingId);
@@ -1046,15 +1048,45 @@ const App = () => {
             newLikes.add(ratingId);
         }
         setUserLikes(newLikes);
-
-        // API call
-        if (isLiked) {
-            await supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: session.user.id });
-        } else {
-            await supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: session.user.id });
+    
+        // 2. Optimistically update the like_count in the global allRatings map for instant count change.
+        setAllRatings(prevAllRatings => {
+            const newAllRatings = new Map(prevAllRatings);
+            // We need to find the rating across all pubs in the map.
+            for (const [pubId, ratings] of newAllRatings.entries()) {
+                const ratingIndex = ratings.findIndex(r => r.id === ratingId);
+                if (ratingIndex !== -1) {
+                    // Create a new ratings array for the pub to ensure immutability.
+                    const newRatings = [...ratings];
+                    // Create a new rating object with the updated count.
+                    const oldRating = newRatings[ratingIndex];
+                    newRatings[ratingIndex] = {
+                        ...oldRating,
+                        like_count: isLiked ? (oldRating.like_count || 1) - 1 : (oldRating.like_count || 0) + 1,
+                    };
+                    // Update the map with the new ratings array.
+                    newAllRatings.set(pubId, newRatings);
+                    break; // Exit loop once the rating is found and updated.
+                }
+            }
+            return newAllRatings;
+        });
+        // --- End Optimistic UI Update ---
+    
+        // API call to the backend.
+        try {
+            if (isLiked) {
+                await supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: session.user.id });
+            } else {
+                await supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: session.user.id });
+            }
+        } catch (error) {
+            console.error("Failed to toggle like:", error);
+            // If the API call fails, revert the optimistic update by refetching all data.
+            fetchAllRatings(); 
+            fetchSocialData(session.user.id);
         }
-        // Refresh ratings to get updated like_count from the trigger
-        fetchAllRatings();
+        // No full refetch needed on success due to the optimistic update.
     };
 
     const renderProfile = (onBack) => {

@@ -5,7 +5,7 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
   const isActive = activeTab === tab.id;
 
   const handleClick = () => {
-    if ((tab.id === 'profile' || tab.id === 'leaderboard' || tab.id === 'moderation' || tab.id === 'stats') && !userProfile) {
+    if ((tab.id === 'profile' || tab.id === 'community' || tab.id === 'moderation' || tab.id === 'stats') && !userProfile) {
       onLoginRequest();
     } else {
       onTabChange(tab.id);
@@ -42,7 +42,7 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
 const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest }) => {
   const mainTabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
-    { id: 'leaderboard', icon: 'fa-trophy', label: 'Leaderboard' },
+    { id: 'community', icon: 'fa-users', label: 'Community' },
     { id: 'profile', icon: 'fa-user', label: 'Profile' },
   ];
   

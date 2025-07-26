@@ -7,6 +7,8 @@ const getTitle = (tab) => {
     switch(tab) {
         case 'map':
             return 'Stoutly';
+        case 'community':
+            return 'Community';
         case 'leaderboard':
             return 'Top Reviewers';
         case 'profile':

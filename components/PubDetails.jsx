@@ -32,7 +32,7 @@ const Section = ({ title, children, ...props }) => (
 );
 
 
-const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh }) => {
+const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike }) => {
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
   const [isRatingFormExpanded, setIsRatingFormExpanded] = useState(!existingUserRating && !!session);
@@ -220,7 +220,8 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                         {pub.ratings.slice(0, 5).map((rating) => {
                             const isOwnRating = session?.user?.id === rating.user.id;
                             const canAdminRemove = loggedInUserProfile?.is_developer && !isOwnRating;
-                            
+                            const isLiked = userLikes && userLikes.has(rating.id);
+
                             return (
                             <li key={rating.id} className="p-3 bg-white dark:bg-gray-800 rounded-lg flex items-start space-x-3 shadow-md">
                                 <button
@@ -253,35 +254,50 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                             <StarRating rating={rating.quality} color="text-amber-400" />
                                         </div>
                                     </div>
-                                    {rating.image_url && (
-                                      <div className="mt-2 flex items-end space-x-2">
-                                        <button onClick={() => setImageToView({ ...rating, uploaderName: rating.user.username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
-                                            <img src={rating.image_url} alt="Pint of Guinness" className="w-20 h-20 object-cover" />
-                                        </button>
-                                        <div className="flex flex-col gap-1">
-                                            {session && !isOwnRating && (
-                                              <button 
-                                                onClick={() => setReportModalInfo({ isOpen: true, rating })}
-                                                className="h-8 px-2 flex items-center justify-center bg-gray-200 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                                                aria-label="Report image"
-                                                title="Report image"
-                                              >
-                                                <i className="fas fa-flag"></i>
-                                              </button>
-                                            )}
-                                            {canAdminRemove && (
+                                    <div className="flex justify-between items-end">
+                                      {rating.image_url ? (
+                                        <div className="mt-2 flex items-end space-x-2">
+                                          <button onClick={() => setImageToView({ ...rating, uploaderName: rating.user.username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
+                                              <img src={rating.image_url} alt="Pint of Guinness" className="w-20 h-20 object-cover" />
+                                          </button>
+                                          <div className="flex flex-col gap-1">
+                                              {session && !isOwnRating && (
                                                 <button 
-                                                    onClick={() => handleAdminRemoveImage(rating)}
-                                                    className="h-8 px-2 flex items-center justify-center bg-red-200 dark:bg-red-700/80 text-red-600 dark:text-red-300 rounded-md hover:bg-red-300 dark:hover:bg-red-900/50 hover:text-red-700 dark:hover:text-red-400 transition-colors"
-                                                    aria-label="Admin: Remove Photo"
-                                                    title="Admin: Remove Photo"
+                                                  onClick={() => setReportModalInfo({ isOpen: true, rating })}
+                                                  className="h-8 px-2 flex items-center justify-center bg-gray-200 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                                                  aria-label="Report image"
+                                                  title="Report image"
                                                 >
-                                                    <i className="fas fa-trash-alt"></i>
+                                                  <i className="fas fa-flag"></i>
                                                 </button>
-                                            )}
+                                              )}
+                                              {canAdminRemove && (
+                                                  <button 
+                                                      onClick={() => handleAdminRemoveImage(rating)}
+                                                      className="h-8 px-2 flex items-center justify-center bg-red-200 dark:bg-red-700/80 text-red-600 dark:text-red-300 rounded-md hover:bg-red-300 dark:hover:bg-red-900/50 hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                                                      aria-label="Admin: Remove Photo"
+                                                      title="Admin: Remove Photo"
+                                                  >
+                                                      <i className="fas fa-trash-alt"></i>
+                                                  </button>
+                                              )}
+                                          </div>
                                         </div>
-                                      </div>
-                                    )}
+                                      ) : <div></div> /* Empty div to maintain layout */}
+                                      <button
+                                        onClick={() => onToggleLike(rating.id)}
+                                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold ${
+                                            isLiked
+                                            ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'
+                                            : 'bg-gray-100 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-800/50'
+                                        }`}
+                                        aria-pressed={isLiked}
+                                        aria-label={isLiked ? `Unlike rating, currently ${rating.like_count} likes` : `Like rating, currently ${rating.like_count} likes`}
+                                      >
+                                          <i className={`${isLiked ? 'fas' : 'far'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
+                                          <span>{rating.like_count || 0}</span>
+                                      </button>
+                                    </div>
                                 </div>
                             </li>
                         )})}

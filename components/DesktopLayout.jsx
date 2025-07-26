@@ -6,7 +6,6 @@ import MapComponent from './Map.jsx';
 import PubList from './PubList.jsx';
 import PubDetails from './PubDetails.jsx';
 import SettingsPage from './SettingsModal.jsx';
-import LeaderboardPage from './LeaderboardPage.jsx';
 import AuthPage from './AuthPage.jsx';
 import UpdatePasswordPage from './UpdatePasswordPage.jsx';
 import XPPopup from './XPPopup.jsx';
@@ -48,6 +47,8 @@ const DesktopLayout = (props) => {
         searchOnNextMoveEnd, handleSearchAfterMove,
         handleAddPubClick, pubPlacementState, finalPlacementLocation, isConfirmingLocation,
         handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement,
+        // Community props
+        CommunityPage, friendships, userLikes, handleToggleLike, handleFriendAction, allRatings
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -78,6 +79,8 @@ const DesktopLayout = (props) => {
                         onViewProfile={handleViewProfile}
                         loggedInUserProfile={userProfile}
                         onDataRefresh={handleDataRefresh}
+                        userLikes={userLikes}
+                        onToggleLike={handleToggleLike}
                     />
                 );
             }
@@ -119,11 +122,23 @@ const DesktopLayout = (props) => {
             );
         }
 
-        if (activeTab === 'leaderboard') {
-            if (viewedProfile) {
+        if (activeTab === 'community') {
+            if (viewedProfile) { // If we clicked a profile from the community tab
                 return renderProfile(handleBackFromProfileView);
             }
-            return <LeaderboardPage onViewProfile={handleViewProfile} />;
+            return (
+                <CommunityPage 
+                    userProfile={userProfile}
+                    onViewProfile={handleViewProfile}
+                    friendships={friendships}
+                    onFriendAction={handleFriendAction}
+                    userLikes={userLikes}
+                    onToggleLike={handleToggleLike}
+                    onLoginRequest={() => setIsAuthOpen(true)}
+                    allRatings={allRatings}
+                    onDataRefresh={handleDataRefresh}
+                />
+            );
         }
 
         if (activeTab === 'profile') {
