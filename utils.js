@@ -177,6 +177,10 @@ const EUROZONE_COUNTRIES = [
 export const getCurrencyInfo = (address = '') => {
     const lowerCaseAddress = address.toLowerCase();
 
+    if (lowerCaseAddress.includes('australia')) {
+        return { symbol: '$', code: 'AUD' };
+    }
+
     if (lowerCaseAddress.includes('usa') || lowerCaseAddress.includes('united states')) {
         return { symbol: '$', code: 'USD' };
     }

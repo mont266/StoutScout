@@ -49,6 +49,8 @@ const urlsToCache = [
   '/components/AddPubModal.jsx',
   '/components/PlacementConfirmationBar.jsx',
   '/components/DesktopPlacementConfirmation.jsx',
+  '/components/UserListPage.jsx',
+  '/components/AllRatingsPage.jsx',
 ];
 
 self.addEventListener('install', event => {

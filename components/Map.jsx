@@ -18,7 +18,7 @@ const userLocationIcon = L.divIcon({
 
 const createPubIcon = (fillColor, strokeColor) => L.divIcon({
   html: `
-    <div class="w-10 h-10 relative flex items-center justify-center" style="transform: translate(-50%, -100%);">
+    <div class="w-10 h-10 relative flex items-center justify-center">
       <svg viewBox="0 0 24 24" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1" class="w-full h-full drop-shadow-lg">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
       </svg>
@@ -34,7 +34,7 @@ const createPubIcon = (fillColor, strokeColor) => L.divIcon({
 
 const placementIcon = L.divIcon({
   html: `
-    <div class="w-12 h-12 relative flex items-center justify-center animate-pulse" style="transform: translate(-50%, -100%);">
+    <div class="w-12 h-12 relative flex items-center justify-center animate-pulse">
       <svg viewBox="0 0 24 24" fill="#FBBF24" stroke="#1A202C" stroke-width="1.5" class="w-full h-full drop-shadow-2xl">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
       </svg>

@@ -17,11 +17,6 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
   const [adminView, setAdminView] = useState('settings'); // 'settings', 'moderation', 'stats'
   const isDesktop = useIsDesktop();
   
-  // State for the new dev profile browser
-  const [allProfiles, setAllProfiles] = useState([]);
-  const [isFetchingProfiles, setIsFetchingProfiles] = useState(false);
-  const [profileSearch, setProfileSearch] = useState('');
-
   const handleUnitChange = (unit) => onSettingsChange({ ...settings, unit });
   const handleThemeChange = (theme) => onSettingsChange({ ...settings, theme });
   const handleDeveloperModeChange = (enabled) => onSettingsChange({ ...settings, developerMode: enabled });
@@ -48,31 +43,6 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
     onSetSimulatedLocation(null);
   };
   
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      // Only fetch if dev mode is on and user is a dev.
-      if (userProfile?.is_developer && settings.developerMode) {
-        setIsFetchingProfiles(true);
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id, username, avatar_id, level')
-          .order('username', { ascending: true });
-
-        if (error) {
-          console.error("Error fetching all profiles:", error);
-          setAllProfiles([]);
-        } else {
-          setAllProfiles(data || []);
-        }
-        setIsFetchingProfiles(false);
-      } else {
-        setAllProfiles([]); // Clear profiles if dev mode is off or user is not a dev
-      }
-    };
-
-    fetchProfiles();
-  }, [userProfile?.is_developer, settings.developerMode]);
-
   const handleInstallClick = async () => {
     if (!installPromptEvent) return;
     trackEvent('pwa_install_prompt_triggered');
@@ -87,10 +57,6 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
     trackEvent('share', { method: 'Add to Home Screen', content_type: 'app' });
     onShowIosInstall();
   };
-
-  const filteredProfiles = allProfiles.filter(p => 
-    p.username.toLowerCase().includes(profileSearch.toLowerCase())
-  );
 
   const isKm = settings.unit === 'km';
   const radiusInMilesRaw = settings.radius / MILES_TO_METERS;
@@ -292,48 +258,6 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
                     {settings.simulatedLocation && (
                       <button onClick={handleClearLocation} className="text-sm text-center w-full mt-2 text-gray-500 dark:text-gray-400 hover:underline">Clear simulated location</button>
                     )}
-                </div>
-                <div className="border-t border-dashed border-gray-300 dark:border-gray-600 pt-6">
-                  <label htmlFor="profile-search" className="block text-lg font-semibold text-gray-800 dark:text-white mb-2">Browse Profiles ({allProfiles.length})</label>
-                  <div className="relative">
-                    <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"></i>
-                    <input
-                      id="profile-search"
-                      type="text"
-                      value={profileSearch}
-                      onChange={(e) => setProfileSearch(e.target.value)}
-                      placeholder="Search by username..."
-                      className="w-full pl-10 pr-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                  <div className="mt-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 max-h-60 overflow-y-auto">
-                    {isFetchingProfiles ? (
-                       <div className="flex items-center justify-center p-8">
-                         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400"></div>
-                       </div>
-                    ) : (
-                      <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {filteredProfiles.length > 0 ? filteredProfiles.map(profile => (
-                          <li key={profile.id}>
-                            <button
-                              onClick={() => onViewProfile(profile.id, 'settings')}
-                              className="w-full flex items-center space-x-3 text-left p-3 hover:bg-amber-100 dark:hover:bg-amber-800/20 transition-colors"
-                            >
-                              <Avatar avatarId={profile.avatar_id} className="w-10 h-10 flex-shrink-0" />
-                              <div className="flex-grow min-w-0">
-                                <p className="font-semibold text-gray-900 dark:text-white truncate">{profile.username}</p>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Level {profile.level}</p>
-                              </div>
-                            </button>
-                          </li>
-                        )) : (
-                          <li className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                            No profiles found.
-                          </li>
-                        )}
-                      </ul>
-                    )}
-                  </div>
                 </div>
               </>
             )}

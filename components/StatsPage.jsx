@@ -3,6 +3,8 @@ import { supabase } from '../supabase.js';
 import { getCurrencyInfo } from '../utils.js';
 import { trackEvent } from '../analytics.js';
 import ImageGallery from './ImageGallery.jsx';
+import UserListPage from './UserListPage.jsx';
+import AllRatingsPage from './AllRatingsPage.jsx';
 
 const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString(), onClick }) => (
     <div
@@ -30,7 +32,7 @@ const StatsPage = ({ onBack, onViewProfile }) => {
     const [isUkExpanded, setIsUkExpanded] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [view, setView] = useState('main'); // 'main' or 'image_gallery'
+    const [currentView, setCurrentView] = useState('main'); // 'main', 'user_list', 'all_ratings', 'image_gallery'
 
     const fetchStats = useCallback(async () => {
         setLoading(true);
@@ -60,10 +62,10 @@ const StatsPage = ({ onBack, onViewProfile }) => {
     }, []);
 
     useEffect(() => {
-        if (view === 'main') {
+        if (currentView === 'main') {
             fetchStats();
         }
-    }, [view, fetchStats]);
+    }, [currentView, fetchStats]);
     
     useEffect(() => {
         if (!countryStats || countryStats.length === 0) {
@@ -71,28 +73,31 @@ const StatsPage = ({ onBack, onViewProfile }) => {
             return;
         }
 
-        const ukNations = ['England', 'Scotland', 'Wales', 'Northern Ireland', 'UK (unspecified)'];
-        const ukStats = countryStats.filter(stat => ukNations.includes(stat.country));
-        const otherStats = countryStats.filter(stat => !ukNations.includes(stat.country));
+        const ukNations = ['England', 'Scotland', 'Wales', 'Northern Ireland', 'UK (unspecified)', 'United Kingdom'];
+        
+        // Correctly separate UK nations from all other countries
+        const otherCountryStats = countryStats.filter(stat => !ukNations.includes(stat.country));
+        const ukSubStats = countryStats.filter(stat => ukNations.includes(stat.country));
 
-        let finalStats = [...otherStats];
+        // Start the list with all non-UK countries
+        const finalStats = [...otherCountryStats];
 
-        if (ukStats.length > 0) {
-            const totalUkRatings = ukStats.reduce((acc, stat) => acc + Number(stat.rating_count), 0);
-            const totalUkValue = ukStats.reduce((acc, stat) => acc + (Number(stat.avg_price) * Number(stat.rating_count)), 0);
+        // If any UK nations were found, aggregate them and add them to the list
+        if (ukSubStats.length > 0) {
+            const totalUkRatings = ukSubStats.reduce((acc, stat) => acc + Number(stat.rating_count), 0);
+            const totalUkValue = ukSubStats.reduce((acc, stat) => acc + (Number(stat.avg_price) * Number(stat.rating_count)), 0);
             const overallUkAvgPrice = totalUkRatings > 0 ? totalUkValue / totalUkRatings : 0;
 
-            const aggregatedUkStat = {
+            finalStats.push({
                 country: 'UK',
                 avg_price: overallUkAvgPrice,
                 rating_count: totalUkRatings,
                 isAggregated: true,
-                subStats: ukStats.sort((a,b) => Number(b.rating_count) - Number(a.rating_count))
-            };
-            
-            finalStats.push(aggregatedUkStat);
+                subStats: ukSubStats.sort((a,b) => Number(b.rating_count) - Number(a.rating_count))
+            });
         }
         
+        // Sort the final list by rating count so the most popular locations are at the top
         finalStats.sort((a, b) => Number(b.rating_count) - Number(a.rating_count));
         setProcessedStats(finalStats);
 
@@ -103,10 +108,10 @@ const StatsPage = ({ onBack, onViewProfile }) => {
         trackEvent('refresh_stats');
         fetchStats();
     };
-
-    const handleViewImageGallery = () => {
-        trackEvent('view_image_gallery');
-        setView('image_gallery');
+    
+    const handleViewChange = (viewName) => {
+        trackEvent(`stats_navigate_to_${viewName}`);
+        setCurrentView(viewName);
     };
 
     const renderLoading = () => (
@@ -145,14 +150,14 @@ const StatsPage = ({ onBack, onViewProfile }) => {
         </div>
     );
     
-    const renderContent = () => (
+    const renderMainContent = () => (
         <div className="space-y-8">
             <section>
                 <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Platform Overview</h4>
                 <div className="grid grid-cols-2 gap-4">
-                    <StatCard label="Total Users" value={stats.total_users} icon="fa-users" />
+                    <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} />
                     <StatCard label="Active Users (30d)" value={stats.active_users_30d} icon="fa-user-clock" />
-                    <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" />
+                    <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
                     <StatCard label="Unique Pubs Rated" value={stats.total_pubs} icon="fa-beer" />
                     <StatCard label="Avg. Quality" value={stats.avg_quality} icon="fa-star" format={(v) => `${parseFloat(v).toFixed(2)} / 5`} />
                     <StatCard label="Avg. Price Rating" value={stats.avg_price_rating} icon="fa-tag" format={(v) => `${parseFloat(v).toFixed(2)} / 5`} />
@@ -162,7 +167,7 @@ const StatsPage = ({ onBack, onViewProfile }) => {
             <section>
                 <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Content &amp; Moderation Activity</h4>
                 <div className="grid grid-cols-2 gap-4">
-                    <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={handleViewImageGallery} />
+                    <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
                     <StatCard label="Removed Images" value={stats.total_removed_images} icon="fa-trash-alt" />
                     <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
                     <StatCard label="Hidden Reviews" value={stats.total_hidden_ratings} icon="fa-eye-slash" />
@@ -200,7 +205,10 @@ const StatsPage = ({ onBack, onViewProfile }) => {
                                                     </div>
                                                     <div className="text-right">
                                                         <div className="font-bold text-lg text-green-600 dark:text-green-400">
-                                                            {currency.symbol}{parseFloat(stat.avg_price).toFixed(2)}
+                                                            {stat.avg_price != null
+                                                                ? `${currency.symbol}${parseFloat(stat.avg_price).toFixed(2)}`
+                                                                : <span className="text-sm text-gray-500">No data</span>
+                                                            }
                                                         </div>
                                                         <div className="text-xs text-gray-500 dark:text-gray-400">{stat.rating_count} ratings</div>
                                                     </div>
@@ -212,7 +220,10 @@ const StatsPage = ({ onBack, onViewProfile }) => {
                                                             <div className="font-medium text-gray-700 dark:text-gray-300">{subStat.country}</div>
                                                             <div className="text-right">
                                                                 <div className="font-semibold text-md text-green-600 dark:text-green-400">
-                                                                    {subCurrency.symbol}{parseFloat(subStat.avg_price).toFixed(2)}
+                                                                    {subStat.avg_price != null
+                                                                        ? `${subCurrency.symbol}${parseFloat(subStat.avg_price).toFixed(2)}`
+                                                                        : <span className="text-xs text-gray-500">No data</span>
+                                                                    }
                                                                 </div>
                                                                 <div className="text-xs text-gray-500 dark:text-gray-400">{subStat.rating_count} ratings</div>
                                                             </div>
@@ -230,7 +241,10 @@ const StatsPage = ({ onBack, onViewProfile }) => {
                                             <div className="font-semibold text-gray-900 dark:text-white">{stat.country}</div>
                                             <div className="text-right">
                                                 <div className="font-bold text-lg text-green-600 dark:text-green-400">
-                                                    {currency.symbol}{parseFloat(stat.avg_price).toFixed(2)}
+                                                    {stat.avg_price != null
+                                                        ? `${currency.symbol}${parseFloat(stat.avg_price).toFixed(2)}`
+                                                        : <span className="text-sm text-gray-500">No data</span>
+                                                    }
                                                 </div>
                                                 <div className="text-xs text-gray-500 dark:text-gray-400">{stat.rating_count} ratings</div>
                                             </div>
@@ -246,9 +260,17 @@ const StatsPage = ({ onBack, onViewProfile }) => {
             </section>
         </div>
     );
+    
+    if (currentView === 'user_list') {
+        return <UserListPage totalUsers={stats?.total_users || 0} onBack={() => setCurrentView('main')} onViewProfile={onViewProfile} />;
+    }
+    
+    if (currentView === 'all_ratings') {
+        return <AllRatingsPage totalRatings={stats?.total_ratings || 0} onBack={() => setCurrentView('main')} onViewProfile={onViewProfile} />;
+    }
 
-    if (view === 'image_gallery') {
-        return <ImageGallery totalImages={stats?.total_uploaded_images || 0} onBack={() => setView('main')} onViewProfile={onViewProfile} />;
+    if (currentView === 'image_gallery') {
+        return <ImageGallery totalImages={stats?.total_uploaded_images || 0} onBack={() => setCurrentView('main')} onViewProfile={onViewProfile} />;
     }
 
     return (
@@ -279,7 +301,7 @@ const StatsPage = ({ onBack, onViewProfile }) => {
                 </div>
             </header>
             <main className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-800/50 p-4 sm:p-6">
-                {loading ? renderLoading() : error ? renderError() : stats ? renderContent() : null}
+                {loading ? renderLoading() : error ? renderError() : stats ? renderMainContent() : null}
             </main>
         </div>
     );
