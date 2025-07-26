@@ -13,6 +13,7 @@ import useIsDesktop from './hooks/useIsDesktop.js';
 import ProfilePage from './components/ProfilePage.jsx';
 import BannedPage from './components/BannedPage.jsx';
 import AddPubModal from './components/AddPubModal.jsx';
+import CommunityPage from './components/CommunityPage.jsx';
 
 const App = () => {
   // --- STATE MANAGEMENT ---
@@ -86,6 +87,10 @@ const App = () => {
   const [finalPlacementLocation, setFinalPlacementLocation] = useState(null);
   const [isConfirmingLocation, setIsConfirmingLocation] = useState(false);
 
+  // Social Features State
+  const [friendships, setFriendships] = useState([]);
+  const [userLikes, setUserLikes] = useState(new Set());
+
 
   // --- HOOKS ---
   const isDesktop = useIsDesktop();
@@ -158,26 +163,35 @@ const App = () => {
   }, []);
 
   const fetchAllRatings = useCallback(async () => {
-      // With the new RLS policy, this will automatically exclude ratings from banned users.
+      // This now uses the 'all_ratings_view' for consistency with the feeds and to ensure RLS is handled correctly by the view's WHERE clause.
+      // Using the view is more performant and reliable for broad queries than a direct table query with a complex RLS policy.
       const { data, error } = await supabase
-          .from('ratings')
-          .select('id, pub_id, price, quality, exact_price, created_at, user_id, image_url, profiles(id, username, avatar_id)')
+          .from('all_ratings_view')
+          .select('*')
           .order('created_at', { ascending: false });
 
-      if (error) return;
+      if (error) {
+          console.error("Critical error fetching ratings from view. Pub details may be missing data.", error);
+          return;
+      }
 
       const ratingsMap = new Map();
       for (const rating of data || []) {
           const existing = ratingsMap.get(rating.pub_id) || [];
-          ratingsMap.set(rating.pub_id, [...existing, { 
-              id: rating.id,
-              price: rating.price, 
+          ratingsMap.set(rating.pub_id, [...existing, {
+              id: rating.rating_id,
+              price: rating.price,
               quality: rating.quality,
               exact_price: rating.exact_price,
               created_at: rating.created_at,
               image_url: rating.image_url,
-              user: rating.profiles || { id: rating.user_id, username: 'Anonymous', avatar_id: null },
-            }]);
+              like_count: rating.like_count || 0,
+              user: {
+                  id: rating.uploader_id,
+                  username: rating.uploader_username,
+                  avatar_id: rating.uploader_avatar_id
+              },
+          }]);
       }
       setAllRatings(ratingsMap);
   }, []);
@@ -215,6 +229,8 @@ const App = () => {
         } else {
             setActiveTab('map');
             setViewedProfile(null);
+            setFriendships([]);
+            setUserLikes(new Set());
         }
     });
 
@@ -291,14 +307,38 @@ const App = () => {
     return { profile, ratings: mappedUserRatings };
   };
 
+  const fetchSocialData = useCallback(async (userId) => {
+    if (!userId) return;
+    
+    // Fetch user's likes
+    const { data: likesData, error: likesError } = await supabase
+      .from('rating_likes')
+      .select('rating_id')
+      .eq('user_id', userId);
+    if (likesError) console.error("Error fetching user likes:", likesError);
+    else setUserLikes(new Set((likesData || []).map(l => l.rating_id)));
+
+    // Fetch user's friendships
+    const { data: friendsData, error: friendsError } = await supabase
+      .from('friendships')
+      .select('*')
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+    if (friendsError) console.error("Error fetching friendships:", friendsError);
+    else setFriendships(friendsData || []);
+
+  }, []);
+
   useEffect(() => {
     if (session?.user) {
       fetchUserData();
+      fetchSocialData(session.user.id);
     } else {
       setUserProfile(null);
       setUserRatings([]);
+      setFriendships([]);
+      setUserLikes(new Set());
     }
-  }, [session]);
+  }, [session, fetchSocialData]);
 
   useEffect(() => {
     const lockOrientation = async () => {
@@ -677,7 +717,7 @@ const App = () => {
     setLegalPageView(null);
 
     // Tabs requiring auth
-    if ((tab === 'profile' || tab === 'leaderboard' || tab === 'moderation' || tab === 'stats') && !session) {
+    if ((tab === 'profile' || tab === 'community' || tab === 'moderation' || tab === 'stats') && !session) {
       setIsAuthOpen(true);
       return;
     }
@@ -811,7 +851,8 @@ const App = () => {
 
     switch (origin) {
         case 'leaderboard':
-            setActiveTab('leaderboard');
+        case 'community':
+            setActiveTab('community');
             break;
         case 'pubDetails':
             setActiveTab('map'); // The selected pub context is preserved
@@ -942,6 +983,80 @@ const App = () => {
         }, 150);
     };
 
+    // --- SOCIAL FEATURE HANDLERS ---
+    const handleFriendRequest = async (targetUserId) => {
+        if (!session?.user) return;
+        trackEvent('send_friend_request', { target_user_id: targetUserId });
+        
+        const { data, error } = await supabase
+            .from('friendships')
+            .insert({
+                user_id_1: session.user.id,
+                user_id_2: targetUserId,
+                action_user_id: session.user.id,
+                status: 'pending'
+            })
+            .select()
+            .single();
+        
+        if (error) {
+            console.error("Error sending friend request:", error);
+            alert("Could not send friend request. They may have already sent you one!");
+        } else {
+            setFriendships(prev => [...prev, data]);
+        }
+    };
+
+    const handleFriendAction = async (friendshipId, action) => {
+        if (!session?.user) return;
+        trackEvent('respond_friend_request', { action });
+
+        const { data, error } = await supabase
+            .from('friendships')
+            .update({
+                status: action,
+                action_user_id: session.user.id
+            })
+            .eq('id', friendshipId)
+            .select()
+            .single();
+
+        if (error) {
+            console.error(`Error ${action}ing friend request:`, error);
+        } else {
+            // Update local state for immediate feedback
+            setFriendships(prev => prev.map(f => f.id === friendshipId ? data : f));
+        }
+    };
+    
+    const handleToggleLike = async (ratingId) => {
+        if (!session?.user) {
+            setIsAuthOpen(true);
+            return;
+        }
+        
+        const isLiked = userLikes.has(ratingId);
+        trackEvent('toggle_like', { rating_id: ratingId, action: isLiked ? 'unlike' : 'like' });
+
+        // Optimistic UI update
+        const newLikes = new Set(userLikes);
+        if (isLiked) {
+            newLikes.delete(ratingId);
+        } else {
+            newLikes.add(ratingId);
+        }
+        setUserLikes(newLikes);
+
+        // API call
+        if (isLiked) {
+            await supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: session.user.id });
+        } else {
+            await supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: session.user.id });
+        }
+        // Refresh ratings to get updated like_count from the trigger
+        fetchAllRatings();
+    };
+
     const renderProfile = (onBack) => {
       if (isFetchingViewedProfile) {
           return (
@@ -960,6 +1075,10 @@ const App = () => {
               onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
               onBack={onBack}
               onProfileUpdate={handleViewProfile}
+              // Social props
+              friendships={friendships}
+              onFriendRequest={handleFriendRequest}
+              onFriendAction={handleFriendAction}
           />
       );
     }
@@ -999,6 +1118,9 @@ const App = () => {
       // New props for pub placement flow
       pubPlacementState, finalPlacementLocation, isConfirmingLocation,
       handleSubmitNewPub, handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement,
+      // New props for Community Features
+      CommunityPage, friendships, userLikes,
+      handleFriendRequest, handleFriendAction, handleToggleLike,
     };
 
     return (
