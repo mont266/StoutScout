@@ -185,6 +185,7 @@ const DesktopLayout = (props) => {
                             settings={settings} onSettingsChange={handleSettingsChange}
                             onSetSimulatedLocation={handleSetSimulatedLocation}
                             userProfile={userProfile} 
+                            session={session}
                             onViewProfile={handleViewProfile}
                             onLogout={handleLogout}
                             onViewLegal={handleViewLegal}

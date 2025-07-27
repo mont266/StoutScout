@@ -100,7 +100,7 @@ const MobileLayout = (props) => {
                             onViewProfile={handleViewProfile}
                             friendships={friendships}
                             onFriendRequest={handleFriendRequest}
-                            onFriendAction={handleFriendAction}
+                            onFriendAction={onFriendAction}
                             userLikes={userLikes}
                             onToggleLike={onToggleLike}
                             onLoginRequest={() => setIsAuthOpen(true)}
@@ -120,6 +120,7 @@ const MobileLayout = (props) => {
                                 settings={settings} onSettingsChange={handleSettingsChange}
                                 onSetSimulatedLocation={handleSetSimulatedLocation}
                                 userProfile={userProfile} onLogout={handleLogout}
+                                session={session}
                                 onViewProfile={handleViewProfile}
                                 onViewLegal={handleViewLegal}
                                 onDataRefresh={handleDataRefresh}

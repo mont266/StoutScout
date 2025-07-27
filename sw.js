@@ -60,6 +60,8 @@ const urlsToCache = [
   '/components/ConfirmDeleteModal.jsx',
   '/components/DeleteConfirmationPopup.jsx',
   '/components/SubmittingRatingModal.jsx',
+  '/components/ContactModal.jsx',
+  '/components/FeedbackModal.jsx',
 ];
 
 self.addEventListener('install', event => {

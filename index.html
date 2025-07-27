@@ -77,5 +77,27 @@
       <input type="text" name="username" />
       <textarea name="appeal_reason"></textarea>
     </form>
+
+    <!-- Netlify form for contact submissions -->
+    <form name="contact" netlify netlify-honeypot="bot-field" hidden>
+      <input type="hidden" name="form-name" value="contact" />
+      <p class="hidden"><label>Don’t fill this out if you’re human: <input name="bot-field" /></label></p>
+      <input type="text" name="user_id" />
+      <input type="text" name="username" />
+      <input type="text" name="name" />
+      <input type="email" name="email" />
+      <textarea name="message"></textarea>
+    </form>
+
+    <!-- Netlify form for feedback submissions -->
+    <form name="feedback" netlify netlify-honeypot="bot-field" hidden>
+      <input type="hidden" name="form-name" value="feedback" />
+      <p class="hidden"><label>Don’t fill this out if you’re human: <input name="bot-field" /></label></p>
+      <input type="text" name="user_id" />
+      <input type="text" name="username" />
+      <select name="type"><option>Bug Report</option><option>Feature Request</option></select>
+      <input type="text" name="subject" />
+      <textarea name="description"></textarea>
+    </form>
   </body>
 </html>
