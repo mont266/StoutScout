@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 
 import Header from './Header.jsx';
 import FilterControls from './FilterControls.jsx';
@@ -20,6 +20,8 @@ import IOSInstallInstructionsModal from './IOSInstallInstructionsModal.jsx';
 import PlacementConfirmationBar from './PlacementConfirmationBar.jsx';
 import FriendsListPage from './FriendsListPage.jsx';
 import SubmittingRatingModal from './SubmittingRatingModal.jsx';
+import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
+import MapSearchBar from './MapSearchBar.jsx';
 
 const TabBar = ({ activeTab, onTabChange }) => {
   const tabs = [
@@ -64,7 +66,7 @@ const MobileLayout = (props) => {
         isDbPubsLoaded, initialSearchComplete, renderProfile, session, handleViewProfile,
         handleSettingsChange, handleSetSimulatedLocation, userProfile, handleLogout,
         handleViewPub, selectedPub, existingUserRatingForSelectedPub, handleRatePub,
-        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo,
+        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, handleBackFromProfileView,
         legalPageView, handleViewLegal, handleDataRefresh,
@@ -73,6 +75,7 @@ const MobileLayout = (props) => {
         searchOnNextMoveEnd, handleSearchAfterMove,
         handleAddPubClick, pubPlacementState, handleConfirmNewPub, handleCancelPubPlacement,
         isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove, isSubmittingRating,
+        handleFindPlace,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings,
         // Friends List props
@@ -81,6 +84,7 @@ const MobileLayout = (props) => {
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
+    const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
     return (
         <div className="w-full max-w-md mx-auto h-dvh flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased">
@@ -143,6 +147,26 @@ const MobileLayout = (props) => {
                         isRefreshing={isRefreshing}
                     />
                     <div className="flex-grow min-h-0 relative">
+                        {isSearchExpanded ? (
+                             <div className="absolute top-4 left-4 right-4 z-[1000] animate-fade-in-down">
+                                <MapSearchBar
+                                    onPlaceSelected={(location) => {
+                                        handleFindPlace(location);
+                                        setIsSearchExpanded(false);
+                                    }}
+                                    onClose={() => setIsSearchExpanded(false)}
+                                    isExpanded={true}
+                                />
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => setIsSearchExpanded(true)}
+                                className="absolute top-4 right-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300"
+                                aria-label="Search for a location"
+                            >
+                                <i className="fas fa-search text-2xl"></i>
+                            </button>
+                        )}
                         <MapComponent
                             pubs={sortedPubs} userLocation={userLocation}
                             center={mapCenter}
@@ -244,6 +268,7 @@ const MobileLayout = (props) => {
             {deleteConfirmationInfo && <DeleteConfirmationPopup key={deleteConfirmationInfo.key} />}
             {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
             {rankUpInfo && <RankUpPopup key={rankUpInfo.key} newRank={rankUpInfo.newRank} />}
+            {addPubSuccessInfo && <AddPubConfirmationPopup key={addPubSuccessInfo.key} />}
             {isAvatarModalOpen && userProfile && (
                 <AvatarSelectionModal
                     userProfile={userProfile}

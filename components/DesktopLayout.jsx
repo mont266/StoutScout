@@ -21,6 +21,8 @@ import PrivacyPolicyPage from './PrivacyPolicyPage.jsx';
 import DesktopPlacementConfirmation from './DesktopPlacementConfirmation.jsx';
 import FriendsListPage from './FriendsListPage.jsx';
 import SubmittingRatingModal from './SubmittingRatingModal.jsx';
+import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
+import MapSearchBar from './MapSearchBar.jsx';
 
 const BackButton = ({ onClick, text = "Back" }) => (
     <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -42,7 +44,7 @@ const DesktopLayout = (props) => {
         renderProfile, session, userProfile, handleViewProfile, handleBackFromProfileView,
         handleSettingsChange, handleSetSimulatedLocation, handleLogout,
         selectedPub, existingUserRatingForSelectedPub, handleRatePub,
-        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo,
+        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
         installPromptEvent, setInstallPromptEvent, setIsIosInstallModalOpen,
@@ -50,6 +52,7 @@ const DesktopLayout = (props) => {
         searchOnNextMoveEnd, handleSearchAfterMove,
         handleAddPubClick, pubPlacementState, finalPlacementLocation, isConfirmingLocation,
         handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
+        handleFindPlace,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings,
         // Friends List props
@@ -107,6 +110,9 @@ const DesktopLayout = (props) => {
             }
             return (
                 <div className="h-full flex flex-col">
+                    <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                        <MapSearchBar onPlaceSelected={handleFindPlace} />
+                    </div>
                     <FilterControls
                         currentFilter={filter}
                         onFilterChange={handleFilterChange}
@@ -268,6 +274,7 @@ const DesktopLayout = (props) => {
             {deleteConfirmationInfo && <DeleteConfirmationPopup key={deleteConfirmationInfo.key} />}
             {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
             {rankUpInfo && <RankUpPopup key={rankUpInfo.key} newRank={rankUpInfo.newRank} />}
+            {addPubSuccessInfo && <AddPubConfirmationPopup key={addPubSuccessInfo.key} />}
             {isAvatarModalOpen && userProfile && (
                 <AvatarSelectionModal
                     userProfile={userProfile}

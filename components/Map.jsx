@@ -223,7 +223,7 @@ const MapComponent = ({
       </MapContainer>
       
       {showSearchAreaButton && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
+        <div className="absolute top-[84px] left-1/2 -translate-x-1/2 z-[1000]">
           <button
             onClick={onSearchThisArea}
             className="px-4 py-2 bg-amber-500 text-black font-bold rounded-full shadow-lg hover:bg-amber-400 transition-colors flex items-center space-x-2 animate-fade-in-down"

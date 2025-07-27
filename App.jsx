@@ -66,6 +66,7 @@ const App = () => {
   const [deleteConfirmationInfo, setDeleteConfirmationInfo] = useState(null);
   const [leveledUpInfo, setLeveledUpInfo] = useState(null);
   const [rankUpInfo, setRankUpInfo] = useState(null);
+  const [addPubSuccessInfo, setAddPubSuccessInfo] = useState(null);
   
   const [levelRequirements, setLevelRequirements] = useState([]);
   
@@ -404,6 +405,39 @@ const App = () => {
       handleRefresh();
   }, [handleRefresh, mapCenter]);
 
+  const handleFindPlace = useCallback((location) => {
+    if (location?.lat && location?.lng) {
+        // Set both the search origin and map center to the new location.
+        // This ensures distance calculations are correct for the new area.
+        setSearchOrigin(location); 
+        setMapCenter(location);
+        
+        // This is the key part: reuse existing logic to trigger a search
+        // after the map's "flyTo" animation finishes.
+        setSearchOnNextMoveEnd(true); 
+    }
+  }, []);
+
+  const handleFindCurrentPub = useCallback(() => {
+    if (realUserLocation && (realUserLocation.lat !== DEFAULT_LOCATION.lat || realUserLocation.lng !== DEFAULT_LOCATION.lng)) {
+        trackEvent('recenter_map');
+        // Set both the search origin and map center to the user's location.
+        setSearchOrigin(realUserLocation);
+        setMapCenter(realUserLocation);
+        
+        // Signal to perform a search after the map finishes its "flyTo" animation.
+        setSearchOnNextMoveEnd(true);
+    } else if (locationError) {
+        // If there's a location error (e.g., permission denied), we can inform the user.
+        alert(`Could not get your location. Please check your browser's location settings. Error: ${locationError}`);
+        trackEvent('recenter_map_failed', { reason: 'location_error', message: locationError });
+    } else {
+        // If location is not yet available but there is no error.
+        alert("Still trying to find your location. Please wait a moment.");
+        trackEvent('recenter_map_failed', { reason: 'location_not_ready' });
+    }
+  }, [realUserLocation, locationError]);
+
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.toggle('dark', settings.theme === 'dark');
@@ -415,6 +449,7 @@ const App = () => {
   useEffect(() => { if (deleteConfirmationInfo) { const timer = setTimeout(() => setDeleteConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [deleteConfirmationInfo]);
   useEffect(() => { if (leveledUpInfo) { const timer = setTimeout(() => setLeveledUpInfo(null), 4000); return () => clearTimeout(timer); } }, [leveledUpInfo]);
   useEffect(() => { if (rankUpInfo) { const timer = setTimeout(() => setRankUpInfo(null), 5000); return () => clearTimeout(timer); } }, [rankUpInfo]);
+  useEffect(() => { if (addPubSuccessInfo) { const timer = setTimeout(() => setAddPubSuccessInfo(null), 3000); return () => clearTimeout(timer); } }, [addPubSuccessInfo]);
 
   const getDistance = useCallback((location1, location2) => {
     if (!location1 || !location2) return Infinity;
@@ -1042,6 +1077,117 @@ const App = () => {
       />
   );
   
+  const handleAddPubClick = () => {
+    if (!session) {
+      setIsAuthOpen(true);
+      return;
+    }
+    trackEvent('add_pub_start');
+    setIsAddPubModalOpen(true);
+  };
+  
+  const handleCancelPubPlacement = () => {
+    trackEvent('add_pub_cancel', { step: pubPlacementState ? 'placement' : 'modal' });
+    setIsAddPubModalOpen(false);
+    setPubPlacementState(null);
+    setFinalPlacementLocation(null);
+    setIsConfirmingLocation(false);
+  };
+  
+  const handleStartPubPlacement = async ({ name, address }) => {
+    trackEvent('add_pub_geocode_start', { address });
+    const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=jsonv2&limit=1&addressdetails=1`;
+  
+    try {
+      const response = await fetch(url, { headers: { 'User-Agent': userAgent } });
+      const data = await response.json();
+  
+      if (data && data.length > 0) {
+        const place = data[0];
+        const location = { lat: parseFloat(place.lat), lng: parseFloat(place.lon) };
+        
+        setIsAddPubModalOpen(false);
+        setPubPlacementState({ name, address });
+        setFinalPlacementLocation(location);
+        setMapCenter(location);
+        trackEvent('add_pub_geocode_success');
+      } else {
+        trackEvent('add_pub_geocode_failed', { reason: 'not_found' });
+        alert('Could not find that address. Please try being more specific or check for typos.');
+      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      trackEvent('add_pub_geocode_failed', { reason: 'api_error' });
+      alert('An error occurred while searching for the address. Please check your connection and try again.');
+    }
+  };
+  
+  const handleConfirmNewPub = async () => {
+    if (!pubPlacementState || !finalPlacementLocation || !session) return;
+  
+    setIsConfirmingLocation(true);
+    trackEvent('add_pub_confirm_start');
+  
+    try {
+      // Reverse geocode to get country info
+      const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
+      const reverseUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${finalPlacementLocation.lat}&lon=${finalPlacementLocation.lng}&addressdetails=1`;
+      const reverseResponse = await fetch(reverseUrl, { headers: { 'User-Agent': userAgent } });
+      const reverseData = await reverseResponse.json();
+      const country_code = reverseData?.address?.country_code || null;
+      const country_name = reverseData?.address?.country || null;
+      
+      // Generate a unique ID for the new pub to satisfy the not-null constraint.
+      const newPubId = `stoutly-${session.user.id}-${Date.now()}`;
+
+      const newPubPayload = {
+        id: newPubId,
+        name: pubPlacementState.name,
+        address: pubPlacementState.address,
+        lat: finalPlacementLocation.lat,
+        lng: finalPlacementLocation.lng,
+        created_by: session.user.id,
+        country_code,
+        country_name,
+      };
+  
+      const { data: insertedPub, error } = await supabase
+        .from('pubs')
+        .insert(newPubPayload)
+        .select()
+        .single();
+  
+      if (error) throw error;
+      
+      trackEvent('add_pub_success', { pub_id: insertedPub.id });
+      
+      // Clean up the placement state first
+      handleCancelPubPlacement(); 
+  
+      // Show success popup
+      setAddPubSuccessInfo({ key: Date.now() });
+
+      // Refresh data to include the new pub
+      await handleDataRefresh();
+      
+      // Format the pub object for selection, ensuring it has the nested location object.
+      const pubForSelection = {
+        ...insertedPub,
+        location: { lat: insertedPub.lat, lng: insertedPub.lng }
+      };
+      // Select the pub, which will also handle centering the map on it.
+      handleSelectPub(pubForSelection);
+  
+    } catch (error) {
+      console.error("Error confirming new pub:", error);
+      trackEvent('add_pub_failed', { error_message: error.message });
+      alert(`There was an error saving the pub: ${error.message}`);
+    } finally {
+      setIsConfirmingLocation(false);
+    }
+  };
+
   const layoutProps = {
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
       activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
@@ -1051,12 +1197,13 @@ const App = () => {
       getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
       renderProfile, session, userProfile, handleLogout: () => supabase.auth.signOut(),
       selectedPub, existingUserRatingForSelectedPub, handleRatePub,
-      reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo,
+      reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
       isAvatarModalOpen, setIsAvatarModalOpen,
       viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
       installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
       showSearchAreaButton, handleSearchThisArea,
       searchOnNextMoveEnd, handleSearchAfterMove,
+      pubPlacementState,
       isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove, isSubmittingRating,
       CommunityPage, friendships, userLikes, onToggleLike: handleToggleLike, allRatings,
       viewingFriendsOf, friendsList, isFetchingFriendsList,
@@ -1070,22 +1217,45 @@ const App = () => {
       onProfileUpdate: handleProfileUpdate,
       handleBackFromProfileView,
       handleBackFromFriendsList: () => setViewingFriendsOf(null),
+      handleFindPlace,
+      handleFindCurrentPub,
+      
+      // Implemented "Add Pub" flow handlers
+      handleAddPubClick: handleAddPubClick,
+      handleConfirmNewPub: handleConfirmNewPub,
+      handleCancelPubPlacement: handleCancelPubPlacement,
       
       // Stubs
       handleSettingsChange: setSettings,
       handleSetSimulatedLocation: () => {},
       handleUpdateAvatar: () => {},
-      handleAddPubClick: () => {},
-      handleConfirmNewPub: () => {},
-      handleCancelPubPlacement: () => {},
-      handleFindCurrentPub: () => {},
   };
 
   if (isDesktop) {
-      return <DesktopLayout {...layoutProps} />;
+      return (
+        <>
+            {isAddPubModalOpen && (
+                <AddPubModal 
+                    onClose={handleCancelPubPlacement}
+                    onSubmit={handleStartPubPlacement}
+                />
+            )}
+            <DesktopLayout {...layoutProps} />
+        </>
+      );
   }
 
-  return <MobileLayout {...layoutProps} />;
+  return (
+    <>
+        {isAddPubModalOpen && (
+            <AddPubModal 
+                onClose={handleCancelPubPlacement}
+                onSubmit={handleStartPubPlacement}
+            />
+        )}
+        <MobileLayout {...layoutProps} />
+    </>
+  );
 };
 
 export default App;
