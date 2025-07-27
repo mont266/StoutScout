@@ -77,7 +77,7 @@ const MobileLayout = (props) => {
         isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove, isSubmittingRating,
         handleFindPlace,
         // Community props
-        CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings,
+        CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
         deleteConfirmationInfo,
@@ -110,6 +110,8 @@ const MobileLayout = (props) => {
                             onLoginRequest={() => setIsAuthOpen(true)}
                             allRatings={allRatings}
                             onDataRefresh={handleDataRefresh}
+                            activeSubTab={communitySubTab}
+                            onSubTabChange={setCommunitySubTab}
                         />
                     )}
                     {activeTab === 'settings' && (() => {

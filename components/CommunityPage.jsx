@@ -6,12 +6,11 @@ import FriendsFeed from './FriendsFeed.jsx';
 import FriendRequestsPage from './FriendRequestsPage.jsx';
 import ImageModal from './ImageModal.jsx';
 
-const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh }) => {
-    const [activeSubTab, setActiveSubTab] = useState('community'); // community, friends, leaderboard, requests
+const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange }) => {
     const [imageToView, setImageToView] = useState(null);
 
     const handleTabChange = (tab) => {
-        setActiveSubTab(tab);
+        onSubTabChange(tab);
         trackEvent('change_community_subtab', { sub_tab: tab });
     };
 
@@ -75,10 +74,10 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
 
                 {/* Content Area */}
                 <main className="flex-grow overflow-y-auto">
-                    {activeSubTab === 'community' && <CommunityFeed onViewProfile={onViewProfile} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} />}
-                    {activeSubTab === 'friends' && <FriendsFeed onViewProfile={onViewProfile} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} />}
-                    {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={onViewProfile} />}
-                    {activeSubTab === 'requests' && <FriendRequestsPage requests={pendingRequests} onFriendAction={onFriendAction} onViewProfile={onViewProfile} onDataRefresh={onDataRefresh} />}
+                    {activeSubTab === 'community' && <CommunityFeed onViewProfile={(id) => onViewProfile(id, 'community')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} />}
+                    {activeSubTab === 'friends' && <FriendsFeed onViewProfile={(id) => onViewProfile(id, 'friends')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} />}
+                    {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} />}
+                    {activeSubTab === 'requests' && <FriendRequestsPage requests={pendingRequests} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'requests')} onDataRefresh={onDataRefresh} />}
                 </main>
             </div>
         </>

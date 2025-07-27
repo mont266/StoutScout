@@ -53,6 +53,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('map');
   const [userProfile, setUserProfile] = useState(null);
   const [userRatings, setUserRatings] = useState([]);
+  const [communitySubTab, setCommunitySubTab] = useState('community');
 
   // State for viewing other user profiles
   const [viewedProfile, setViewedProfile] = useState(null);
@@ -117,6 +118,8 @@ const App = () => {
       screenName = 'profile_other_user';
     } else if (activeTab === 'profile' && userProfile) {
       screenName = 'profile_own';
+    } else if (activeTab === 'community') {
+      screenName = `community_${communitySubTab}`;
     } else if (isAuthOpen) {
       screenName = 'auth';
     } else if (isPasswordRecovery) {
@@ -129,7 +132,7 @@ const App = () => {
       screen_name: screenName,
       screen_class: screenClass, // GA4 standard parameter
     });
-  }, [activeTab, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery, pubPlacementState, viewingFriendsOf]);
+  }, [activeTab, communitySubTab, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery, pubPlacementState, viewingFriendsOf]);
 
 
   useEffect(() => {
@@ -864,6 +867,11 @@ const App = () => {
     setViewedRatings([]);
     setProfileViewOrigin(null);
 
+    // When the user explicitly clicks the Community tab, reset to the main feed.
+    if (tab === 'community') {
+        setCommunitySubTab('community');
+    }
+
     // Tabs requiring auth
     if ((tab === 'profile' || tab === 'community' || tab === 'moderation' || tab === 'stats') && !session) {
       setIsAuthOpen(true);
@@ -964,13 +972,18 @@ const App = () => {
 
   const handleBackFromProfileView = () => {
     setViewedProfile(null);
-    // Go back to the origin tab if specified
-    if (profileViewOrigin && profileViewOrigin.startsWith('community')) {
-      setActiveTab('community');
-    } else if (profileViewOrigin && profileViewOrigin.startsWith('leaderboard')) {
-      setActiveTab('leaderboard');
-    }
+    const origin = profileViewOrigin;
     setProfileViewOrigin(null);
+
+    // This logic handles returning to the correct sub-tab in the community section
+    if (origin === 'leaderboard' || origin === 'friends' || origin === 'requests' || origin === 'community') {
+        setCommunitySubTab(origin);
+        setActiveTab('community');
+    } else if (origin && origin.startsWith('community')) {
+        // Fallback for any other community-related origin
+        setActiveTab('community');
+    }
+    // Other origins like 'pubDetails' do not trigger a tab change, which is correct.
   };
   
   const handleFriendRequest = async (targetUserId) => {
@@ -1208,6 +1221,7 @@ const App = () => {
       CommunityPage, friendships, userLikes, onToggleLike: handleToggleLike, allRatings,
       viewingFriendsOf, friendsList, isFetchingFriendsList,
       deleteConfirmationInfo,
+      communitySubTab, setCommunitySubTab,
       
       // Implemented handlers
       handleViewProfile,

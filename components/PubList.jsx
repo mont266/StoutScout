@@ -86,7 +86,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
           {resultsAreCapped && (
             <div className="p-2 text-center text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-b border-gray-200 dark:border-gray-700">
               <i className="fas fa-info-circle mr-1"></i>
-              Showing top 20 results. Reduce search radius in Settings to find more.
+              Result list is capped in this dense area. Reduce your search radius in Settings for a more detailed list.
             </div>
           )}
           {isLoading ? (

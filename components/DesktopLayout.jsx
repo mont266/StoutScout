@@ -54,7 +54,7 @@ const DesktopLayout = (props) => {
         handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
         handleFindPlace,
         // Community props
-        CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings,
+        CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleBackFromFriendsList,
         deleteConfirmationInfo,
@@ -165,6 +165,8 @@ const DesktopLayout = (props) => {
                     onLoginRequest={() => setIsAuthOpen(true)}
                     allRatings={allRatings}
                     onDataRefresh={handleDataRefresh}
+                    activeSubTab={communitySubTab}
+                    onSubTabChange={setCommunitySubTab}
                 />
             );
         }
