@@ -71,7 +71,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 <li><strong>Account Information:</strong> You can see and review your profile information and ratings at any time within the "Profile" section of the app. You can also update your ratings.</li>
                 <li><strong>Managing Your Photos:</strong> You can remove a photograph you've uploaded at any time by editing the corresponding rating. Removing the photo will delete it from our servers.</li>
                 <li><strong>Location Information:</strong> You can prevent us from collecting location information by changing the permissions on your device or browser. If you do, the map and distance-based features may not function correctly.</li>
-                <li><strong>Account Deletion:</strong> If you wish to delete your account, please contact us at scottmontford@gmail.com. Please note that upon deletion, we may retain certain anonymized or aggregated data that does not identify you.</li>
+                <li><strong>Account Deletion:</strong> If you wish to delete your account, please contact us at admin@stoutly.co.uk. Please note that upon deletion, we may retain certain anonymized or aggregated data that does not identify you.</li>
             </ul>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">5. Data Security</h2>
@@ -84,7 +84,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
             <p>We may update this Privacy Policy from time to time. If we make changes, we will notify you by revising the date at the top of the policy.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Contact Us</h2>
-            <p>If you have any questions about this Privacy Policy, please contact us at scottmontford@gmail.com.</p>
+            <p>If you have any questions about this Privacy Policy, please contact us at admin@stoutly.co.uk.</p>
         </LegalPageWrapper>
     );
 };
