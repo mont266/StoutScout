@@ -173,9 +173,11 @@ const MobileLayout = (props) => {
                             pubs={sortedPubs} userLocation={userLocation}
                             center={mapCenter}
                             onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                            onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
+                            onNominatimResults={handleNominatimResults} theme={settings.theme}
                             onMapMove={handleMapMove}
                             refreshTrigger={refreshTrigger}
+                            searchOrigin={searchOrigin}
+                            radius={settings.radius}
                             showSearchAreaButton={showSearchAreaButton}
                             onSearchThisArea={handleSearchThisArea}
                             searchOnNextMoveEnd={searchOnNextMoveEnd}

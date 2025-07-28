@@ -11,6 +11,7 @@ export default {
       animation: {
         'fade-in-down': 'fadeInDown 0.3s ease-out forwards',
         'fade-in-up': 'fadeInUp 0.3s ease-out forwards',
+        'pulse-halo': 'pulseHalo 1.5s ease-in-out infinite',
       },
       keyframes: {
         fadeInDown: {
@@ -31,6 +32,20 @@ export default {
           '100%': {
             opacity: '1',
             transform: 'translateY(0) scale(1)',
+          },
+        },
+        pulseHalo: {
+          '0%': {
+            transform: 'scale(1)',
+            opacity: '0.5',
+          },
+          '75%': {
+            transform: 'scale(2)',
+            opacity: '0',
+          },
+          '100%': {
+            transform: 'scale(2)',
+            opacity: '0',
           },
         },
       },

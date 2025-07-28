@@ -62,6 +62,10 @@ const urlsToCache = [
   '/components/SubmittingRatingModal.jsx',
   '/components/ContactModal.jsx',
   '/components/FeedbackModal.jsx',
+  '/components/TimeSeriesChart.jsx',
+  '/components/ImageGallery.jsx',
+  '/components/UserListPage.jsx',
+  '/components/AllRatingsPage.jsx',
 ];
 
 self.addEventListener('install', event => {

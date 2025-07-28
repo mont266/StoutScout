@@ -17,8 +17,8 @@ const UserListPage = ({ totalUsers, onBack, onViewProfile }) => {
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('id, username, avatar_id, level, is_banned')
-                .order('username', { ascending: true });
+                .select('id, username, avatar_id, level, is_banned, created_at')
+                .order('created_at', { ascending: false }); // <-- FIX: Sort by most recently joined
 
             if (error) throw error;
             setProfiles(data || []);
@@ -39,7 +39,7 @@ const UserListPage = ({ totalUsers, onBack, onViewProfile }) => {
         p.username.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const renderContent = () => {
+    const renderListContent = () => {
         if (loading) {
             return (
                 <div className="flex justify-center items-center h-full">
@@ -49,7 +49,7 @@ const UserListPage = ({ totalUsers, onBack, onViewProfile }) => {
         }
         if (error) {
             return (
-                <div className="text-center text-red-500 p-6 bg-red-500/10 rounded-lg">
+                <div className="text-center text-red-500 p-6 bg-red-500/10 rounded-lg m-4">
                     <p>{error}</p>
                     <button onClick={fetchProfiles} className="mt-4 px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600">Retry</button>
                 </div>
@@ -57,7 +57,7 @@ const UserListPage = ({ totalUsers, onBack, onViewProfile }) => {
         }
         if (filteredProfiles.length === 0) {
             return (
-                <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg m-4">
                     <p>No profiles found matching "{searchTerm}".</p>
                 </div>
             );
@@ -97,7 +97,9 @@ const UserListPage = ({ totalUsers, onBack, onViewProfile }) => {
             )}
             <header className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-xl font-bold text-amber-500 dark:text-amber-400">All Users</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">A complete list of all registered users on the platform. ({totalUsers.toLocaleString()} total)</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    A list of all registered users ({totalUsers.toLocaleString()} total).
+                </p>
                 <div className="relative mt-4">
                     <i className="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"></i>
                     <input
@@ -109,8 +111,9 @@ const UserListPage = ({ totalUsers, onBack, onViewProfile }) => {
                     />
                 </div>
             </header>
+            
             <main className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-800/50">
-                {renderContent()}
+                {renderListContent()}
             </main>
         </div>
     );

@@ -58,6 +58,8 @@ const DesktopLayout = (props) => {
         // Friends List props
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleBackFromFriendsList,
         deleteConfirmationInfo,
+        // Stats props
+        statsSubView, setStatsSubView,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -207,6 +209,18 @@ const DesktopLayout = (props) => {
             );
         }
         
+        return null;
+    };
+
+    const FullScreenPage = () => {
+        if (activeTab === 'stats') {
+            return <StatsPage 
+                onBack={() => handleTabChange('settings')} 
+                onViewProfile={handleViewProfile}
+                subView={statsSubView}
+                setSubView={setStatsSubView}
+            />;
+        }
         if (activeTab === 'moderation') {
             return (
                 <ModerationPage
@@ -216,13 +230,10 @@ const DesktopLayout = (props) => {
                 />
             );
         }
-
-        if (activeTab === 'stats') {
-            return <StatsPage onBack={() => handleTabChange('settings')} onViewProfile={handleViewProfile} />;
-        }
-
         return null;
     };
+    
+    const isFullScreenTab = ['stats', 'moderation'].includes(activeTab);
 
     return (
         <div className="w-full h-dvh flex bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-sans antialiased">
@@ -234,38 +245,48 @@ const DesktopLayout = (props) => {
                 onLoginRequest={() => setIsAuthOpen(true)}
             />
 
-            <aside className="w-[480px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-10">
-               {renderContentPanel()}
-            </aside>
-            
-            <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
-                <MapComponent
-                    pubs={sortedPubs} userLocation={userLocation}
-                    center={mapCenter}
-                    onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                    onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
-                    onMapMove={handleMapMove}
-                    refreshTrigger={refreshTrigger}
-                    showSearchAreaButton={showSearchAreaButton}
-                    onSearchThisArea={handleSearchThisArea}
-                    searchOnNextMoveEnd={searchOnNextMoveEnd}
-                    onSearchAfterMove={handleSearchAfterMove}
-                    pubPlacementState={pubPlacementState}
-                    finalPlacementLocation={finalPlacementLocation}
-                    onPlacementPinMove={handlePlacementPinMove}
-                />
-                 {locationError && !(settings.developerMode && settings.simulatedLocation) && 
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
-                }
-                <button
-                    onClick={handleFindCurrentPub}
-                    title="Recenter map on your location"
-                    className={`absolute bottom-4 left-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
-                    aria-label="Recenter map on your location"
-                >
-                    <i className="fas fa-location-arrow text-2xl"></i>
-                </button>
-            </main>
+            {isFullScreenTab ? (
+                <main className="flex-grow h-full relative">
+                    <FullScreenPage />
+                </main>
+            ) : (
+                <>
+                    <aside className="w-[480px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-10">
+                    {renderContentPanel()}
+                    </aside>
+                    
+                    <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
+                        <MapComponent
+                            pubs={sortedPubs} userLocation={userLocation}
+                            center={mapCenter}
+                            onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
+                            onNominatimResults={handleNominatimResults} theme={settings.theme}
+                            onMapMove={handleMapMove}
+                            refreshTrigger={refreshTrigger}
+                            searchOrigin={searchOrigin}
+                            radius={settings.radius}
+                            showSearchAreaButton={showSearchAreaButton}
+                            onSearchThisArea={handleSearchThisArea}
+                            searchOnNextMoveEnd={searchOnNextMoveEnd}
+                            onSearchAfterMove={handleSearchAfterMove}
+                            pubPlacementState={pubPlacementState}
+                            finalPlacementLocation={finalPlacementLocation}
+                            onPlacementPinMove={handlePlacementPinMove}
+                        />
+                        {locationError && !(settings.developerMode && settings.simulatedLocation) && 
+                            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
+                        }
+                        <button
+                            onClick={handleFindCurrentPub}
+                            title="Recenter map on your location"
+                            className={`absolute bottom-4 left-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
+                            aria-label="Recenter map on your location"
+                        >
+                            <i className="fas fa-location-arrow text-2xl"></i>
+                        </button>
+                    </main>
+                </>
+            )}
             
             {/* Popups and Modals */}
             <SubmittingRatingModal isVisible={isSubmittingRating} />

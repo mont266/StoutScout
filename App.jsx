@@ -54,6 +54,7 @@ const App = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [userRatings, setUserRatings] = useState([]);
   const [communitySubTab, setCommunitySubTab] = useState('community');
+  const [statsSubView, setStatsSubView] = useState('main');
 
   // State for viewing other user profiles
   const [viewedProfile, setViewedProfile] = useState(null);
@@ -102,6 +103,8 @@ const App = () => {
   // --- HOOKS ---
   const isDesktop = useIsDesktop();
   const locationPermissionTracked = useRef(false);
+  const initialSettingsLoad = useRef(true);
+  const radiusUpdateTimeout = useRef(null);
   
   // --- ANALYTICS ---
   
@@ -120,6 +123,8 @@ const App = () => {
       screenName = 'profile_own';
     } else if (activeTab === 'community') {
       screenName = `community_${communitySubTab}`;
+    } else if (activeTab === 'stats') {
+      screenName = `stats_${statsSubView}`;
     } else if (isAuthOpen) {
       screenName = 'auth';
     } else if (isPasswordRecovery) {
@@ -132,7 +137,7 @@ const App = () => {
       screen_name: screenName,
       screen_class: screenClass, // GA4 standard parameter
     });
-  }, [activeTab, communitySubTab, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery, pubPlacementState, viewingFriendsOf]);
+  }, [activeTab, communitySubTab, statsSubView, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery, pubPlacementState, viewingFriendsOf]);
 
 
   useEffect(() => {
@@ -377,6 +382,39 @@ const App = () => {
 
   // --- CORE APP LOGIC & HANDLERS ---
 
+  // Save settings to local storage whenever they change.
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
+
+  // Effect to automatically refresh pubs when the search radius setting changes.
+  useEffect(() => {
+    // Prevent this from running on the initial app load.
+    if (initialSettingsLoad.current) {
+        initialSettingsLoad.current = false;
+        return;
+    }
+    
+    // Clear any existing timeout to debounce the slider.
+    if (radiusUpdateTimeout.current) {
+        clearTimeout(radiusUpdateTimeout.current);
+    }
+
+    // Set a new timeout to trigger a refresh after the user stops changing the slider.
+    radiusUpdateTimeout.current = setTimeout(() => {
+        trackEvent('change_setting', { setting_name: 'radius', value: settings.radius });
+        handleRefresh();
+    }, 800); // 800ms debounce period
+
+    // Cleanup timeout on component unmount or if radius changes again.
+    return () => {
+        if (radiusUpdateTimeout.current) {
+            clearTimeout(radiusUpdateTimeout.current);
+        }
+    };
+  }, [settings.radius]);
+
+
   const handleNominatimResults = useCallback((places, capped) => {
     if (!initialSearchComplete) {
       setInitialSearchComplete(true);
@@ -467,33 +505,10 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    // 1. Create an index of DB pubs by their signature (normalized name + postcode)
-    // This helps us quickly check for duplicates.
-    const dbPubIndex = new Map();
-    dbPubs.forEach(pub => {
-      const name = normalizePubNameForComparison(pub.name);
-      const postcode = extractPostcode(pub.address);
-      if (name && postcode) {
-        dbPubIndex.set(`${name}|${postcode}`, pub.id);
-      }
-    });
-
     const combinedPubsMap = new Map();
 
-    // 2. Process Nominatim results.
-    // Filter out any results that are duplicates of existing rated pubs.
-    const uniqueNominatimPubs = nominatimResults.filter(place => {
-      const placeName = normalizePubNameForComparison(place.name);
-      const placePostcode = place.postcode; // Already normalized
-      if (placeName && placePostcode) {
-        const signature = `${placeName}|${placePostcode}`;
-        return !dbPubIndex.has(signature); // Keep if NOT in the db index
-      }
-      return true; // Keep if we can't create a signature
-    });
-
-    // Add unique Nominatim pubs to the display map.
-    uniqueNominatimPubs.forEach(place => {
+    // 1. Add all Nominatim pubs to the map.
+    nominatimResults.forEach(place => {
       combinedPubsMap.set(place.id, {
         id: place.id,
         name: place.name,
@@ -504,22 +519,25 @@ const App = () => {
       });
     });
     
-    // 3. Add all DB pubs that are within the search radius.
-    // Since we filtered duplicates from Nominatim, this is safe to do.
+    // 2. Add all DB pubs, overwriting any duplicates from Nominatim.
     dbPubs.forEach(pub => {
-        if (pub.location) { // Ensure location exists
-            const distance = getDistance(pub.location, searchOrigin);
-            if (distance <= settings.radius) {
-                combinedPubsMap.set(pub.id, { ...pub });
-            }
-        }
+        combinedPubsMap.set(pub.id, { ...pub });
     });
 
-    // 5. Finalize the list and add ratings.
-    const finalPubsList = Array.from(combinedPubsMap.values()).map(pub => ({
+    // 3. Convert map to an array and filter by the search radius.
+    const allPubsInArea = Array.from(combinedPubsMap.values());
+    const pubsInRadius = allPubsInArea.filter(pub => {
+        if (!pub.location) return false;
+        const distance = getDistance(pub.location, searchOrigin);
+        return distance <= settings.radius;
+    });
+
+    // 4. Add ratings to the filtered list.
+    const finalPubsList = pubsInRadius.map(pub => ({
       ...pub,
       ratings: allRatings.get(pub.id) || [],
     }));
+
     setPubs(finalPubsList);
   }, [nominatimResults, dbPubs, allRatings, searchOrigin, settings.radius, getDistance]);
 
@@ -848,7 +866,15 @@ const App = () => {
     }
   }, [session, userLikes, fetchAllRatings]);
   
-  const handleTabChange = (tab) => {
+  const handleCancelPubPlacement = useCallback(() => {
+    trackEvent('add_pub_cancel', { step: pubPlacementState ? 'placement' : 'modal' });
+    setIsAddPubModalOpen(false);
+    setPubPlacementState(null);
+    setFinalPlacementLocation(null);
+    setIsConfirmingLocation(false);
+  }, [pubPlacementState]);
+
+  const handleTabChange = useCallback((tab) => {
     // On mobile, close the details panel when switching main tabs.
     if (!isDesktop) {
         setSelectedPubId(null);
@@ -860,6 +886,9 @@ const App = () => {
     }
 
     // When user explicitly changes tabs, reset all sub-view states
+    if (activeTab === 'stats' && tab !== 'stats') {
+        setStatsSubView('main');
+    }
     setLegalPageView(null);
     setViewingFriendsOf(null);
     setFriendsList([]);
@@ -884,7 +913,7 @@ const App = () => {
     }
 
     setActiveTab(tab);
-  };
+  }, [isDesktop, pubPlacementState, activeTab, session, userProfile, handleCancelPubPlacement]);
 
   const handleViewLegal = (page) => {
     trackEvent('view_legal_page', { page_name: page });
@@ -897,7 +926,7 @@ const App = () => {
     setFinalPlacementLocation(newLocation);
   }, []);
 
-  const handleViewProfile = async (userId, origin) => {
+  const handleViewProfile = useCallback(async (userId, origin) => {
     if (!userId) return;
     // Special case: If user clicks their own profile, use handleTabChange to ensure a clean reset to their own view.
     if (userProfile && userId === userProfile.id) {
@@ -968,7 +997,7 @@ const App = () => {
     } finally {
         setIsFetchingViewedProfile(false);
     }
-  };
+  }, [userProfile, handleTabChange]);
 
   const handleBackFromProfileView = () => {
     setViewedProfile(null);
@@ -1099,14 +1128,6 @@ const App = () => {
     setIsAddPubModalOpen(true);
   };
   
-  const handleCancelPubPlacement = () => {
-    trackEvent('add_pub_cancel', { step: pubPlacementState ? 'placement' : 'modal' });
-    setIsAddPubModalOpen(false);
-    setPubPlacementState(null);
-    setFinalPlacementLocation(null);
-    setIsConfirmingLocation(false);
-  };
-  
   const handleStartPubPlacement = async ({ name, address }) => {
     trackEvent('add_pub_geocode_start', { address });
     const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
@@ -1222,6 +1243,7 @@ const App = () => {
       viewingFriendsOf, friendsList, isFetchingFriendsList,
       deleteConfirmationInfo,
       communitySubTab, setCommunitySubTab,
+      statsSubView, setStatsSubView,
       
       // Implemented handlers
       handleViewProfile,
