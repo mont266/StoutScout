@@ -14,6 +14,7 @@ import DeleteConfirmationPopup from './DeleteConfirmationPopup.jsx';
 import LevelUpPopup from './LevelUpPopup.jsx';
 import RankUpPopup from './RankUpPopup.jsx';
 import AvatarSelectionModal from './AvatarSelectionModal.jsx';
+import ModerationPage from './ModerationPage.jsx';
 import TermsOfUsePage from './TermsOfUsePage.jsx';
 import PrivacyPolicyPage from './PrivacyPolicyPage.jsx';
 import IOSInstallInstructionsModal from './IOSInstallInstructionsModal.jsx';
@@ -27,7 +28,6 @@ const TabBar = ({ activeTab, onTabChange }) => {
   const tabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
-    { id: 'profile', icon: 'fa-user', label: 'Profile' },
     { id: 'settings', icon: 'fa-cog', label: 'Settings' },
   ];
 
@@ -38,7 +38,7 @@ const TabBar = ({ activeTab, onTabChange }) => {
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`flex items-center justify-center w-20 h-14 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+            className={`flex flex-col items-center justify-center w-24 h-16 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
               activeTab === tab.id
                 ? 'text-amber-500 dark:text-amber-400'
                 : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -46,7 +46,8 @@ const TabBar = ({ activeTab, onTabChange }) => {
             aria-label={tab.label}
             aria-current={activeTab === tab.id ? 'page' : undefined}
           >
-            <i className={`fas ${tab.icon} fa-2x`}></i>
+            <i className={`fas ${tab.icon} fa-lg`}></i>
+            <span className="text-xs mt-1 font-semibold">{tab.label}</span>
           </button>
         ))}
       </div>
@@ -76,11 +77,15 @@ const MobileLayout = (props) => {
         handleAddPubClick, pubPlacementState, handleConfirmNewPub, handleCancelPubPlacement,
         isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove, isSubmittingRating,
         handleFindPlace,
+        levelRequirements,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
         deleteConfirmationInfo,
+        // Stats & Admin
+        StatsPage,
+        settingsSubView, handleViewAdminPage,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -93,7 +98,13 @@ const MobileLayout = (props) => {
             {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(false)} />}
             <SubmittingRatingModal isVisible={isSubmittingRating} />
 
-            <Header activeTab={activeTab} />
+            <Header 
+                activeTab={activeTab}
+                userProfile={userProfile}
+                levelRequirements={levelRequirements}
+                onProfileClick={() => props.handleTabChange('profile')}
+                onLoginRequest={() => setIsAuthOpen(true)}
+            />
 
             <main className="relative flex-grow flex flex-col overflow-hidden">
                 <div className={`flex-grow flex flex-col overflow-y-auto ${activeTab !== 'map' ? '' : 'hidden'}`}>
@@ -115,6 +126,12 @@ const MobileLayout = (props) => {
                         />
                     )}
                     {activeTab === 'settings' && (() => {
+                        if (settingsSubView === 'stats') {
+                            return <StatsPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} />;
+                        }
+                        if (settingsSubView === 'moderation') {
+                            return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} />;
+                        }
                         if (legalPageView === 'terms') {
                             return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
                         }
@@ -129,6 +146,8 @@ const MobileLayout = (props) => {
                                 session={session}
                                 onViewProfile={handleViewProfile}
                                 onViewLegal={handleViewLegal}
+                                onViewStats={() => handleViewAdminPage('stats')}
+                                onViewModeration={() => handleViewAdminPage('moderation')}
                                 onDataRefresh={handleDataRefresh}
                                 installPromptEvent={installPromptEvent}
                                 setInstallPromptEvent={setInstallPromptEvent}
@@ -173,11 +192,9 @@ const MobileLayout = (props) => {
                             pubs={sortedPubs} userLocation={userLocation}
                             center={mapCenter}
                             onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                            onNominatimResults={handleNominatimResults} theme={settings.theme}
+                            onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
                             onMapMove={handleMapMove}
                             refreshTrigger={refreshTrigger}
-                            searchOrigin={searchOrigin}
-                            radius={settings.radius}
                             showSearchAreaButton={showSearchAreaButton}
                             onSearchThisArea={handleSearchThisArea}
                             searchOnNextMoveEnd={searchOnNextMoveEnd}

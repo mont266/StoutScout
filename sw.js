@@ -57,7 +57,6 @@ const urlsToCache = [
   '/components/FriendRequestsPage.jsx',
   '/components/RatingCard.jsx',
   '/components/FriendsListPage.jsx',
-  '/components/ConfirmDeleteModal.jsx',
   '/components/DeleteConfirmationPopup.jsx',
   '/components/SubmittingRatingModal.jsx',
   '/components/ContactModal.jsx',
@@ -66,6 +65,8 @@ const urlsToCache = [
   '/components/ImageGallery.jsx',
   '/components/UserListPage.jsx',
   '/components/AllRatingsPage.jsx',
+  '/components/ConfirmationModal.jsx',
+  '/components/AlertModal.jsx',
 ];
 
 self.addEventListener('install', event => {

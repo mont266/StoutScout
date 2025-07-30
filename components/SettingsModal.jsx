@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants.js';
 import { supabase } from '../supabase.js';
 import Avatar from './Avatar.jsx';
@@ -13,11 +13,9 @@ import FeedbackModal from './FeedbackModal.jsx';
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, userProfile, session, onLogout, onViewProfile, onViewLegal, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall }) => {
+const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, userProfile, session, onLogout, onViewProfile, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall }) => {
   const [locationInput, setLocationInput] = useState(settings.simulatedLocation?.name || '');
   const [isLocating, setIsLocating] = useState(false);
-  const [adminView, setAdminView] = useState('settings'); // 'settings', 'moderation', 'stats'
-  const isDesktop = useIsDesktop();
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   
@@ -72,17 +70,9 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
   const displayUnit = isKm ? 'km' : 'mi';
   
   const mobileOS = getMobileOS();
-  
-  if (userProfile?.is_developer) {
-    if (adminView === 'moderation') {
-      return <ModerationPage onViewProfile={onViewProfile} onBack={() => setAdminView('settings')} onDataRefresh={onDataRefresh} />;
-    }
-    if (adminView === 'stats') {
-      return <StatsPage onBack={() => setAdminView('settings')} onViewProfile={onViewProfile} />;
-    }
-  }
 
   const renderInstallButton = () => {
+    const isDesktop = useIsDesktop();
     if (isDesktop) return null;
 
     if (mobileOS === 'Android' && installPromptEvent) {
@@ -195,19 +185,21 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
           </div>
 
           {/* Admin Tools Section */}
-          {userProfile?.is_developer && (
+          {(userProfile?.is_developer || userProfile?.is_team_member) && (
               <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
                    <h3 className="text-xl font-bold text-red-500 dark:text-red-400 text-center">Admin Tools</h3>
                    <div className="flex flex-col sm:flex-row gap-3">
+                      {userProfile?.is_developer && (
+                        <button
+                            onClick={() => { onViewModeration(); trackEvent('view_moderation_center'); }}
+                            className="flex-1 flex items-center justify-center space-x-2 bg-red-500/10 text-red-500 dark:text-red-400 font-bold py-3 px-4 rounded-lg hover:bg-red-500/20 transition-colors"
+                        >
+                            <i className="fas fa-shield-alt"></i>
+                            <span>Moderation</span>
+                        </button>
+                      )}
                       <button
-                          onClick={() => { setAdminView('moderation'); trackEvent('view_moderation_center'); }}
-                          className="flex-1 flex items-center justify-center space-x-2 bg-red-500/10 text-red-500 dark:text-red-400 font-bold py-3 px-4 rounded-lg hover:bg-red-500/20 transition-colors"
-                      >
-                          <i className="fas fa-shield-alt"></i>
-                          <span>Moderation</span>
-                      </button>
-                      <button
-                          onClick={() => { setAdminView('stats'); trackEvent('view_stats_page'); }}
+                          onClick={() => { onViewStats(); trackEvent('view_stats_page'); }}
                           className="flex-1 flex items-center justify-center space-x-2 bg-blue-500/10 text-blue-500 dark:text-blue-400 font-bold py-3 px-4 rounded-lg hover:bg-blue-500/20 transition-colors"
                       >
                           <i className="fas fa-chart-bar"></i>

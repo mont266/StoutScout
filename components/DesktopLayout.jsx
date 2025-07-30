@@ -24,15 +24,6 @@ import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 
-const BackButton = ({ onClick, text = "Back" }) => (
-    <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <button onClick={onClick} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg transition-colors w-full">
-            <i className="fas fa-arrow-left"></i>
-            <span className="font-semibold">{text}</span>
-        </button>
-    </div>
-);
-
 const DesktopLayout = (props) => {
     const {
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
@@ -53,13 +44,14 @@ const DesktopLayout = (props) => {
         handleAddPubClick, pubPlacementState, finalPlacementLocation, isConfirmingLocation,
         handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
         handleFindPlace,
+        levelRequirements,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleBackFromFriendsList,
         deleteConfirmationInfo,
         // Stats props
-        statsSubView, setStatsSubView,
+        StatsPage,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -199,6 +191,8 @@ const DesktopLayout = (props) => {
                             onViewProfile={handleViewProfile}
                             onLogout={handleLogout}
                             onViewLegal={handleViewLegal}
+                            onViewStats={() => handleTabChange('stats')}
+                            onViewModeration={() => handleTabChange('moderation')}
                             onDataRefresh={handleDataRefresh}
                             installPromptEvent={installPromptEvent}
                             setInstallPromptEvent={setInstallPromptEvent}
@@ -211,27 +205,6 @@ const DesktopLayout = (props) => {
         
         return null;
     };
-
-    const FullScreenPage = () => {
-        if (activeTab === 'stats') {
-            return <StatsPage 
-                onBack={() => handleTabChange('settings')} 
-                onViewProfile={handleViewProfile}
-                subView={statsSubView}
-                setSubView={setStatsSubView}
-            />;
-        }
-        if (activeTab === 'moderation') {
-            return (
-                <ModerationPage
-                    onViewProfile={handleViewProfile}
-                    onBack={() => handleTabChange('settings')}
-                    onDataRefresh={handleDataRefresh}
-                />
-            );
-        }
-        return null;
-    };
     
     const isFullScreenTab = ['stats', 'moderation'].includes(activeTab);
 
@@ -242,29 +215,26 @@ const DesktopLayout = (props) => {
                 onTabChange={handleTabChange}
                 onLogout={handleLogout}
                 userProfile={userProfile}
+                levelRequirements={levelRequirements}
                 onLoginRequest={() => setIsAuthOpen(true)}
             />
 
-            {isFullScreenTab ? (
-                <main className="flex-grow h-full relative">
-                    <FullScreenPage />
-                </main>
-            ) : (
-                <>
+            {/* Main Content Area */}
+            <div className="flex-grow h-full relative">
+                
+                {/* Map & Aside Layout */}
+                <div className={`w-full h-full flex ${!isFullScreenTab ? '' : 'hidden'}`}>
                     <aside className="w-[480px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-10">
-                    {renderContentPanel()}
+                        {renderContentPanel()}
                     </aside>
-                    
                     <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
                         <MapComponent
                             pubs={sortedPubs} userLocation={userLocation}
                             center={mapCenter}
                             onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                            onNominatimResults={handleNominatimResults} theme={settings.theme}
+                            onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
                             onMapMove={handleMapMove}
                             refreshTrigger={refreshTrigger}
-                            searchOrigin={searchOrigin}
-                            radius={settings.radius}
                             showSearchAreaButton={showSearchAreaButton}
                             onSearchThisArea={handleSearchThisArea}
                             searchOnNextMoveEnd={searchOnNextMoveEnd}
@@ -285,8 +255,25 @@ const DesktopLayout = (props) => {
                             <i className="fas fa-location-arrow text-2xl"></i>
                         </button>
                     </main>
-                </>
-            )}
+                </div>
+
+                {/* Stats Page */}
+                <div className={`w-full h-full ${activeTab === 'stats' ? '' : 'hidden'}`}>
+                    <StatsPage 
+                        onBack={() => handleTabChange('settings')} 
+                        onViewProfile={handleViewProfile}
+                    />
+                </div>
+
+                {/* Moderation Page */}
+                <div className={`w-full h-full ${activeTab === 'moderation' ? '' : 'hidden'}`}>
+                    <ModerationPage
+                        onViewProfile={handleViewProfile}
+                        onBack={() => handleTabChange('settings')}
+                        onDataRefresh={handleDataRefresh}
+                    />
+                </div>
+            </div>
             
             {/* Popups and Modals */}
             <SubmittingRatingModal isVisible={isSubmittingRating} />

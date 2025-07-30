@@ -1,5 +1,6 @@
 import React from 'react';
 import Icon from './Icon.jsx';
+import ProfileAvatar from './ProfileAvatar.jsx';
 
 const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, tooltipPosition = 'right' }) => {
   const isActive = activeTab === tab.id;
@@ -39,11 +40,10 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
   );
 };
 
-const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest }) => {
+const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements }) => {
   const mainTabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
-    { id: 'profile', icon: 'fa-user', label: 'Profile' },
   ];
   
   const bottomTabs = [
@@ -64,27 +64,42 @@ const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequ
       
       <div className="!mt-auto flex flex-col items-center space-y-4">
         <div className="w-full border-t border-gray-200 dark:border-gray-700 my-2"></div>
+         
+         {userProfile ? (
+            <ProfileAvatar 
+                userProfile={userProfile}
+                levelRequirements={levelRequirements}
+                size={56}
+                onClick={() => onTabChange('profile')}
+            />
+         ) : (
+            <NavButton
+                tab={{ id: 'login', icon: 'fa-sign-in-alt', label: 'Sign In / Sign Up' }}
+                activeTab={null} onTabChange={onLoginRequest}
+                tooltipPosition="top"
+            />
+         )}
+
          {bottomTabs.map(tab => (
             <NavButton key={tab.id} tab={tab} {...{ activeTab, onTabChange, onLoginRequest, userProfile }} tooltipPosition="top" />
          ))}
-        {userProfile?.is_developer && (
-            <>
-                <NavButton
-                    tab={{ id: 'moderation', icon: 'fa-shield-alt', label: 'Moderation' }}
-                    {...{ activeTab, onTabChange, onLoginRequest, userProfile }}
-                    tooltipPosition="top"
-                />
-                 <NavButton
-                    tab={{ id: 'stats', icon: 'fa-chart-bar', label: 'Stats' }}
-                    {...{ activeTab, onTabChange, onLoginRequest, userProfile }}
-                    tooltipPosition="top"
-                />
-            </>
+
+        {(userProfile?.is_developer || userProfile?.is_team_member) && (
+             <NavButton
+                tab={{ id: 'stats', icon: 'fa-chart-bar', label: 'Stats' }}
+                {...{ activeTab, onTabChange, onLoginRequest, userProfile }}
+                tooltipPosition="top"
+            />
         )}
-        {userProfile ? (
+        {userProfile?.is_developer && (
+            <NavButton
+                tab={{ id: 'moderation', icon: 'fa-shield-alt', label: 'Moderation' }}
+                {...{ activeTab, onTabChange, onLoginRequest, userProfile }}
+                tooltipPosition="top"
+            />
+        )}
+        {userProfile && (
           <NavButton tab={{ id: 'logout', icon: 'fa-sign-out-alt', label: 'Sign Out' }} activeTab={null} onTabChange={onLogout} tooltipPosition="top" />
-        ) : (
-          <NavButton tab={{ id: 'login', icon: 'fa-sign-in-alt', label: 'Sign In' }} activeTab={null} onTabChange={onLoginRequest} tooltipPosition="top" />
         )}
       </div>
     </nav>

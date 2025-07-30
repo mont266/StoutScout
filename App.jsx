@@ -14,6 +14,7 @@ import ProfilePage from './components/ProfilePage.jsx';
 import BannedPage from './components/BannedPage.jsx';
 import AddPubModal from './components/AddPubModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
+import StatsPage from './components/StatsPage.jsx';
 
 const App = () => {
   // --- STATE MANAGEMENT ---
@@ -54,7 +55,6 @@ const App = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [userRatings, setUserRatings] = useState([]);
   const [communitySubTab, setCommunitySubTab] = useState('community');
-  const [statsSubView, setStatsSubView] = useState('main');
 
   // State for viewing other user profiles
   const [viewedProfile, setViewedProfile] = useState(null);
@@ -79,8 +79,9 @@ const App = () => {
 
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   
-  // State for legal pages
+  // State for legal & admin sub-pages
   const [legalPageView, setLegalPageView] = useState(null); // 'terms' or 'privacy'
+  const [settingsSubView, setSettingsSubView] = useState(null); // 'stats' or 'moderation'
 
   // PWA Install prompt state
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
@@ -117,6 +118,8 @@ const App = () => {
       screenName = 'friends_list';
     } else if (legalPageView) {
       screenName = `legal_${legalPageView}`; // e.g., legal_terms
+    } else if (settingsSubView) {
+        screenName = `settings_${settingsSubView}`;
     } else if (viewedProfile && (!userProfile || viewedProfile.id !== userProfile.id)) {
       screenName = 'profile_other_user';
     } else if (activeTab === 'profile' && userProfile) {
@@ -124,7 +127,7 @@ const App = () => {
     } else if (activeTab === 'community') {
       screenName = `community_${communitySubTab}`;
     } else if (activeTab === 'stats') {
-      screenName = `stats_${statsSubView}`;
+      screenName = `stats_main`;
     } else if (isAuthOpen) {
       screenName = 'auth';
     } else if (isPasswordRecovery) {
@@ -137,7 +140,7 @@ const App = () => {
       screen_name: screenName,
       screen_class: screenClass, // GA4 standard parameter
     });
-  }, [activeTab, communitySubTab, statsSubView, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery, pubPlacementState, viewingFriendsOf]);
+  }, [activeTab, communitySubTab, legalPageView, viewedProfile, userProfile, isAuthOpen, isPasswordRecovery, pubPlacementState, viewingFriendsOf, settingsSubView]);
 
 
   useEffect(() => {
@@ -803,23 +806,41 @@ const App = () => {
   
   const handleSelectPub = useCallback((pub) => {
     const pubId = pub ? pub.id : null;
-    setSelectedPubId(pubId);
+    if (!pubId) {
+      setSelectedPubId(null);
+      return;
+    }
 
-    // If a pub is selected, declaratively center the map on it.
+    const isPubInCurrentList = pubs.some(p => p.id === pubId);
+
+    // This block handles both selecting a pub already on the map, AND navigating to a new one.
+    // The key is to always perform these actions when a pub is selected.
+    setSelectedPubId(pubId);
+    setActiveTab('map');
     if (pub?.location) {
         setMapCenter(pub.location);
     }
-    
-    // On desktop, if a pub is selected, switch to the map tab to show details.
-    if (pubId) {
-      setActiveTab('map');
-    }
-    
-    // On mobile, if a pub is selected and the list is collapsed, expand it.
-    if (pubId && !isListExpanded) {
+    if (!isDesktop && !isListExpanded) {
         setIsListExpanded(true);
     }
-  }, [isListExpanded, setActiveTab]);
+
+    // If the pub wasn't in the list, it means we're navigating from an external context.
+    // In this case, we need to trigger a new search around this pub.
+    if (!isPubInCurrentList) {
+        // Temporarily add the pub to ensure it can be found by `selectedPub` useMemo
+        // before the full list refreshes. This makes the UI feel instant.
+        const pubWithRatings = { ...pub, ratings: allRatings.get(pub.id) || [] };
+        setPubs(currentPubs => {
+            if (currentPubs.some(p => p.id === pubId)) return currentPubs;
+            return [...currentPubs, pubWithRatings];
+        });
+
+        // Set the search origin to the new pub's location.
+        setSearchOrigin(pub.location);
+        // Trigger a search after the map has flown to the new location.
+        setSearchOnNextMoveEnd(true);
+    }
+  }, [isDesktop, isListExpanded, pubs, allRatings]);
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
@@ -886,10 +907,8 @@ const App = () => {
     }
 
     // When user explicitly changes tabs, reset all sub-view states
-    if (activeTab === 'stats' && tab !== 'stats') {
-        setStatsSubView('main');
-    }
     setLegalPageView(null);
+    setSettingsSubView(null);
     setViewingFriendsOf(null);
     setFriendsList([]);
     setViewedProfile(null);
@@ -906,20 +925,30 @@ const App = () => {
       setIsAuthOpen(true);
       return;
     }
-    // Tabs requiring developer role
-    if ((tab === 'moderation' || tab === 'stats') && !userProfile?.is_developer) {
+    // Tabs requiring developer or team member role
+    if ((tab === 'stats') && !(userProfile?.is_developer || userProfile?.is_team_member)) {
+        setActiveTab('map'); // Fail silently to map
+        return;
+    }
+    // Tabs requiring ONLY developer role
+    if ((tab === 'moderation') && !userProfile?.is_developer) {
         setActiveTab('map'); // Fail silently to map
         return;
     }
 
     setActiveTab(tab);
-  }, [isDesktop, pubPlacementState, activeTab, session, userProfile, handleCancelPubPlacement]);
+  }, [isDesktop, pubPlacementState, session, userProfile, handleCancelPubPlacement]);
 
   const handleViewLegal = (page) => {
     trackEvent('view_legal_page', { page_name: page });
     setLegalPageView(page);
     // Ensure other full-screen views are closed
     setSelectedPubId(null);
+  };
+  
+  const handleViewAdminPage = (page) => {
+    trackEvent('view_admin_page', { page_name: page });
+    setSettingsSubView(page);
   };
 
   const handlePlacementPinMove = useCallback((newLocation) => {
@@ -1223,6 +1252,7 @@ const App = () => {
   };
 
   const layoutProps = {
+      isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
       activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
       handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
@@ -1243,7 +1273,9 @@ const App = () => {
       viewingFriendsOf, friendsList, isFetchingFriendsList,
       deleteConfirmationInfo,
       communitySubTab, setCommunitySubTab,
-      statsSubView, setStatsSubView,
+      StatsPage,
+      levelRequirements,
+      settingsSubView, handleViewAdminPage,
       
       // Implemented handlers
       handleViewProfile,

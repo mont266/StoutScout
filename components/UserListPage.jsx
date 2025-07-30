@@ -15,10 +15,11 @@ const UserListPage = ({ totalUsers, onBack, onViewProfile }) => {
         trackEvent('view_user_list');
 
         try {
+            // A simple SELECT is sufficient here, no need for a complex RPC for a basic list.
             const { data, error } = await supabase
                 .from('profiles')
                 .select('id, username, avatar_id, level, is_banned, created_at')
-                .order('created_at', { ascending: false }); // <-- FIX: Sort by most recently joined
+                .order('created_at', { ascending: false });
 
             if (error) throw error;
             setProfiles(data || []);

@@ -1,18 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { trackEvent } from '../analytics.js';
 import LeaderboardPage from './LeaderboardPage.jsx';
 import CommunityFeed from './CommunityFeed.jsx';
 import FriendsFeed from './FriendsFeed.jsx';
 import FriendRequestsPage from './FriendRequestsPage.jsx';
 import ImageModal from './ImageModal.jsx';
+import ScrollToTopButton from './ScrollToTopButton.jsx';
 
 const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange }) => {
     const [imageToView, setImageToView] = useState(null);
+    const [showScrollButton, setShowScrollButton] = useState(false);
+    const scrollContainerRef = useRef(null);
 
     const handleTabChange = (tab) => {
         onSubTabChange(tab);
         trackEvent('change_community_subtab', { sub_tab: tab });
     };
+
+    const handleScroll = () => {
+        if (scrollContainerRef.current) {
+            // Show button if scrolled more than half the viewport height
+            setShowScrollButton(scrollContainerRef.current.scrollTop > window.innerHeight / 2);
+        }
+    };
+
+    const scrollToTop = () => {
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+            trackEvent('scroll_to_top', { feed_type: activeSubTab });
+        }
+    };
+
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (container) {
+            container.addEventListener('scroll', handleScroll);
+            return () => container.removeEventListener('scroll', handleScroll);
+        }
+    }, []);
 
     const pendingRequests = friendships.filter(f => f.status === 'pending' && f.action_user_id !== userProfile.id);
 
@@ -73,12 +98,14 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                 </div>
 
                 {/* Content Area */}
-                <main className="flex-grow overflow-y-auto">
+                <main ref={scrollContainerRef} className="flex-grow overflow-y-auto">
                     {activeSubTab === 'community' && <CommunityFeed onViewProfile={(id) => onViewProfile(id, 'community')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} />}
                     {activeSubTab === 'friends' && <FriendsFeed onViewProfile={(id) => onViewProfile(id, 'friends')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} />}
                     {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} />}
                     {activeSubTab === 'requests' && <FriendRequestsPage requests={pendingRequests} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'requests')} onDataRefresh={onDataRefresh} />}
                 </main>
+
+                <ScrollToTopButton show={showScrollButton} onClick={scrollToTop} />
             </div>
         </>
     );

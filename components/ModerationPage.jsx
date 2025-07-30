@@ -3,6 +3,8 @@ import { supabase } from '../supabase.js';
 import Avatar from './Avatar.jsx';
 import { trackEvent } from '../analytics.js';
 import { formatTimeAgo } from '../utils.js';
+import ConfirmationModal from './ConfirmationModal.jsx';
+import AlertModal from './AlertModal.jsx';
 
 const TabButton = ({ label, isActive, onClick }) => (
     <button
@@ -24,6 +26,8 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
     const [loading, setLoading] = useState({ users: true, images: true });
     const [error, setError] = useState({ users: null, images: null });
     const [processingActionId, setProcessingActionId] = useState(null); // stores user or report ID being processed
+    const [confirmation, setConfirmation] = useState({ isOpen: false });
+    const [alertInfo, setAlertInfo] = useState({ isOpen: false });
 
     const fetchFlaggedUsers = useCallback(async () => {
         setLoading(p => ({ ...p, users: true }));
@@ -89,14 +93,26 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
         }
     };
     
-    const handleResolveReport = async (report, action) => {
-        if (!window.confirm(`Are you sure you want to '${action}' this image? This action is permanent.`)) return;
+    const confirmResolveReport = (report, action) => {
+        setConfirmation({
+            isOpen: true,
+            title: `Confirm Action: ${action.charAt(0).toUpperCase() + action.slice(1)}`,
+            message: `Are you sure you want to '${action}' this image? This action is permanent.`,
+            onConfirm: async () => {
+                await handleResolveReport(report, action);
+                setConfirmation({ isOpen: false });
+            },
+            confirmText: action.charAt(0).toUpperCase() + action.slice(1),
+            theme: action === 'remove' ? 'red' : 'green'
+        });
+    };
 
+    const handleResolveReport = async (report, action) => {
         setProcessingActionId(report.id);
         trackEvent('resolve_image_report', { report_id: report.id, action });
 
         if (!report.rating || !report.rating.uploader) {
-            alert('Error: Missing rating or uploader data for this report. Cannot proceed.');
+            setAlertInfo({ isOpen: true, title: 'Error', message: 'Missing rating or uploader data for this report. Cannot proceed.', theme: 'error'});
             setProcessingActionId(null);
             return;
         }
@@ -111,7 +127,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
         });
         
         if (error) {
-            alert(`Failed to resolve report: ${error.context?.error?.message || error.message}`);
+            setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Failed to resolve report: ${error.context?.responseJson?.error || error.message}`, theme: 'error'});
         } else {
             setReportedImages(current => current.filter(r => r.id !== report.id));
             if (onDataRefresh) onDataRefresh();
@@ -120,9 +136,21 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
         setProcessingActionId(null);
     };
 
-    const handleIgnoreFlag = async (userId) => {
-        if (!window.confirm("Are you sure you want to ignore this user's flags? They won't appear here for 30 days unless they trigger new criteria.")) return;
+    const confirmIgnoreFlag = (userId) => {
+        setConfirmation({
+            isOpen: true,
+            title: 'Ignore Flags?',
+            message: "Are you sure you want to ignore this user's flags? They won't appear here for 30 days unless they trigger new criteria.",
+            onConfirm: async () => {
+                await handleIgnoreFlag(userId);
+                setConfirmation({ isOpen: false });
+            },
+            confirmText: 'Ignore',
+            theme: 'blue'
+        });
+    };
 
+    const handleIgnoreFlag = async (userId) => {
         setProcessingActionId(userId);
         trackEvent('ignore_user_flag', { ignored_user_id: userId });
 
@@ -131,7 +159,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
         });
 
         if (error) {
-            alert(`Failed to ignore flag: ${error.context?.error?.message || error.message}`);
+            setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Failed to ignore flag: ${error.context?.responseJson?.error || error.message}`, theme: 'error'});
         } else {
             setFlaggedUsers(current => current.filter(u => u.id !== userId));
         }
@@ -168,7 +196,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
                             </div>
                             <div className="flex-shrink-0 flex items-center gap-2">
                                 <button
-                                    onClick={() => handleIgnoreFlag(user.id)}
+                                    onClick={() => confirmIgnoreFlag(user.id)}
                                     disabled={processingActionId === user.id}
                                     className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold py-2 px-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-xs disabled:opacity-50"
                                 >
@@ -228,14 +256,14 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
                         </div>
                         <div className="flex-shrink-0 p-3 flex sm:flex-col items-center justify-around sm:justify-center gap-2 border-t sm:border-t-0 sm:border-l border-gray-200 dark:border-gray-700">
                             <button 
-                                onClick={() => handleResolveReport(report, 'allow')}
+                                onClick={() => confirmResolveReport(report, 'allow')}
                                 disabled={processingActionId === report.id}
                                 className="w-full sm:w-auto bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-300 font-bold py-2 px-4 rounded-lg hover:bg-green-200 dark:hover:bg-green-700/50 transition-colors text-sm disabled:opacity-50"
                             >
                                 {processingActionId === report.id ? '...' : 'Allow'}
                             </button>
                              <button 
-                                onClick={() => handleResolveReport(report, 'remove')}
+                                onClick={() => confirmResolveReport(report, 'remove')}
                                 disabled={processingActionId === report.id}
                                 className="w-full sm:w-auto bg-red-100 text-red-800 dark:bg-red-800/50 dark:text-red-300 font-bold py-2 px-4 rounded-lg hover:bg-red-200 dark:hover:bg-red-700/50 transition-colors text-sm disabled:opacity-50"
                             >
@@ -251,41 +279,62 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
     const isLoading = activeTab === 'users' ? loading.users : loading.images;
 
     return (
-        <div className="flex flex-col h-full">
-            {onBack && (
-              <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                  <button onClick={onBack} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg transition-colors">
-                      <i className="fas fa-arrow-left"></i>
-                      <span className="font-semibold">Back to Settings</span>
-                  </button>
-              </div>
+        <>
+            {alertInfo.isOpen && (
+                <AlertModal 
+                    onClose={() => setAlertInfo({ isOpen: false })}
+                    title={alertInfo.title}
+                    message={alertInfo.message}
+                    theme={alertInfo.theme}
+                />
             )}
-            <div className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-red-500 dark:text-red-400">Moderation Center</h3>
-                    <button
-                        onClick={handleRefresh}
-                        disabled={isLoading}
-                        className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-wait"
-                        aria-label="Refresh list"
-                        title="Refresh list"
-                    >
-                        <i className={`fas fa-sync-alt ${isLoading ? 'animate-spin' : ''}`}></i>
-                    </button>
-                </div>
-                <div className="mt-2 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex">
-                        <TabButton label="Flagged Users" isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />
-                        <TabButton label="Reported Images" isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
+            {confirmation.isOpen && (
+                <ConfirmationModal
+                    onClose={() => setConfirmation({ isOpen: false })}
+                    onConfirm={confirmation.onConfirm}
+                    isLoading={!!processingActionId}
+                    title={confirmation.title}
+                    message={confirmation.message}
+                    confirmText={confirmation.confirmText}
+                    theme={confirmation.theme}
+                />
+            )}
+            <div className="flex flex-col h-full">
+                {onBack && (
+                  <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                      <button onClick={onBack} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg transition-colors">
+                          <i className="fas fa-arrow-left"></i>
+                          <span className="font-semibold">Back to Settings</span>
+                      </button>
+                  </div>
+                )}
+                <div className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-xl font-bold text-red-500 dark:text-red-400">Moderation Center</h3>
+                        <button
+                            onClick={handleRefresh}
+                            disabled={isLoading}
+                            className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-wait"
+                            aria-label="Refresh list"
+                            title="Refresh list"
+                        >
+                            <i className={`fas fa-sync-alt ${isLoading ? 'animate-spin' : ''}`}></i>
+                        </button>
+                    </div>
+                    <div className="mt-2 border-b border-gray-200 dark:border-gray-700">
+                        <div className="flex">
+                            <TabButton label="Flagged Users" isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+                            <TabButton label="Reported Images" isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="flex-grow p-4 overflow-y-auto">
-                {activeTab === 'users' && renderFlaggedUsers()}
-                {activeTab === 'images' && renderReportedImages()}
+                <div className="flex-grow p-4 overflow-y-auto">
+                    {activeTab === 'users' && renderFlaggedUsers()}
+                    {activeTab === 'images' && renderReportedImages()}
+                </div>
             </div>
-        </div>
+        </>
     );
 };
 

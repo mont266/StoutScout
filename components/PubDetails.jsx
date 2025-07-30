@@ -7,6 +7,8 @@ import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
 import { formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import Avatar from './Avatar.jsx';
+import ConfirmationModal from './ConfirmationModal.jsx';
+import AlertModal from './AlertModal.jsx';
 
 const StatCard = ({ label, value, icon, color }) => (
     <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md flex flex-col items-center justify-center text-center">
@@ -36,6 +38,9 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
   const [isRatingFormExpanded, setIsRatingFormExpanded] = useState(!existingUserRating && !!session);
+  const [confirmation, setConfirmation] = useState({ isOpen: false });
+  const [alertInfo, setAlertInfo] = useState({ isOpen: false });
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   const avgPrice = getAverageRating(pub.ratings, 'price');
   const avgQuality = getAverageRating(pub.ratings, 'quality');
@@ -61,7 +66,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
 
   const handleReportImage = async (rating, reason) => {
       if (!session) {
-          alert("You must be logged in to report an image.");
+          setAlertInfo({ isOpen: true, title: 'Login Required', message: 'You must be logged in to report an image.', theme: 'info' });
           return;
       }
       trackEvent('report_image', { rating_id: rating.id, reason });
@@ -70,31 +75,44 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
               body: { rating_id: rating.id, reason },
           });
           if (error) throw error;
-          alert("Thank you. The image has been reported and will be reviewed.");
+          setAlertInfo({ isOpen: true, title: 'Report Submitted', message: 'Thank you. The image has been reported and will be reviewed.', theme: 'success' });
       } catch (error) {
           console.error("Failed to report image:", error);
-          alert(`Could not report image: ${error.context?.error || error.message}`);
+          setAlertInfo({ isOpen: true, title: 'Report Failed', message: `Could not report image: ${error.context?.responseJson?.error || error.message}`, theme: 'error' });
       }
       setReportModalInfo({ isOpen: false, rating: null });
   };
   
+  const confirmAdminRemoveImage = (ratingToRemove) => {
+    setConfirmation({
+        isOpen: true,
+        title: 'Remove Image?',
+        message: 'Are you sure you want to remove this image? This action is permanent and cannot be undone.',
+        onConfirm: async () => {
+            await handleAdminRemoveImage(ratingToRemove);
+            setConfirmation({ isOpen: false });
+        },
+        confirmText: 'Remove',
+        theme: 'red'
+    });
+  };
+
   const handleAdminRemoveImage = async (ratingToRemove) => {
-    if (!window.confirm("Are you sure you want to remove this image? This action is permanent and cannot be undone.")) {
-      return;
-    }
+    setIsActionLoading(true);
     trackEvent('admin_remove_image', { rating_id: ratingToRemove.id });
     try {
       const { error } = await supabase.functions.invoke('remove-image-admin', {
         body: { rating_id: ratingToRemove.id },
       });
       if (error) throw error;
-      alert("Image removed successfully.");
+      setAlertInfo({ isOpen: true, title: 'Image Removed', message: 'Image removed successfully.', theme: 'success' });
       onDataRefresh(); // Refresh app-wide data
     } catch (error) {
       console.error("Failed to remove image as admin:", error);
-      alert(`Could not remove image: ${error.context?.error || error.message}`);
+      setAlertInfo({ isOpen: true, title: 'Error', message: `Could not remove image: ${error.context?.responseJson?.error || error.message}`, theme: 'error' });
     }
     setImageToView(null);
+    setIsActionLoading(false);
   };
 
   const handleRatingSubmit = (ratingData) => {
@@ -152,6 +170,25 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
 
   return (
     <>
+      {alertInfo.isOpen && (
+        <AlertModal 
+            onClose={() => setAlertInfo({ isOpen: false })}
+            title={alertInfo.title}
+            message={alertInfo.message}
+            theme={alertInfo.theme}
+        />
+      )}
+      {confirmation.isOpen && (
+          <ConfirmationModal
+              onClose={() => setConfirmation({ isOpen: false })}
+              onConfirm={confirmation.onConfirm}
+              isLoading={isActionLoading}
+              title={confirmation.title}
+              message={confirmation.message}
+              confirmText={confirmation.confirmText}
+              theme={confirmation.theme}
+          />
+      )}
       {imageToView && (
           <ImageModal
               rating={imageToView}
@@ -159,7 +196,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
               onReport={() => handleInitiateReport(imageToView)}
               canReport={session && session.user.id !== imageToView.user.id}
               canAdminRemove={loggedInUserProfile?.is_developer && session?.user.id !== imageToView.user.id}
-              onAdminRemove={handleAdminRemoveImage}
+              onAdminRemove={confirmAdminRemoveImage}
           />
       )}
       {reportModalInfo.isOpen && (
@@ -275,7 +312,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                               )}
                                               {canAdminRemove && (
                                                   <button 
-                                                      onClick={() => handleAdminRemoveImage(rating)}
+                                                      onClick={() => confirmAdminRemoveImage(rating)}
                                                       className="h-8 px-2 flex items-center justify-center bg-red-200 dark:bg-red-700/80 text-red-600 dark:text-red-300 rounded-md hover:bg-red-300 dark:hover:bg-red-900/50 hover:text-red-700 dark:hover:text-red-400 transition-colors"
                                                       aria-label="Admin: Remove Photo"
                                                       title="Admin: Remove Photo"

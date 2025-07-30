@@ -78,7 +78,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
       )}
 
       {isExpanded && (
-        <div className="overflow-y-auto">
+        <div className="overflow-y-auto flex-grow">
            <div className="p-2 text-center text-xs bg-gray-100 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
               <i className="fas fa-search-location mr-1.5"></i>
               Searching within <strong className="text-gray-800 dark:text-gray-200">{displayRadius} {distanceUnit}</strong>

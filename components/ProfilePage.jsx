@@ -3,12 +3,13 @@ import { RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import { supabase } from '../supabase.js';
 import StarRating from './StarRating.jsx';
-import Avatar from './Avatar.jsx';
+import ProfileAvatar from './ProfileAvatar.jsx';
 import ImageModal from './ImageModal.jsx';
 import ReportImageModal from './ReportImageModal.jsx';
 import { trackEvent } from '../analytics.js';
 import BanUserModal from './BanUserModal.jsx';
-import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
+import ConfirmationModal from './ConfirmationModal.jsx';
+import AlertModal from './AlertModal.jsx';
 
 const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendRequest, onFriendAction }) => {
     const [status, setStatus] = useState('loading');
@@ -101,60 +102,23 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
     const [ratingToDelete, setRatingToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [confirmation, setConfirmation] = useState({ isOpen: false });
+    const [alertInfo, setAlertInfo] = useState({ isOpen: false });
 
     // Keep state in sync with props from App.jsx
     useEffect(() => {
         setProfile(userProfile);
     }, [userProfile]);
 
-    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count, is_early_bird, friends_count } = profile;
+    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, friends_count } = profile;
     const reviews = profile.reviews || 0;
     
     const rankData = getRankData(level);
-
-    // New progress calculation logic based on the scaled system
-    const getLevelProgress = () => {
-        if (!levelRequirements || levelRequirements.length === 0 || !level) {
-            return {
-                percentage: 0,
-                progressText: 'Calculating...',
-                nextLevelDisplay: `Lvl ${level + 1}`
-            };
-        }
-
-        const currentLevelInfo = levelRequirements.find(lr => lr.level === level);
-        const nextLevelInfo = levelRequirements.find(lr => lr.level === level + 1);
-        
-        if (!currentLevelInfo) {
-             return { percentage: 0, progressText: 'Syncing...', nextLevelDisplay: `Lvl ${level + 1}` };
-        }
-        
-        // Handle max level case
-        if (!nextLevelInfo) {
-            return { percentage: 100, progressText: 'Max Level Reached!', nextLevelDisplay: 'Max' };
-        }
-        
-        const ratingsForThisLevel = nextLevelInfo.total_ratings_required - currentLevelInfo.total_ratings_required;
-        // Clamp progress to be a minimum of 0. This handles cases where a user's review count
-        // might be lower than the current requirement for their level (e.g., due to requirement changes),
-        // preventing negative progress from being displayed.
-        const progressIntoThisLevel = Math.max(0, reviews - currentLevelInfo.total_ratings_required);
-        
-        const percentage = ratingsForThisLevel > 0 ? (progressIntoThisLevel / ratingsForThisLevel) * 100 : 0;
-        
-        return {
-            percentage: Math.min(100, Math.max(0, percentage)), // Clamp between 0 and 100
-            progressText: `${progressIntoThisLevel} / ${ratingsForThisLevel} Ratings to next level`,
-            nextLevelDisplay: `Lvl ${level + 1}`
-        };
-    };
-
-    const { percentage: progressPercentage, progressText: reviewsForNextLevelText, nextLevelDisplay } = getLevelProgress();
     
     // Determine if the logged-in user can see moderation tools for the viewed profile
     const isViewingOwnProfile = !loggedInUserProfile || profile.id === loggedInUserProfile.id;
     const canModerate = loggedInUserProfile?.is_developer && !isViewingOwnProfile;
-    const isActionLoading = isBanning || isUnbanning || isUpdatingRoles;
+    const isActionLoading = isBanning || isUnbanning || isUpdatingRoles || isDeleting;
 
     const handleBanUser = async (reason) => {
         setIsBanning(true);
@@ -164,7 +128,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         });
 
         if (error) {
-            alert(`Failed to ban user: ${error.context?.error || error.message}.`);
+            setAlertInfo({ isOpen: true, title: 'Ban Failed', message: error.context?.responseJson?.error || error.message, theme: 'error' });
             trackEvent('ban_user_failed', { banned_user_id: profile.id, error: error.message });
         } else {
             setProfile(p => ({ ...p, is_banned: true, ban_reason: reason }));
@@ -175,17 +139,29 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         }
         setIsBanning(false);
     };
+
+    const confirmUnbanUser = () => {
+        setConfirmation({
+            isOpen: true,
+            title: 'Unban User',
+            message: `Are you sure you want to unban ${username}? Their ratings will become public again.`,
+            onConfirm: async () => {
+                await handleUnbanUser();
+                setConfirmation({ isOpen: false });
+            },
+            confirmText: 'Unban',
+            theme: 'green'
+        });
+    };
     
     const handleUnbanUser = async () => {
-        if (!window.confirm(`Are you sure you want to unban ${username}? Their ratings will become public again.`)) return;
-        
         setIsUnbanning(true);
         const { error } = await supabase.functions.invoke('unban-user', {
             body: { user_id: profile.id },
         });
 
         if (error) {
-            alert(`Failed to unban user: ${error.context?.error || error.message}.`);
+            setAlertInfo({ isOpen: true, title: 'Unban Failed', message: error.context?.responseJson?.error || error.message, theme: 'error' });
             trackEvent('unban_user_failed', { unbanned_user_id: profile.id, error: error.message });
         } else {
             setProfile(p => ({ ...p, is_banned: false, ban_reason: null, banned_at: null }));
@@ -197,10 +173,21 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         setIsUnbanning(false);
     };
 
+    const confirmSetRole = (roleName, roleValue) => {
+        setConfirmation({
+            isOpen: true,
+            title: 'Confirm Role Change',
+            message: `Are you sure you want to ${roleValue ? 'grant' : 'revoke'} the '${roleName.replace('is_', '')}' role for ${username}? This is a significant permission change.`,
+            onConfirm: async () => {
+                await handleSetRole(roleName, roleValue);
+                setConfirmation({ isOpen: false });
+            },
+            confirmText: 'Confirm',
+            theme: 'blue'
+        });
+    };
+
     const handleSetRole = async (roleName, roleValue) => {
-        if (!window.confirm(`Are you sure you want to ${roleValue ? 'grant' : 'revoke'} the '${roleName.replace('is_', '')}' role for ${username}? This is a significant permission change.`)) {
-            return;
-        }
         setIsUpdatingRoles(true);
         
         const { error } = await supabase.functions.invoke('set-user-role', {
@@ -212,7 +199,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         });
 
         if (error) {
-            alert(`Failed to update role: ${error.context?.error || error.message}. Ensure the 'set-user-role' Edge Function is deployed and has the correct permissions.`);
+            setAlertInfo({ isOpen: true, title: 'Failed to Update Role', message: error.context?.responseJson?.error || error.message, theme: 'error' });
             trackEvent('set_role_failed', { target_user_id: profile.id, role_name: roleName, error: error.message });
         } else {
             setProfile(p => ({ ...p, [roleName]: roleValue }));
@@ -234,7 +221,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
 
     const handleReportImage = async (rating, reason) => {
         if (!loggedInUserProfile) {
-            alert("You must be logged in to report an image.");
+            setAlertInfo({ isOpen: true, title: 'Login Required', message: 'You must be logged in to report an image.', theme: 'info' });
             return;
         }
         trackEvent('report_image', { rating_id: rating.id, reason });
@@ -243,13 +230,25 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                 body: { rating_id: rating.id, reason },
             });
             if (error) throw error;
-            alert("Thank you. The image has been reported and will be reviewed.");
+            setAlertInfo({ isOpen: true, title: 'Report Submitted', message: 'Thank you. The image has been reported and will be reviewed.', theme: 'success' });
         } catch (error) {
             console.error("Failed to report image:", error);
-            alert(`Could not report image: ${error.context?.error || error.message}`);
+            setAlertInfo({ isOpen: true, title: 'Report Failed', message: `Could not report image: ${error.context?.responseJson?.error || error.message}`, theme: 'error' });
         }
         setReportModalInfo({ isOpen: false, rating: null });
         setImageToView(null);
+    };
+
+    const requestDeleteRating = (rating) => {
+        setRatingToDelete(rating);
+        setConfirmation({
+            isOpen: true,
+            title: 'Delete Rating?',
+            message: 'This rating and any associated photo will be permanently deleted.',
+            onConfirm: handleDeleteConfirm,
+            confirmText: 'Delete',
+            theme: 'red'
+        });
     };
 
     const handleDeleteConfirm = async () => {
@@ -258,10 +257,13 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         await onDeleteRating(ratingToDelete);
         setIsDeleting(false);
         setRatingToDelete(null);
+        setConfirmation({ isOpen: false });
     };
 
     const getProfileBorderColor = () => {
-        if (is_beta_tester) return 'border-blue-500'; // Blue takes precedence for Beta Testers
+        if (is_developer) return 'border-amber-500';
+        if (is_beta_tester) return 'border-blue-500';
+        if (is_team_member) return 'border-purple-500';
         if (is_early_bird) return 'border-green-500';
         return 'border-amber-400';
     };
@@ -269,6 +271,25 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
 
     return (
         <>
+        {alertInfo.isOpen && (
+            <AlertModal 
+                onClose={() => setAlertInfo({ isOpen: false })}
+                title={alertInfo.title}
+                message={alertInfo.message}
+                theme={alertInfo.theme}
+            />
+        )}
+        {confirmation.isOpen && (
+            <ConfirmationModal
+                onClose={() => setConfirmation({ isOpen: false })}
+                onConfirm={confirmation.onConfirm}
+                isLoading={isActionLoading}
+                title={confirmation.title}
+                message={confirmation.message}
+                confirmText={confirmation.confirmText}
+                theme={confirmation.theme}
+            />
+        )}
         {isBanModalOpen && (
             <BanUserModal 
                 username={profile.username}
@@ -288,14 +309,6 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
             <ReportImageModal 
                 onClose={() => setReportModalInfo({isOpen: false, rating: null})}
                 onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)}
-            />
-        )}
-        {ratingToDelete && (
-            <ConfirmDeleteModal
-                isLoading={isDeleting}
-                onClose={() => setRatingToDelete(null)}
-                onConfirm={handleDeleteConfirm}
-                message="This rating and any associated photo will be permanently deleted."
             />
         )}
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
@@ -326,6 +339,11 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                     <span>Early Bird</span>
                                 </span>
                             )}
+                            {is_team_member && (
+                                <span className="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1 rounded-full dark:bg-purple-900 dark:text-purple-200 uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
+                                    Team Member
+                                </span>
+                            )}
                             {is_developer && (
                                 <span className="bg-amber-500 text-black text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide border-2 border-white dark:border-gray-800 shadow">
                                     Developer
@@ -340,19 +358,20 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
 
                         {/* Avatar */}
                         <div className="relative inline-block">
-                            {isViewingOwnProfile ? (
+                             <ProfileAvatar 
+                                userProfile={profile}
+                                levelRequirements={levelRequirements}
+                                size={112} // w-28
+                                onClick={isViewingOwnProfile ? onAvatarChangeClick : undefined}
+                            />
+                            {isViewingOwnProfile && (
                                 <button
                                     onClick={onAvatarChangeClick}
-                                    className="relative rounded-full focus:outline-none focus:ring-4 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                                    className="absolute bottom-0 right-0 bg-amber-500 text-black rounded-full w-8 h-8 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:bg-amber-400 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
                                     aria-label="Change avatar"
                                 >
-                                    <Avatar avatarId={avatar_id} className="w-28 h-28" />
-                                    <div className="absolute bottom-0 right-0 bg-amber-500 text-black rounded-full w-8 h-8 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:bg-amber-400 transition-colors">
-                                        <i className="fas fa-pen text-sm"></i>
-                                    </div>
+                                    <i className="fas fa-pen text-sm"></i>
                                 </button>
-                            ) : (
-                                <Avatar avatarId={avatar_id} className="w-28 h-28" />
                             )}
                         </div>
                     </div>
@@ -394,23 +413,6 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                          )}
                     </div>
 
-                    {/* Review Progress Bar */}
-                    <div className="mt-6">
-                        <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-1">
-                            <span>Progress to Next Level</span>
-                            <span>{nextLevelDisplay}</span>
-                        </div>
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 border border-gray-300 dark:border-gray-600">
-                            <div
-                                className="bg-gradient-to-r from-amber-400 to-amber-500 h-full rounded-full transition-all duration-500"
-                                style={{ width: `${progressPercentage}%` }}
-                            ></div>
-                        </div>
-                        <p className="text-xs text-amber-600 dark:text-amber-300 mt-1 text-center">
-                            {reviewsForNextLevelText}
-                        </p>
-                    </div>
-
                     {/* Friendship Button */}
                     <div className="mt-6">
                         <FriendshipButton 
@@ -443,7 +445,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                     </p>
                                     {is_banned ? (
                                         <button
-                                            onClick={handleUnbanUser}
+                                            onClick={confirmUnbanUser}
                                             disabled={isActionLoading}
                                             className="w-full sm:w-auto bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                                         >
@@ -465,7 +467,15 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                     <h4 className="text-md font-semibold text-center text-gray-700 dark:text-gray-300 mb-3">Manage Roles</h4>
                                     <div className="flex flex-col sm:flex-row gap-2">
                                         <button
-                                            onClick={() => handleSetRole('is_beta_tester', !profile.is_beta_tester)}
+                                            onClick={() => confirmSetRole('is_team_member', !profile.is_team_member)}
+                                            disabled={isActionLoading}
+                                            className={`flex-1 flex items-center justify-center space-x-2 font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${profile.is_team_member ? 'bg-purple-500 text-white hover:bg-purple-600' : 'bg-purple-200 dark:bg-purple-800/50 text-purple-800 dark:text-purple-300 hover:bg-purple-300 dark:hover:bg-purple-800'}`}
+                                        >
+                                            {isUpdatingRoles ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> : (profile.is_team_member ? <i className="fas fa-user-minus"></i> : <i className="fas fa-user-plus"></i>)}
+                                            <span>{profile.is_team_member ? 'Revoke Team' : 'Grant Team'}</span>
+                                        </button>
+                                        <button
+                                            onClick={() => confirmSetRole('is_beta_tester', !profile.is_beta_tester)}
                                             disabled={isActionLoading}
                                             className={`flex-1 flex items-center justify-center space-x-2 font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${profile.is_beta_tester ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300 hover:bg-blue-300 dark:hover:bg-blue-800'}`}
                                         >
@@ -473,7 +483,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                             <span>{profile.is_beta_tester ? 'Revoke Beta' : 'Grant Beta'}</span>
                                         </button>
                                         <button
-                                            onClick={() => handleSetRole('is_developer', !profile.is_developer)}
+                                            onClick={() => confirmSetRole('is_developer', !profile.is_developer)}
                                             disabled={isActionLoading}
                                             className={`flex-1 flex items-center justify-center space-x-2 font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${profile.is_developer ? 'bg-amber-500 text-black hover:bg-amber-600' : 'bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-300 hover:bg-amber-300 dark:hover:bg-amber-800'}`}
                                         >
@@ -558,7 +568,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                                         {r.pubLocation && <i className="fas fa-map-pin text-amber-500 dark:text-amber-400" title="View on map"></i>}
                                                         {isViewingOwnProfile && (
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); setRatingToDelete(r); }}
+                                                                onClick={(e) => { e.stopPropagation(); requestDeleteRating(r); }}
                                                                 className="text-gray-400 hover:text-red-500 transition-colors text-lg w-6 h-6 flex items-center justify-center rounded"
                                                                 aria-label="Delete rating"
                                                                 title="Delete rating"

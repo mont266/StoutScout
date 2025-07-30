@@ -8,7 +8,7 @@ import AllRatingsPage from './AllRatingsPage.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import TimeSeriesChart from './TimeSeriesChart.jsx';
 
-const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString(), onClick, className = '' }) => (
+const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString(), onClick, className = '', subValue = null }) => (
     <div
         onClick={onClick}
         className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center space-x-4 transition-all hover:shadow-lg hover:scale-[1.02] ${onClick ? 'cursor-pointer' : ''} ${className}`}
@@ -21,7 +21,10 @@ const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString(), onCl
         </div>
         <div>
             <div className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">{label}</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{value !== null && value !== undefined ? format(value) : '...'}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                {value !== null && value !== undefined ? format(value) : '...'}
+                {subValue && <span className="text-base font-semibold text-gray-400 dark:text-gray-500 ml-2">{subValue}</span>}
+            </div>
         </div>
     </div>
 );
@@ -54,32 +57,31 @@ const TimePeriodFilter = ({ activePeriod, onPeriodChange }) => {
     );
 };
 
-const StatsPage = ({ onBack, onViewProfile, subView, setSubView }) => {
+const formatPercent = (numerator, denominator) => {
+    if (denominator === 0 || numerator === null || denominator === null) return '(0.0%)';
+    const percentage = (numerator / denominator) * 100;
+    return `(${percentage.toFixed(1)}%)`;
+}
+
+const StatsPage = ({ onBack, onViewProfile }) => {
     const [stats, setStats] = useState({});
     const [countryStats, setCountryStats] = useState([]);
     const [timeSeriesData, setTimeSeriesData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const isDesktop = useIsDesktop();
     const [timePeriod, setTimePeriod] = useState('30d');
-    
-    // Controlled vs. Uncontrolled state for sub-view
-    const [internalView, setInternalView] = useState('main');
-    const isControlled = isDesktop && subView !== undefined && setSubView !== undefined;
-    const currentView = isControlled ? subView : internalView;
-    const setCurrentView = isControlled ? setSubView : internalView;
+    const [currentView, setCurrentView] = useState('main');
+    const isDesktop = useIsDesktop();
 
-    const fetchStats = useCallback(async (desktop, period) => {
+    const fetchStats = useCallback(async (period) => {
         setLoading(true);
         setError(null);
         trackEvent('view_stats_page', { time_period: period });
 
         try {
-            const fetchPeriod = desktop ? period : 'all'; // Mobile always shows all-time stats
-
             const promises = [
-                supabase.rpc('get_dashboard_stats', { time_period: fetchPeriod }).single(),
-                supabase.rpc('get_dashboard_timeseries', { time_period: fetchPeriod }),
+                supabase.rpc('get_dashboard_stats', { time_period: period }).single(),
+                supabase.rpc('get_dashboard_timeseries', { time_period: period }),
                 supabase.rpc('get_price_stats_by_country'),
             ];
 
@@ -106,13 +108,13 @@ const StatsPage = ({ onBack, onViewProfile, subView, setSubView }) => {
 
     useEffect(() => {
         if (currentView === 'main') {
-            fetchStats(isDesktop, timePeriod);
+            fetchStats(timePeriod);
         }
-    }, [currentView, timePeriod, isDesktop, fetchStats]);
+    }, [currentView, timePeriod, fetchStats]);
     
     const handleRefresh = () => {
         trackEvent('refresh_stats', { time_period: timePeriod });
-        fetchStats(isDesktop, timePeriod);
+        fetchStats(timePeriod);
     };
     
     const handleViewChange = (viewName) => {
@@ -122,7 +124,7 @@ const StatsPage = ({ onBack, onViewProfile, subView, setSubView }) => {
     
     const handleBackFromSubView = useCallback(() => {
         setCurrentView('main');
-    }, [setCurrentView]);
+    }, []);
 
     if (currentView === 'user_list') {
         return <UserListPage totalUsers={stats?.total_users || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
@@ -157,19 +159,77 @@ const StatsPage = ({ onBack, onViewProfile, subView, setSubView }) => {
         </div>
     );
     
-    const renderMobileContent = () => (
-        <div className="space-y-8">
-            <section>
-                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Platform Overview</h4>
-                <div className="grid grid-cols-2 gap-4">
-                    <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} />
-                    <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
-                    <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
-                    <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
-                </div>
-            </section>
-        </div>
-    );
+    const renderMobileDashboard = () => {
+        const timePeriodLabel = {
+            '1d': 'Last 24 Hours',
+            '7d': 'Last 7 Days',
+            '30d': 'Last 30 Days',
+            '6m': 'Last 6 Months',
+            '1y': 'Last Year',
+            'all': 'All Time',
+        }[timePeriod] || 'Selected Period';
+    
+        return (
+            <div className="space-y-6">
+                <section>
+                    <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">{timePeriodLabel}</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                        <StatCard label="New Users" value={stats.new_users_in_period} icon="fa-user-plus" />
+                        <StatCard label="New Ratings" value={stats.new_ratings_in_period} icon="fa-star" />
+                        <StatCard label="Active Users" value={stats.active_users_in_period} icon="fa-user-clock" />
+                        <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} />
+                    </div>
+                </section>
+    
+                <section>
+                    <TimeSeriesChart data={timeSeriesData} dataKey="new_users" title="New Users" loading={loading} error={error} timePeriod={timePeriod} lineColor="#F59E0B" tooltipLabel="users" />
+                </section>
+                <section>
+                    <TimeSeriesChart data={timeSeriesData} dataKey="new_ratings" title="New Ratings" loading={loading} error={error} timePeriod={timePeriod} lineColor="#10B981" tooltipLabel="ratings" />
+                </section>
+    
+                <section>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md h-full flex flex-col max-h-[500px]">
+                        <h5 className="text-md font-semibold text-gray-700 dark:text-gray-300 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">Pint Price by Country</h5>
+                        <div className="overflow-y-auto">
+                            {countryStats.length > 0 ? (
+                                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {countryStats.map((stat) => {
+                                        const currency = getCurrencyInfo(stat.country_display_name);
+                                        return (
+                                            <li key={stat.country_display_name} className="flex items-center justify-between p-3">
+                                                <span className="font-semibold text-gray-900 dark:text-white">{stat.country_display_name}</span>
+                                                <div className="text-right">
+                                                    <div className="font-bold text-base text-green-600 dark:text-green-400">
+                                                        {stat.avg_price != null ? `${currency.symbol}${parseFloat(stat.avg_price).toFixed(2)}` : <span className="text-sm text-gray-500">No data</span>}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{Number(stat.rating_count).toLocaleString()} ratings</div>
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            ) : (
+                                <p className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">No price data available.</p>
+                            )}
+                        </div>
+                    </div>
+                </section>
+    
+                <section>
+                    <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Global Stats</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                        <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
+                        <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
+                        <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
+                        <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
+                        <StatCard label="Avatar Adoption" value={stats.users_with_avatars} icon="fa-user-circle" subValue={formatPercent(stats.users_with_avatars, stats.total_users)} className="col-span-2" />
+                        <StatCard label="1st Rating Conversion" value={stats.users_who_rated_once} icon="fa-user-check" subValue={formatPercent(stats.users_who_rated_once, stats.total_users)} className="col-span-2" />
+                    </div>
+                </section>
+            </div>
+        );
+    };
     
     const renderDesktopDashboard = () => (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -221,7 +281,8 @@ const StatsPage = ({ onBack, onViewProfile, subView, setSubView }) => {
                 <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
                 <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
                 <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
-                <StatCard label="Removed Images" value={stats.total_removed_images} icon="fa-trash-alt" className="sm:col-span-2" />
+                <StatCard label="Avatar Adoption Rate" value={stats.users_with_avatars} icon="fa-user-circle" subValue={formatPercent(stats.users_with_avatars, stats.total_users)} />
+                <StatCard label="First Rating Conversion" value={stats.users_who_rated_once} icon="fa-user-check" subValue={formatPercent(stats.users_who_rated_once, stats.total_users)} />
             </div>
         </div>
     );
@@ -240,12 +301,12 @@ const StatsPage = ({ onBack, onViewProfile, subView, setSubView }) => {
                 <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
                     <div>
                         <h3 className="text-xl md:text-2xl font-bold text-amber-500 dark:text-amber-400">
-                            {isDesktop ? 'Analytics Dashboard' : 'Application Statistics'}
+                            Analytics Dashboard
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">A high-level overview of app usage and data.</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {isDesktop && <TimePeriodFilter activePeriod={timePeriod} onPeriodChange={setTimePeriod} />}
+                        <TimePeriodFilter activePeriod={timePeriod} onPeriodChange={setTimePeriod} />
                         <button
                             onClick={handleRefresh} disabled={loading}
                             className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
@@ -257,7 +318,7 @@ const StatsPage = ({ onBack, onViewProfile, subView, setSubView }) => {
                 </div>
             </header>
             <main className="flex-grow overflow-y-auto p-4 md:p-6">
-                {loading ? renderLoading() : error ? renderError() : (isDesktop ? renderDesktopDashboard() : renderMobileContent())}
+                {loading ? renderLoading() : error ? renderError() : (isDesktop ? renderDesktopDashboard() : renderMobileDashboard())}
             </main>
         </div>
     );
