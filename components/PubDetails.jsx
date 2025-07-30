@@ -33,8 +33,49 @@ const Section = ({ title, children, ...props }) => (
     </section>
 );
 
+const ScoreGauge = ({ score }) => {
+  if (score === null || score === undefined) return null;
 
-const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating }) => {
+  const getScoreColor = (s) => {
+    if (s >= 80) return 'text-yellow-400';
+    if (s >= 65) return 'text-green-500';
+    if (s >= 45) return 'text-yellow-500';
+    return 'text-gray-500';
+  };
+
+  const color = getScoreColor(score);
+  const circumference = 2 * Math.PI * 45; // radius is 45
+  const offset = circumference - (score / 100) * circumference;
+
+  return (
+    <div className="relative w-36 h-36">
+      <svg className="w-full h-full" viewBox="0 0 100 100">
+        {/* Background circle */}
+        <circle className="text-gray-200 dark:text-gray-700" strokeWidth="10" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" />
+        {/* Progress circle */}
+        <circle
+          className={`${color} transition-all duration-1000 ease-in-out`}
+          style={{ strokeDashoffset: offset }}
+          strokeWidth="10"
+          strokeDasharray={circumference}
+          strokeLinecap="round"
+          stroke="currentColor"
+          fill="transparent"
+          r="45"
+          cx="50"
+          cy="50"
+          transform="rotate(-90 50 50)"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className={`text-4xl font-bold ${color}`}>{score}</span>
+      </div>
+    </div>
+  );
+};
+
+
+const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation }) => {
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
   const [isRatingFormExpanded, setIsRatingFormExpanded] = useState(!existingUserRating && !!session);
@@ -218,6 +259,25 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
         </header>
 
         <main className="flex-grow overflow-y-auto p-4 space-y-6 pb-safe">
+            {pub.pub_score !== null && (
+                <Section>
+                    <div className="flex justify-center items-center gap-2 mb-2">
+                        <h3 id="pub-score-heading" className="text-xl font-bold text-gray-900 dark:text-white">Pub Score</h3>
+                        <button
+                            onClick={onOpenScoreExplanation}
+                            className="text-gray-400 dark:text-gray-500 hover:text-amber-500 transition-colors"
+                            aria-label="Learn more about Pub Score"
+                            aria-describedby="pub-score-heading"
+                        >
+                            <i className="fas fa-info-circle"></i>
+                        </button>
+                    </div>
+                    <div className="flex justify-center">
+                         <ScoreGauge score={pub.pub_score} />
+                    </div>
+                </Section>
+            )}
+
             {pub.ratings.length > 0 ? (
                 <Section>
                     <div className="flex space-x-3">

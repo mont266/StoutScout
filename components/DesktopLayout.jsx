@@ -52,6 +52,7 @@ const DesktopLayout = (props) => {
         deleteConfirmationInfo,
         // Stats props
         StatsPage,
+        onOpenScoreExplanation,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -99,6 +100,7 @@ const DesktopLayout = (props) => {
                         userLikes={userLikes}
                         onToggleLike={onToggleLike}
                         isSubmittingRating={isSubmittingRating}
+                        onOpenScoreExplanation={onOpenScoreExplanation}
                     />
                 );
             }
@@ -137,6 +139,7 @@ const DesktopLayout = (props) => {
                             resultsAreCapped={resultsAreCapped}
                             searchRadius={settings.radius}
                             isLoading={isInitialDataLoading || isRefreshing}
+                            onOpenScoreExplanation={onOpenScoreExplanation}
                         />
                     </div>
                 </div>
@@ -161,6 +164,7 @@ const DesktopLayout = (props) => {
                     onDataRefresh={handleDataRefresh}
                     activeSubTab={communitySubTab}
                     onSubTabChange={setCommunitySubTab}
+                    onViewPub={handleSelectPub}
                 />
             );
         }

@@ -86,6 +86,7 @@ const MobileLayout = (props) => {
         // Stats & Admin
         StatsPage,
         settingsSubView, handleViewAdminPage,
+        onOpenScoreExplanation,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -123,6 +124,7 @@ const MobileLayout = (props) => {
                             onDataRefresh={handleDataRefresh}
                             activeSubTab={communitySubTab}
                             onSubTabChange={setCommunitySubTab}
+                            onViewPub={handleSelectPub}
                         />
                     )}
                     {activeTab === 'settings' && (() => {
@@ -231,6 +233,7 @@ const MobileLayout = (props) => {
                             resultsAreCapped={resultsAreCapped}
                             searchRadius={settings.radius}
                             isLoading={isInitialDataLoading || isRefreshing}
+                            onOpenScoreExplanation={onOpenScoreExplanation}
                         />
                     </div>
                 </div>
@@ -252,6 +255,7 @@ const MobileLayout = (props) => {
                             userLikes={userLikes}
                             onToggleLike={onToggleLike}
                             isSubmittingRating={isSubmittingRating}
+                            onOpenScoreExplanation={onOpenScoreExplanation}
                         />
                     )}
                 </div>

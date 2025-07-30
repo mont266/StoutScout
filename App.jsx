@@ -15,6 +15,7 @@ import BannedPage from './components/BannedPage.jsx';
 import AddPubModal from './components/AddPubModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
 import StatsPage from './components/StatsPage.jsx';
+import PubScoreExplanationModal from './components/PubScoreExplanationModal.jsx';
 
 const App = () => {
   // --- STATE MANAGEMENT ---
@@ -29,6 +30,7 @@ const App = () => {
   const [nominatimResults, setNominatimResults] = useState([]);
   const [pubs, setPubs] = useState([]);
   const [allRatings, setAllRatings] = useState(new Map());
+  const [pubScores, setPubScores] = useState(new Map());
   const [selectedPubId, setSelectedPubId] = useState(null);
   const [filter, setFilter] = useState(FilterType.Distance);
   const [isListExpanded, setIsListExpanded] = useState(true);
@@ -69,6 +71,7 @@ const App = () => {
   const [leveledUpInfo, setLeveledUpInfo] = useState(null);
   const [rankUpInfo, setRankUpInfo] = useState(null);
   const [addPubSuccessInfo, setAddPubSuccessInfo] = useState(null);
+  const [isPubScoreModalOpen, setIsPubScoreModalOpen] = useState(false);
   
   const [levelRequirements, setLevelRequirements] = useState([]);
   
@@ -217,6 +220,19 @@ const App = () => {
       setAllRatings(ratingsMap);
   }, []);
 
+  const fetchPubScores = useCallback(async () => {
+    const { data, error } = await supabase.from('pub_scores').select('*');
+    if (error) {
+        console.error("Error fetching pub scores:", error);
+        return;
+    }
+    const scoresMap = new Map();
+    for (const score of data || []) {
+        scoresMap.set(score.pub_id, score.pub_score);
+    }
+    setPubScores(scoresMap);
+  }, []);
+
   const fetchSocialData = useCallback(async (userId) => {
     if (!userId) return;
     
@@ -241,10 +257,11 @@ const App = () => {
   const handleDataRefresh = useCallback(async () => {
       await Promise.all([
           fetchAllRatings(),
+          fetchPubScores(),
           fetchDbPubs(),
           session?.user?.id ? fetchSocialData(session.user.id) : Promise.resolve(),
       ]);
-  }, [fetchAllRatings, fetchDbPubs, fetchSocialData, session]);
+  }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchSocialData, session]);
 
   useEffect(() => {
     setLoading(true);
@@ -254,6 +271,7 @@ const App = () => {
     });
     
     fetchAllRatings();
+    fetchPubScores();
     fetchLevelRequirements();
     fetchDbPubs();
     
@@ -278,7 +296,7 @@ const App = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchAllRatings, fetchDbPubs]);
+  }, [fetchAllRatings, fetchPubScores, fetchDbPubs]);
   
   const fetchLevelRequirements = async () => {
     const { data, error } = await supabase
@@ -535,14 +553,15 @@ const App = () => {
         return distance <= settings.radius;
     });
 
-    // 4. Add ratings to the filtered list.
+    // 4. Add ratings and scores to the filtered list.
     const finalPubsList = pubsInRadius.map(pub => ({
       ...pub,
       ratings: allRatings.get(pub.id) || [],
+      pub_score: pubScores.get(pub.id) ?? null,
     }));
 
     setPubs(finalPubsList);
-  }, [nominatimResults, dbPubs, allRatings, searchOrigin, settings.radius, getDistance]);
+  }, [nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance]);
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   
@@ -639,6 +658,8 @@ const App = () => {
   const sortedPubs = useMemo(() => {
     return [...pubs].sort((a, b) => {
       switch (filter) {
+        case FilterType.PubScore:
+          return (b.pub_score ?? -1) - (a.pub_score ?? -1);
         case FilterType.Price: return getComparablePrice(a) - getComparablePrice(b);
         case FilterType.Quality: return getAverageRating(b.ratings, 'quality') - getAverageRating(a.ratings, 'quality');
         default: return getDistance(a.location, searchOrigin) - getDistance(b.location, searchOrigin);
@@ -751,12 +772,11 @@ const App = () => {
             await fetchUserData();
             setUpdateConfirmationInfo({ key: Date.now() });
         }
-        await fetchAllRatings();
-        await fetchDbPubs();
+        await handleDataRefresh();
     } finally {
         setIsSubmittingRating(false);
     }
-  }, [session, userRatings, selectedPub, userProfile, fetchAllRatings, fetchDbPubs, fetchUserData]);
+  }, [session, userRatings, selectedPub, userProfile, handleDataRefresh, fetchUserData]);
   
   const handleDeleteRating = useCallback(async (ratingToDelete) => {
     if (!session || !userProfile || !ratingToDelete) return;
@@ -793,16 +813,13 @@ const App = () => {
         setDeleteConfirmationInfo({ key: Date.now() });
 
         // 4. Re-fetch all data to update the UI
-        await Promise.all([
-            fetchAllRatings(),
-            fetchUserData()
-        ]);
+        await handleDataRefresh();
 
     } catch (error) {
         console.error("Error deleting rating:", error);
         alert(`Could not delete rating: ${error.message}`);
     }
-}, [session, userProfile, userRatings, fetchAllRatings, fetchUserData]);
+}, [session, userProfile, userRatings, handleDataRefresh]);
   
   const handleSelectPub = useCallback((pub) => {
     const pubId = pub ? pub.id : null;
@@ -829,7 +846,11 @@ const App = () => {
     if (!isPubInCurrentList) {
         // Temporarily add the pub to ensure it can be found by `selectedPub` useMemo
         // before the full list refreshes. This makes the UI feel instant.
-        const pubWithRatings = { ...pub, ratings: allRatings.get(pub.id) || [] };
+        const pubWithRatings = {
+          ...pub,
+          ratings: allRatings.get(pub.id) || [],
+          pub_score: pubScores.get(pub.id) || null
+        };
         setPubs(currentPubs => {
             if (currentPubs.some(p => p.id === pubId)) return currentPubs;
             return [...currentPubs, pubWithRatings];
@@ -840,7 +861,7 @@ const App = () => {
         // Trigger a search after the map has flown to the new location.
         setSearchOnNextMoveEnd(true);
     }
-  }, [isDesktop, isListExpanded, pubs, allRatings]);
+  }, [isDesktop, isListExpanded, pubs, allRatings, pubScores]);
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
@@ -1276,6 +1297,7 @@ const App = () => {
       StatsPage,
       levelRequirements,
       settingsSubView, handleViewAdminPage,
+      onOpenScoreExplanation: () => setIsPubScoreModalOpen(true),
       
       // Implemented handlers
       handleViewProfile,
@@ -1299,15 +1321,22 @@ const App = () => {
       handleUpdateAvatar: () => {},
   };
 
+  const renderModals = () => (
+    <>
+        {isPubScoreModalOpen && <PubScoreExplanationModal isOpen={isPubScoreModalOpen} onClose={() => setIsPubScoreModalOpen(false)} />}
+        {isAddPubModalOpen && (
+            <AddPubModal 
+                onClose={handleCancelPubPlacement}
+                onSubmit={handleStartPubPlacement}
+            />
+        )}
+    </>
+  );
+
   if (isDesktop) {
       return (
         <>
-            {isAddPubModalOpen && (
-                <AddPubModal 
-                    onClose={handleCancelPubPlacement}
-                    onSubmit={handleStartPubPlacement}
-                />
-            )}
+            {renderModals()}
             <DesktopLayout {...layoutProps} />
         </>
       );
@@ -1315,12 +1344,7 @@ const App = () => {
 
   return (
     <>
-        {isAddPubModalOpen && (
-            <AddPubModal 
-                onClose={handleCancelPubPlacement}
-                onSubmit={handleStartPubPlacement}
-            />
-        )}
+        {renderModals()}
         <MobileLayout {...layoutProps} />
     </>
   );

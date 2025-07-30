@@ -1,11 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FilterType } from '../types.js';
 import StarRating from './StarRating.jsx';
 import { getCurrencyInfo, getPriceRangeFromStars } from '../utils.js';
+import CoachMark from './CoachMark.jsx';
 
-const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading, showToggleHeader = true }) => {
+const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading, showToggleHeader = true, onOpenScoreExplanation }) => {
   const selectedItemRef = useRef(null);
   const listRef = useRef(null);
+  const [showCoachMark, setShowCoachMark] = useState(false);
 
   useEffect(() => {
     if (isExpanded && selectedItemRef.current) {
@@ -16,8 +18,45 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
     }
   }, [selectedPubId, isExpanded]);
 
+  useEffect(() => {
+    const isMobile = window.innerWidth < 768;
+    const hasSeenCoachMark = localStorage.getItem('stoutly-pubscore-coachmark-seen');
+    if (isMobile && filter === FilterType.PubScore && !hasSeenCoachMark && pubs.length > 0) {
+      setShowCoachMark(true);
+    } else {
+      setShowCoachMark(false);
+    }
+  }, [filter, pubs]);
+
+  const handleDismissCoachMark = () => {
+    localStorage.setItem('stoutly-pubscore-coachmark-seen', 'true');
+    setShowCoachMark(false);
+  };
+
+  const handleLearnMore = () => {
+    handleDismissCoachMark();
+    onOpenScoreExplanation();
+  };
+
   const renderMetric = (pub) => {
     switch(filter) {
+        case FilterType.PubScore:
+            const score = pub.pub_score;
+            if (score === null || score === undefined) {
+                return <span className="text-sm text-gray-500 dark:text-gray-400">N/A</span>;
+            }
+            const getScoreColorClasses = (s) => {
+                if (s >= 80) return 'bg-yellow-400 text-black';
+                if (s >= 65) return 'bg-green-500 text-white';
+                if (s >= 45) return 'bg-yellow-500 text-black';
+                return 'bg-gray-400 dark:bg-gray-600 text-white dark:text-gray-200';
+            };
+            const colorClasses = getScoreColorClasses(score);
+            return (
+                <div className={`w-12 h-12 rounded-full flex flex-col items-center justify-center shadow-md ${colorClasses}`}>
+                    <span className="font-bold text-xl leading-none">{score}</span>
+                </div>
+            );
         case FilterType.Price:
             const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
             const currencyInfo = getCurrencyInfo(pub.address);
@@ -107,7 +146,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
                     key={pub.id}
                     ref={isSelected ? selectedItemRef : null}
                     onClick={() => onSelectPub(pub)}
-                    className={`p-4 cursor-pointer transition-colors border-l-4 ${isSelected ? 'bg-amber-500/10 border-amber-500' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'}`}
+                    className={`relative p-4 cursor-pointer transition-colors border-l-4 ${isSelected ? 'bg-amber-500/10 border-amber-500' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'}`}
                   >
                      <div className="flex items-center justify-between space-x-4">
                         <div className="flex items-center space-x-4 min-w-0">
@@ -121,6 +160,13 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
                             {renderMetric(pub)}
                         </div>
                     </div>
+                    {index === 0 && showCoachMark && (
+                      <CoachMark 
+                        text="This is the Pub Score! It helps you find the best overall pubs."
+                        onDismiss={handleDismissCoachMark}
+                        onLearnMore={handleLearnMore}
+                      />
+                    )}
                   </li>
                 );
               })}

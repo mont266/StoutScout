@@ -2,7 +2,8 @@
 export const FilterType = {
   Distance: 'distance',
   Price: 'price',
-  Quality: 'quality'
+  Quality: 'quality',
+  PubScore: 'pub_score',
 };
 
 // Interfaces like Coordinates, Rating, Pub, etc., are TypeScript-only constructs

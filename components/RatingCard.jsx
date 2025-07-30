@@ -1,14 +1,30 @@
 import React from 'react';
 import Avatar from './Avatar.jsx';
 import StarRating from './StarRating.jsx';
-import { formatTimeAgo, getCurrencyInfo } from '../utils.js';
+import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 
-const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage }) => {
+const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub }) => {
 
-    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price } = rating;
+    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng } = rating;
 
     const isLiked = userLikes && userLikes.has(id);
     const currencyInfo = getCurrencyInfo(pub_address);
+    const rankData = user.level ? getRankData(user.level) : null;
+
+    const handlePubClick = () => {
+        if (!onViewPub) return;
+        if (pub_lat && pub_lng) {
+            const pubForSelection = {
+                id: pub_id,
+                name: pub_name,
+                address: pub_address,
+                location: { lat: pub_lat, lng: pub_lng }
+            };
+            onViewPub(pubForSelection);
+        } else {
+            console.warn("Cannot view pub on map: missing location data.", rating);
+        }
+    };
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
@@ -18,11 +34,23 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                      <Avatar avatarId={user.avatar_id} className="w-10 h-10" />
                 </button>
                 <div className="flex-grow min-w-0">
-                    <button onClick={() => onViewProfile(user.id, 'community')} className="font-semibold text-gray-800 dark:text-gray-200 hover:underline">
-                        {user.username}
-                    </button>
+                    <div className="flex items-center space-x-1.5">
+                        <button onClick={() => onViewProfile(user.id, 'community')} className="font-semibold text-gray-800 dark:text-gray-200 hover:underline truncate">
+                            {user.username}
+                        </button>
+                        {rankData && (
+                            <i className={`fas ${rankData.icon} text-sm text-amber-500 dark:text-amber-400`} title={rankData.name}></i>
+                        )}
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={pub_name}>
-                        rated a pint at <span className="font-medium">{pub_name}</span>
+                        rated a pint at{' '}
+                        <button
+                            onClick={handlePubClick}
+                            disabled={!onViewPub || !pub_lat || !pub_lng}
+                            className="font-medium hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded disabled:no-underline disabled:cursor-default"
+                        >
+                            {pub_name}
+                        </button>
                     </p>
                 </div>
                  <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">{formatTimeAgo(new Date(created_at).getTime())}</span>

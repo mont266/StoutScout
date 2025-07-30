@@ -282,6 +282,33 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
               </button>
           </div>
 
+          {/* Follow Us Section */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white px-2">Follow Us</h3>
+              <div className="flex flex-col sm:flex-row gap-3">
+                  <a
+                      href="https://www.facebook.com/people/Stoutly-App/61578687216972/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => trackEvent('click_social', { social_platform: 'facebook' })}
+                      className="flex-1 flex items-center justify-center space-x-3 bg-[#1877F2] text-white font-bold py-3 px-4 rounded-lg hover:bg-[#166fe5] transition-colors"
+                  >
+                      <i className="fab fa-facebook-f text-xl"></i>
+                      <span>Facebook</span>
+                  </a>
+                  <a
+                      href="https://www.instagram.com/stoutlyapp/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => trackEvent('click_social', { social_platform: 'instagram' })}
+                      className="flex-1 flex items-center justify-center space-x-3 bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white font-bold py-3 px-4 rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                      <i className="fab fa-instagram text-xl"></i>
+                      <span>Instagram</span>
+                  </a>
+              </div>
+          </div>
+
           {/* Legal Section */}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-2">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white px-2">Legal</h3>

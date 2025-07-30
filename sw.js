@@ -67,6 +67,8 @@ const urlsToCache = [
   '/components/AllRatingsPage.jsx',
   '/components/ConfirmationModal.jsx',
   '/components/AlertModal.jsx',
+  '/components/PubScoreExplanationModal.jsx',
+  '/components/CoachMark.jsx',
 ];
 
 self.addEventListener('install', event => {
