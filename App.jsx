@@ -1272,6 +1272,29 @@ const App = () => {
     }
   };
 
+  const handleUpdateAvatar = async (newAvatarId) => {
+    if (!session || !userProfile) return;
+
+    try {
+        const avatarData = JSON.parse(newAvatarId);
+        trackEvent('update_avatar', { avatar_style: avatarData.style });
+
+        const { error } = await supabase
+            .from('profiles')
+            .update({ avatar_id: newAvatarId })
+            .eq('id', userProfile.id);
+
+        if (error) throw error;
+
+        await fetchUserData(); 
+        setIsAvatarModalOpen(false);
+
+    } catch (error) {
+        console.error("Error updating avatar:", error);
+        alert(`Could not update avatar: ${error.message}`);
+    }
+  };
+
   const layoutProps = {
       isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
@@ -1318,7 +1341,7 @@ const App = () => {
       // Stubs
       handleSettingsChange: setSettings,
       handleSetSimulatedLocation: () => {},
-      handleUpdateAvatar: () => {},
+      handleUpdateAvatar: handleUpdateAvatar,
   };
 
   const renderModals = () => (
