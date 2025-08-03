@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef, createContext } from 'react';
 import { FilterType } from './types.js';
 import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
@@ -17,6 +17,8 @@ import CommunityPage from './components/CommunityPage.jsx';
 import StatsPage from './components/StatsPage.jsx';
 import PubScoreExplanationModal from './components/PubScoreExplanationModal.jsx';
 import CookieConsentBanner from './components/CookieConsentBanner.jsx';
+import { OnlineStatusContext } from './contexts/OnlineStatusContext.jsx';
+
 
 const App = () => {
   // --- STATE MANAGEMENT ---
@@ -107,6 +109,9 @@ const App = () => {
   // Cookie Consent State
   const [cookieConsent, setCookieConsent] = useState(null);
 
+  // Online Presence State
+  const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+
 
   // --- HOOKS ---
   const isDesktop = useIsDesktop();
@@ -192,6 +197,54 @@ const App = () => {
       window.removeEventListener('pwa-install-prompt-ready', handleInstallPrompt);
     };
   }, []);
+
+  // Real-time user presence tracking
+  useEffect(() => {
+    if (!session?.user) {
+      setOnlineUserIds(new Set()); // Clear online users on logout
+      return;
+    }
+
+    const channel = supabase.channel('global-presence', {
+      config: {
+        presence: {
+          key: session.user.id,
+        },
+      },
+    });
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const presenceState = channel.presenceState();
+        const userIds = Object.keys(presenceState);
+        setOnlineUserIds(new Set(userIds));
+      })
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
+        setOnlineUserIds(prevUserIds => {
+          const newUserIds = new Set(prevUserIds);
+          newPresences.forEach(p => newUserIds.add(p.key));
+          return newUserIds;
+        });
+      })
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        setOnlineUserIds(prevUserIds => {
+          const newUserIds = new Set(prevUserIds);
+          leftPresences.forEach(p => newUserIds.delete(p.key));
+          return newUserIds;
+        });
+      });
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({ online_at: new Date().toISOString() });
+      }
+    });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
+
 
   const fetchDbPubs = useCallback(async () => {
     const { data, error } = await supabase.from('pubs_with_dynamic_pricing_info').select('id, name, address, lat, lng, country_code, country_name, is_dynamic_price_area, area_identifier, area_rating_count');
@@ -1449,7 +1502,7 @@ const App = () => {
   const AppContent = isDesktop ? <DesktopLayout {...layoutProps} /> : <MobileLayout {...layoutProps} />;
 
   return (
-    <>
+    <OnlineStatusContext.Provider value={{ onlineUserIds }}>
       {renderModals()}
       {AppContent}
       {cookieConsent === null && (
@@ -1458,7 +1511,7 @@ const App = () => {
           onDecline={handleDeclineCookies}
         />
       )}
-    </>
+    </OnlineStatusContext.Provider>
   );
 };
 

@@ -14,6 +14,7 @@ const urlsToCache = [
   '/analytics.js',
   '/hooks/useIsDesktop.js',
   '/imageUtils.js',
+  '/contexts/OnlineStatusContext.jsx',
   '/components/Map.jsx',
   '/components/FilterControls.jsx',
   '/components/PubDetails.jsx',
@@ -69,7 +70,9 @@ const urlsToCache = [
   '/components/AlertModal.jsx',
   '/components/PubScoreExplanationModal.jsx',
   '/components/CoachMark.jsx',
+  '/components/KofiModal.jsx',
   '/components/CookieConsentBanner.jsx',
+  '/components/OnlineUsersPage.jsx',
 ];
 
 self.addEventListener('install', event => {

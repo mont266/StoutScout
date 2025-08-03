@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import { supabase } from '../supabase.js';
@@ -10,6 +10,7 @@ import { trackEvent } from '../analytics.js';
 import BanUserModal from './BanUserModal.jsx';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import AlertModal from './AlertModal.jsx';
+import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
 
 const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendRequest, onFriendAction }) => {
     const [status, setStatus] = useState('loading');
@@ -104,11 +105,21 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     const [isDeleting, setIsDeleting] = useState(false);
     const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [alertInfo, setAlertInfo] = useState({ isOpen: false });
+    const { onlineUserIds } = useContext(OnlineStatusContext);
 
     // Keep state in sync with props from App.jsx
     useEffect(() => {
         setProfile(userProfile);
     }, [userProfile]);
+    
+    if (!profile) {
+        // Render a loading state or null if profile is not yet available
+        return (
+             <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-400"></div>
+            </div>
+        );
+    }
 
     const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, friends_count } = profile;
     const reviews = profile.reviews || 0;
@@ -119,6 +130,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     const isViewingOwnProfile = !loggedInUserProfile || profile.id === loggedInUserProfile.id;
     const canModerate = loggedInUserProfile?.is_developer && !isViewingOwnProfile;
     const isActionLoading = isBanning || isUnbanning || isUpdatingRoles || isDeleting;
+    const isOnline = onlineUserIds.has(profile.id);
 
     const handleBanUser = async (reason) => {
         setIsBanning(true);
@@ -377,6 +389,12 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                     </div>
                     
                     <h2 className="text-4xl font-bold text-gray-900 dark:text-white mt-4">{username}</h2>
+                    {isOnline && (
+                        <div className="mt-2 flex items-center justify-center gap-1.5 text-green-500 dark:text-green-400 text-sm font-semibold">
+                            <div className="w-2.5 h-2.5 bg-current rounded-full animate-pulse"></div>
+                            <span>Online</span>
+                        </div>
+                    )}
                     
                     <div className="flex items-center justify-center space-x-3 mt-2">
                         <i className={`fas ${rankData.icon} text-2xl text-amber-500 dark:text-amber-400`} aria-label={`Rank icon for ${rankData.name}`}></i>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { supabase } from '../supabase.js';
 import { getCurrencyInfo } from '../utils.js';
 import { trackEvent } from '../analytics.js';
@@ -7,6 +7,8 @@ import UserListPage from './UserListPage.jsx';
 import AllRatingsPage from './AllRatingsPage.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import TimeSeriesChart from './TimeSeriesChart.jsx';
+import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
+import OnlineUsersPage from './OnlineUsersPage.jsx';
 
 const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString(), onClick, className = '', subValue = null }) => (
     <div
@@ -72,6 +74,8 @@ const StatsPage = ({ onBack, onViewProfile }) => {
     const [timePeriod, setTimePeriod] = useState('30d');
     const [currentView, setCurrentView] = useState('main');
     const isDesktop = useIsDesktop();
+    const { onlineUserIds } = useContext(OnlineStatusContext);
+    const onlineUsersCount = onlineUserIds.size;
 
     const fetchStats = useCallback(async (period) => {
         setLoading(true);
@@ -107,7 +111,7 @@ const StatsPage = ({ onBack, onViewProfile }) => {
     }, []);
 
     useEffect(() => {
-        if (currentView === 'main') {
+        if (currentView === 'main' || currentView === 'online_users') {
             fetchStats(timePeriod);
         }
     }, [currentView, timePeriod, fetchStats]);
@@ -126,6 +130,10 @@ const StatsPage = ({ onBack, onViewProfile }) => {
         setCurrentView('main');
     }, []);
 
+    if (currentView === 'online_users') {
+        return <OnlineUsersPage onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
+    }
+    
     if (currentView === 'user_list') {
         return <UserListPage totalUsers={stats?.total_users || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
     }
@@ -174,10 +182,11 @@ const StatsPage = ({ onBack, onViewProfile }) => {
                 <section>
                     <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">{timePeriodLabel}</h4>
                     <div className="grid grid-cols-2 gap-4">
+                        <StatCard label="Users Online" value={onlineUsersCount} icon="fa-wifi" onClick={() => handleViewChange('online_users')} />
                         <StatCard label="New Users" value={stats.new_users_in_period} icon="fa-user-plus" />
                         <StatCard label="New Ratings" value={stats.new_ratings_in_period} icon="fa-star" />
                         <StatCard label="Active Users" value={stats.active_users_in_period} icon="fa-user-clock" />
-                        <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} />
+                        <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} className="col-span-2" />
                     </div>
                 </section>
     
@@ -232,15 +241,16 @@ const StatsPage = ({ onBack, onViewProfile }) => {
     };
     
     const renderDesktopDashboard = () => (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Row 1: KPIs */}
+            <StatCard label="Users Online" value={onlineUsersCount} icon="fa-wifi" onClick={() => handleViewChange('online_users')} />
             <StatCard label={`New Users (${timePeriod})`} value={stats.new_users_in_period} icon="fa-user-plus" />
             <StatCard label={`Active Users (${timePeriod})`} value={stats.active_users_in_period} icon="fa-user-clock" />
             <StatCard label={`New Ratings (${timePeriod})`} value={stats.new_ratings_in_period} icon="fa-star" />
             <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} />
     
             {/* Row 2: Charts */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-3">
                 <TimeSeriesChart data={timeSeriesData} dataKey="new_users" title="New Users" loading={loading} error={error} timePeriod={timePeriod} lineColor="#F59E0B" tooltipLabel="users" />
             </div>
             <div className="lg:col-span-2">
@@ -276,7 +286,7 @@ const StatsPage = ({ onBack, onViewProfile }) => {
                 </div>
             </div>
             
-            <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
+            <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
                 <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
                 <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
                 <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
