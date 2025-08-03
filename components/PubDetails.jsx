@@ -384,7 +384,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                         </div>
                                       ) : <div></div> /* Empty div to maintain layout */}
                                       <button
-                                        onClick={() => onToggleLike(rating.id)}
+                                        onClick={() => onToggleLike({ ...rating, pub_id: pub.id })}
                                         className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold ${
                                             isLiked
                                             ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'

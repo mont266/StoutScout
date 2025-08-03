@@ -77,7 +77,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                         </div>
                     </div>
                      <button
-                        onClick={() => onToggleLike ? onToggleLike(id) : onLoginRequest()}
+                        onClick={() => onToggleLike ? onToggleLike(rating) : onLoginRequest()}
                         className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold ${
                             isLiked
                             ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'

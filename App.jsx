@@ -851,26 +851,51 @@ const App = () => {
     trackEvent('change_filter', { filter_type: newFilter });
   };
 
-  const handleToggleLike = useCallback(async (ratingId) => {
+  const handleToggleLike = useCallback(async (rating) => {
     if (!session) {
       setIsAuthOpen(true);
       return;
     }
 
+    const ratingId = rating.id;
+    const pubId = rating.pub_id;
     const userId = session.user.id;
     const isLiked = userLikes.has(ratingId);
     
     trackEvent('toggle_like', { rating_id: ratingId, action: isLiked ? 'unlike' : 'like' });
 
-    const newLikes = new Set(userLikes);
+    // --- Start optimistic updates ---
+    const originalUserLikes = userLikes;
+    const originalAllRatings = allRatings;
+
+    // 1. Optimistic update for button color
+    const newUserLikes = new Set(originalUserLikes);
     if (isLiked) {
-      newLikes.delete(ratingId);
+      newUserLikes.delete(ratingId);
     } else {
-      newLikes.add(ratingId);
+      newUserLikes.add(ratingId);
     }
-    setUserLikes(newLikes);
+    setUserLikes(newUserLikes);
+
+    // 2. Optimistic update for like count
+    const newAllRatings = new Map(originalAllRatings);
+    const pubRatings = newAllRatings.get(pubId);
+
+    if (pubRatings) {
+        const ratingIndex = pubRatings.findIndex(r => r.id === ratingId);
+        if (ratingIndex !== -1) {
+            const updatedRatings = [...pubRatings];
+            const originalRating = updatedRatings[ratingIndex];
+            const newCount = isLiked ? (originalRating.like_count || 0) - 1 : (originalRating.like_count || 0) + 1;
+            updatedRatings[ratingIndex] = { ...originalRating, like_count: Math.max(0, newCount) };
+            newAllRatings.set(pubId, updatedRatings);
+            setAllRatings(newAllRatings);
+        }
+    }
+    // --- End optimistic updates ---
 
     try {
+      // 3. Database call
       if (isLiked) {
         const { error } = await supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: userId });
         if (error) throw error;
@@ -878,18 +903,16 @@ const App = () => {
         const { error } = await supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: userId });
         if (error) throw error;
       }
+      
+      // 4. Re-fetch from server to ensure consistency.
       await fetchAllRatings();
     } catch (error) {
         console.error("Error toggling like:", error);
-        const revertedLikes = new Set(userLikes);
-        if (isLiked) {
-          revertedLikes.add(ratingId);
-        } else {
-          revertedLikes.delete(ratingId);
-        }
-        setUserLikes(revertedLikes);
+        // 5. Revert on error
+        setUserLikes(originalUserLikes);
+        setAllRatings(originalAllRatings);
     }
-  }, [session, userLikes, fetchAllRatings]);
+  }, [session, userLikes, allRatings, fetchAllRatings]);
   
   const handleCancelPubPlacement = useCallback(() => {
     trackEvent('add_pub_cancel', { step: pubPlacementState ? 'placement' : 'modal' });

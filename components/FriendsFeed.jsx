@@ -204,6 +204,26 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         }
     }, [hasFriends, filter]);
     
+    // Optimistically update the feed's local state
+    const handleFeedToggleLike = (ratingToToggle) => {
+        // First, update the local state for an instant UI change
+        setRatings(currentRatings => 
+            currentRatings.map(rating => {
+                if (rating.id === ratingToToggle.id) {
+                    const isLiked = userLikes.has(ratingToToggle.id);
+                    const newLikeCount = isLiked 
+                        ? (rating.like_count || 1) - 1 
+                        : (rating.like_count || 0) + 1;
+                    return { ...rating, like_count: newLikeCount };
+                }
+                return rating;
+            })
+        );
+
+        // Then, call the global handler from App.jsx to manage the database and global state
+        onToggleLike(ratingToToggle);
+    };
+
     const handleRefresh = useCallback(() => {
         if (loading) return;
         trackEvent('refresh_feed', { feed_type: 'friends' });
@@ -324,24 +344,14 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
             );
         }
 
-        const ratingsWithGlobalLikes = ratings.map(rating => {
-            const pubRatings = allRatings.get(rating.pub_id);
-            const globalRating = pubRatings?.find(r => r.id === rating.id);
-
-            if (globalRating && globalRating.like_count !== rating.like_count) {
-                return { ...rating, like_count: globalRating.like_count };
-            }
-            return rating;
-        });
-
         return (
             <div className="p-2 sm:p-4 space-y-4">
-                {ratingsWithGlobalLikes.map(rating => (
+                {ratings.map(rating => (
                     <RatingCard 
                         key={rating.id}
                         rating={rating}
                         userLikes={userLikes}
-                        onToggleLike={onToggleLike}
+                        onToggleLike={handleFeedToggleLike}
                         onViewProfile={onViewProfile}
                         onLoginRequest={onLoginRequest}
                         onViewImage={onViewImage}
