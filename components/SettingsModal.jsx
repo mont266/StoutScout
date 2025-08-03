@@ -20,6 +20,10 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isKofiModalOpen, setIsKofiModalOpen] = useState(false);
+  const [isRefreshingStats, setIsRefreshingStats] = useState(false);
+  const [refreshStatsSuccess, setRefreshStatsSuccess] = useState(false);
+  const [isRebuilding, setIsRebuilding] = useState(false);
+  const [rebuildSuccess, setRebuildSuccess] = useState(false);
   
   const handleUnitChange = (unit) => onSettingsChange({ ...settings, unit });
   const handleThemeChange = (theme) => onSettingsChange({ ...settings, theme });
@@ -65,6 +69,56 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
   const handleDonateClick = () => {
     trackEvent('click_donate_kofi');
     setIsKofiModalOpen(true);
+  };
+
+  const handleManualPriceStatRefresh = async () => {
+    setIsRefreshingStats(true);
+    setRefreshStatsSuccess(false);
+    trackEvent('manual_refresh_area_prices');
+    try {
+        const { error } = await supabase.rpc('refresh_area_price_stats');
+        if (error) throw error;
+        
+        setRefreshStatsSuccess(true);
+        setTimeout(() => setRefreshStatsSuccess(false), 3000);
+
+        await onDataRefresh();
+    } catch (error) {
+        console.error("Error refreshing area price stats:", error);
+        alert(`Could not refresh stats: ${error.message}`);
+    } finally {
+        setIsRefreshingStats(false);
+    }
+  };
+
+  const handleRebuildDynamicPricing = async () => {
+    if (!window.confirm("This will re-assign all pubs to a pricing area and then recalculate all area stats. This is a heavy operation. Continue?")) {
+        return;
+    }
+    setIsRebuilding(true);
+    setRebuildSuccess(false);
+    trackEvent('manual_rebuild_dynamic_pricing');
+    try {
+        // Step 1: Re-assign all area identifiers
+        const { error: assignError } = await supabase.rpc('assign_area_identifiers');
+        if (assignError) throw new Error(`Area assignment failed: ${assignError.message}`);
+
+        // Step 2: Refresh the stats based on the new assignments
+        const { error: refreshError } = await supabase.rpc('refresh_area_price_stats');
+        if (refreshError) throw new Error(`Stat refresh failed: ${refreshError.message}`);
+        
+        setRebuildSuccess(true);
+        setTimeout(() => setRebuildSuccess(false), 3000);
+
+        // Step 3: Refresh all app data
+        await onDataRefresh();
+
+    } catch (error) {
+        console.error("Error rebuilding dynamic pricing:", error);
+        alert(`Could not rebuild dynamic pricing: ${error.message}`);
+    } finally {
+        setIsRebuilding(false);
+    }
   };
 
   const isKm = settings.unit === 'km';
@@ -196,23 +250,66 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
           {(userProfile?.is_developer || userProfile?.is_team_member) && (
               <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
                    <h3 className="text-xl font-bold text-red-500 dark:text-red-400 text-center">Admin Tools</h3>
-                   <div className="flex flex-col sm:flex-row gap-3">
-                      {userProfile?.is_developer && (
-                        <button
-                            onClick={() => { onViewModeration(); trackEvent('view_moderation_center'); }}
-                            className="flex-1 flex items-center justify-center space-x-2 bg-red-500/10 text-red-500 dark:text-red-400 font-bold py-3 px-4 rounded-lg hover:bg-red-500/20 transition-colors"
-                        >
-                            <i className="fas fa-shield-alt"></i>
-                            <span>Moderation</span>
-                        </button>
-                      )}
-                      <button
-                          onClick={() => { onViewStats(); trackEvent('view_stats_page'); }}
-                          className="flex-1 flex items-center justify-center space-x-2 bg-blue-500/10 text-blue-500 dark:text-blue-400 font-bold py-3 px-4 rounded-lg hover:bg-blue-500/20 transition-colors"
-                      >
-                          <i className="fas fa-chart-bar"></i>
-                          <span>Stats</span>
-                      </button>
+                   <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {userProfile?.is_developer && (
+                            <button
+                                onClick={() => { onViewModeration(); trackEvent('view_moderation_center'); }}
+                                className="flex-1 flex items-center justify-center space-x-2 bg-red-500/10 text-red-500 dark:text-red-400 font-bold py-3 px-4 rounded-lg hover:bg-red-500/20 transition-colors"
+                            >
+                                <i className="fas fa-shield-alt"></i>
+                                <span>Moderation</span>
+                            </button>
+                          )}
+                          <button
+                              onClick={() => { onViewStats(); trackEvent('view_stats_page'); }}
+                              className="flex-1 flex items-center justify-center space-x-2 bg-blue-500/10 text-blue-500 dark:text-blue-400 font-bold py-3 px-4 rounded-lg hover:bg-blue-500/20 transition-colors"
+                          >
+                              <i className="fas fa-chart-bar"></i>
+                              <span>Stats</span>
+                          </button>
+                      </div>
+                      <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg space-y-3">
+                          <p className="text-xs text-center text-gray-500 dark:text-gray-400">Use these tools to fix data inconsistencies for the dynamic pricing feature.</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <button
+                                onClick={handleRebuildDynamicPricing}
+                                disabled={isRebuilding}
+                                className="flex-1 flex items-center justify-center space-x-2 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-bold py-3 px-4 rounded-lg hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
+                              >
+                                  {isRebuilding 
+                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
+                                      : rebuildSuccess 
+                                          ? <i className="fas fa-check"></i> 
+                                          : <i className="fas fa-cogs"></i>}
+                                  <span>
+                                      {isRebuilding 
+                                          ? 'Rebuilding...' 
+                                          : rebuildSuccess 
+                                              ? 'Rebuilt!' 
+                                              : 'Rebuild Dynamic Pricing'}
+                                  </span>
+                              </button>
+                              <button
+                                onClick={handleManualPriceStatRefresh}
+                                disabled={isRefreshingStats}
+                                className="flex-1 flex items-center justify-center space-x-2 bg-green-500/10 text-green-600 dark:text-green-400 font-bold py-3 px-4 rounded-lg hover:bg-green-500/20 transition-colors disabled:opacity-50"
+                              >
+                                  {isRefreshingStats 
+                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
+                                      : refreshStatsSuccess 
+                                          ? <i className="fas fa-check"></i> 
+                                          : <i className="fas fa-calculator"></i>}
+                                  <span>
+                                      {isRefreshingStats 
+                                          ? 'Refreshing...' 
+                                          : refreshStatsSuccess 
+                                              ? 'Refreshed!' 
+                                              : 'Refresh Area Prices'}
+                                  </span>
+                              </button>
+                          </div>
+                      </div>
                    </div>
               </div>
           )}

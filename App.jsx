@@ -169,7 +169,7 @@ const App = () => {
   }, []);
 
   const fetchDbPubs = useCallback(async () => {
-    const { data, error } = await supabase.from('pubs').select('id, name, address, lat, lng, country_code, country_name');
+    const { data, error } = await supabase.from('pubs_with_dynamic_pricing_info').select('id, name, address, lat, lng, country_code, country_name, is_dynamic_price_area, area_identifier, area_rating_count');
     if (error) {
       console.error("Error fetching rated pubs from DB:", error);
     } else {
@@ -180,6 +180,9 @@ const App = () => {
         country_code: p.country_code,
         country_name: p.country_name,
         location: { lat: p.lat, lng: p.lng },
+        is_dynamic_price_area: p.is_dynamic_price_area,
+        area_identifier: p.area_identifier,
+        area_rating_count: p.area_rating_count,
       }));
       setDbPubs(formatted);
     }
@@ -187,37 +190,54 @@ const App = () => {
   }, []);
 
   const fetchAllRatings = useCallback(async () => {
-      // This now uses the 'all_ratings_view' for consistency with the feeds and to ensure RLS is handled correctly by the view's WHERE clause.
-      // Using the view is more performant and reliable for broad queries than a direct table query with a complex RLS policy.
-      const { data, error } = await supabase
-          .from('all_ratings_view')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-      if (error) {
-          console.error("Critical error fetching ratings from view. Pub details may be missing data.", error);
-          return;
+    // This robust, two-query approach avoids complex RLS-related JOIN issues on the backend.
+    
+    // Step 1: Fetch all public ratings without joining profile data yet.
+    const { data: ratingsData, error: ratingsError } = await supabase
+      .from('ratings')
+      .select('id, pub_id, user_id, price, quality, created_at, exact_price, image_url, like_count')
+      .eq('is_private', false)
+      .order('created_at', { ascending: false });
+  
+    if (ratingsError) {
+      console.error("Critical error fetching ratings:", ratingsError);
+      setAllRatings(new Map());
+      return;
+    }
+  
+    // Step 2: Fetch all user profiles. The RLS policy on profiles allows public reads (`USING (true)`).
+    const { data: profilesData, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_id, level, is_banned');
+  
+    if (profilesError) {
+      console.error("Critical error fetching profiles:", profilesError);
+      setAllRatings(new Map()); // Fail gracefully
+      return;
+    }
+  
+    // Create a lookup map for efficient access to profiles.
+    const profilesMap = new Map((profilesData || []).map(p => [p.id, p]));
+  
+    // Step 3: Join the data on the client side.
+    const ratingsMap = new Map();
+    for (const rating of ratingsData || []) {
+      const user = profilesMap.get(rating.user_id);
+  
+      // This check replicates the security logic from the database RLS policy:
+      // only show ratings from users who exist and are not banned.
+      if (!user || user.is_banned) {
+        continue;
       }
-
-      const ratingsMap = new Map();
-      for (const rating of data || []) {
-          const existing = ratingsMap.get(rating.pub_id) || [];
-          ratingsMap.set(rating.pub_id, [...existing, {
-              id: rating.rating_id,
-              price: rating.price,
-              quality: rating.quality,
-              exact_price: rating.exact_price,
-              created_at: rating.created_at,
-              image_url: rating.image_url,
-              like_count: rating.like_count || 0,
-              user: {
-                  id: rating.uploader_id,
-                  username: rating.uploader_username,
-                  avatar_id: rating.uploader_avatar_id
-              },
-          }]);
-      }
-      setAllRatings(ratingsMap);
+      
+      // Re-nest the user object into the rating, as the rest of the app expects this structure.
+      const ratingWithUser = { ...rating, user };
+      
+      const existing = ratingsMap.get(rating.pub_id) || [];
+      ratingsMap.set(rating.pub_id, [...existing, ratingWithUser]);
+    }
+  
+    setAllRatings(ratingsMap);
   }, []);
 
   const fetchPubScores = useCallback(async () => {
@@ -336,6 +356,12 @@ const App = () => {
         setUserProfile(null);
         setUserRatings([]);
         return { profile: null, ratings: [] };
+    }
+    
+    if (profile?.is_banned) {
+        setUserProfile(profile);
+        setUserRatings([]);
+        return { profile, ratings: [] };
     }
 
     // Add friend count to the profile object
@@ -519,9 +545,21 @@ const App = () => {
     nominatimResults.forEach(nominatimPub => {
         const isDuplicate = dbPubs.some(dbPub => {
             if (!nominatimPub.location || !dbPub.location) return false;
+            
             const distance = getDistance(nominatimPub.location, dbPub.location);
-            const namesMatch = normalizePubNameForComparison(nominatimPub.name) === normalizePubNameForComparison(dbPub.name);
-            return distance < PROXIMITY_THRESHOLD_METERS && namesMatch;
+            // Quick exit if pubs are not close to each other.
+            if (distance >= PROXIMITY_THRESHOLD_METERS) {
+                return false;
+            }
+
+            const normalizedNominatimName = normalizePubNameForComparison(nominatimPub.name);
+            const normalizedDbName = normalizePubNameForComparison(dbPub.name);
+
+            // Fuzzy name match: check if one name is a substring of the other.
+            // This handles cases like "The Pub" vs "The Pub - Pub Chain".
+            const namesMatch = normalizedNominatimName.includes(normalizedDbName) || normalizedDbName.includes(normalizedNominatimName);
+
+            return namesMatch;
         });
 
         if (!isDuplicate) {
@@ -537,11 +575,18 @@ const App = () => {
     });
 
     // 4. Add ratings and scores to the filtered list.
-    const finalPubsList = pubsInRadius.map(pub => ({
-      ...pub,
-      ratings: allRatings.get(pub.id) || [],
-      pub_score: pubScores.get(pub.id) ?? null,
-    }));
+    const finalPubsList = pubsInRadius.map(pub => {
+      const dbVersion = dbPubs.find(p => p.id === pub.id);
+      
+      return {
+        ...pub,
+        is_dynamic_price_area: pub.is_dynamic_price_area ?? dbVersion?.is_dynamic_price_area ?? false,
+        area_identifier: pub.area_identifier || dbVersion?.area_identifier,
+        area_rating_count: pub.area_rating_count ?? dbVersion?.area_rating_count ?? 0,
+        ratings: allRatings.get(pub.id) || [],
+        pub_score: pubScores.get(pub.id) ?? null,
+      }
+    });
 
     setPubs(finalPubsList);
   }, [nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance]);
@@ -1371,6 +1416,10 @@ const App = () => {
         )}
     </>
   );
+
+  if (userProfile?.is_banned) {
+    return <BannedPage userProfile={userProfile} onLogout={() => supabase.auth.signOut()} />;
+  }
 
   if (isDesktop) {
       return (

@@ -17,7 +17,7 @@ const StatCard = ({ label, value, icon, color }) => (
         </div>
         <div>
             <div className="text-lg font-bold text-gray-900 dark:text-white">{value}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">{label}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{label}</div>
         </div>
     </div>
 );
@@ -99,6 +99,45 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
 
     return { text: `${currencyInfo.symbol}${average.toFixed(2)}`, stars: avgPrice };
   }, [pub.ratings, avgPrice, currencyInfo]);
+
+  const DYNAMIC_PRICING_THRESHOLD = 26; // Needs > 25 ratings
+
+  const priceLabel = (
+    <div className="flex items-center justify-center gap-1.5 uppercase tracking-wider">
+        <span>Avg. Price</span>
+        {pub.is_dynamic_price_area && (
+            <div className="group relative flex items-center normal-case">
+                <i className="fas fa-globe-europe text-gray-400 dark:text-gray-500 cursor-help"></i>
+                <div className="absolute bottom-full mb-2 w-max max-w-[200px] left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+                    <span className="font-bold block">Dynamic Price Rating</span>
+                    This rating compares prices to the local average, not a global standard.
+                </div>
+            </div>
+        )}
+        {!pub.is_dynamic_price_area && pub.area_identifier && (
+            <div className="group relative flex items-center normal-case">
+                <i className="fas fa-hourglass-half text-gray-400 dark:text-gray-500 cursor-help"></i>
+                <div className="absolute bottom-full mb-2 w-max max-w-xs left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+                    <span className="font-bold block">Dynamic Pricing Pending</span>
+                    Area stats are updated periodically to ensure accuracy.
+                    <br />
+                    This area has <span className="font-bold text-amber-400">{pub.area_rating_count}</span> of the <span className="font-bold">{DYNAMIC_PRICING_THRESHOLD}</span> exact price ratings needed to activate this feature.
+                </div>
+            </div>
+        )}
+        {!pub.is_dynamic_price_area && !pub.area_identifier && (
+            <div className="group relative flex items-center normal-case">
+                <i className="fas fa-hourglass-half text-gray-400 dark:text-gray-500 cursor-help"></i>
+                <div className="absolute bottom-full mb-2 w-max max-w-xs left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+                    <span className="font-bold block">Dynamic Pricing Inactive</span>
+                    Submit ratings with an exact price in this area to help create a new dynamic pricing zone.
+                </div>
+            </div>
+        )}
+    </div>
+  );
+  
+  const isDeveloper = loggedInUserProfile?.is_developer;
 
   const handleInitiateReport = (ratingToReport) => {
     setImageToView(null); // Close the image modal first
@@ -259,6 +298,20 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
         </header>
 
         <main className="flex-grow overflow-y-auto p-4 space-y-6 pb-safe">
+            {isDeveloper && (
+                <Section>
+                    <div className="flex justify-center items-center gap-2 mb-2">
+                        <h3 className="text-xl font-bold text-red-500 dark:text-red-400">Admin Info</h3>
+                    </div>
+                    <div className="p-3 bg-red-500/10 text-red-700 dark:text-red-300 rounded-lg text-xs font-mono space-y-1">
+                        <p><strong>Pub ID:</strong> {pub.id}</p>
+                        <p><strong>Area ID:</strong> {pub.area_identifier || 'N/A'}</p>
+                        <p><strong>Area Status:</strong> {pub.is_dynamic_price_area ? <span className="font-bold text-green-600 dark:text-green-400">Active</span> : 'Inactive'}</p>
+                        <p><strong>Area Ratings:</strong> {pub.area_rating_count || 0}</p>
+                    </div>
+                </Section>
+            )}
+
             {pub.pub_score !== null && (
                 <Section>
                     <div className="flex justify-center items-center gap-2 mb-2">
@@ -281,9 +334,9 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
             {pub.ratings.length > 0 ? (
                 <Section>
                     <div className="flex space-x-3">
-                        <StatCard label="Quality" value={`${avgQuality.toFixed(1)} / 5`} icon="fa-beer" color="text-amber-500" />
-                        <StatCard label="Avg. Price" value={priceInfo.text} icon="fa-tag" color="text-green-500" />
-                        <StatCard label="Ratings" value={pub.ratings.length} icon="fa-users" color="text-blue-500" />
+                        <StatCard label={<span className="uppercase tracking-wider">Quality</span>} value={`${avgQuality.toFixed(1)} / 5`} icon="fa-beer" color="text-amber-500" />
+                        <StatCard label={priceLabel} value={priceInfo.text} icon="fa-tag" color="text-green-500" />
+                        <StatCard label={<span className="uppercase tracking-wider">Ratings</span>} value={pub.ratings.length} icon="fa-users" color="text-blue-500" />
                     </div>
                 </Section>
             ) : (
@@ -326,7 +379,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                 <button
                                     onClick={() => onViewProfile && onViewProfile(rating.user.id, 'pubDetails')}
                                     disabled={!onViewProfile}
-                                    className="rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                                    className={`rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${isOwnRating ? 'ring-2 ring-amber-500' : 'ring-transparent focus:ring-amber-500'}`}
                                     aria-label={`View profile for ${rating.user.username}`}
                                 >
                                     <Avatar avatarId={rating.user.avatar_id} className="w-10 h-10" />
@@ -353,14 +406,19 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                             <StarRating rating={rating.quality} color="text-amber-400" />
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-end">
+                                    {rating.exact_price > 0 && (
+                                        <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">
+                                            Paid: <span className="font-bold text-gray-700 dark:text-white">{currencyInfo.symbol}{rating.exact_price.toFixed(2)}</span>
+                                        </p>
+                                    )}
+                                    <div className="mt-2 flex justify-between items-end">
                                       {rating.image_url ? (
-                                        <div className="mt-2 flex items-end space-x-2">
+                                        <div className="flex items-end space-x-2">
                                           <button onClick={() => setImageToView({ ...rating, uploaderName: rating.user.username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
-                                              <img src={rating.image_url} alt="Pint of Guinness" className="w-20 h-20 object-cover" />
+                                            <img src={rating.image_url} alt="Pint of Guinness" className="w-20 h-20 object-cover" />
                                           </button>
                                           <div className="flex flex-col gap-1">
-                                              {session && !isOwnRating && (
+                                            {session && !isOwnRating && (
                                                 <button 
                                                   onClick={() => setReportModalInfo({ isOpen: true, rating })}
                                                   className="h-8 px-2 flex items-center justify-center bg-gray-200 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-colors"
@@ -369,29 +427,29 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                                 >
                                                   <i className="fas fa-flag"></i>
                                                 </button>
-                                              )}
-                                              {canAdminRemove && (
-                                                  <button 
-                                                      onClick={() => confirmAdminRemoveImage(rating)}
-                                                      className="h-8 px-2 flex items-center justify-center bg-red-200 dark:bg-red-700/80 text-red-600 dark:text-red-300 rounded-md hover:bg-red-300 dark:hover:bg-red-900/50 hover:text-red-700 dark:hover:text-red-400 transition-colors"
-                                                      aria-label="Admin: Remove Photo"
-                                                      title="Admin: Remove Photo"
-                                                  >
-                                                      <i className="fas fa-trash-alt"></i>
-                                                  </button>
-                                              )}
+                                            )}
+                                            {canAdminRemove && (
+                                                <button 
+                                                    onClick={() => confirmAdminRemoveImage(rating)}
+                                                    className="h-8 px-2 flex items-center justify-center bg-red-200 dark:bg-red-700/80 text-red-600 dark:text-red-300 rounded-md hover:bg-red-300 dark:hover:bg-red-900/50 hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                                                    aria-label="Admin: Remove Photo"
+                                                    title="Admin: Remove Photo"
+                                                >
+                                                    <i className="fas fa-trash-alt"></i>
+                                                </button>
+                                            )}
                                           </div>
                                         </div>
                                       ) : <div></div> /* Empty div to maintain layout */}
                                       <button
-                                        onClick={() => onToggleLike({ ...rating, pub_id: pub.id })}
-                                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold ${
-                                            isLiked
-                                            ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'
-                                            : 'bg-gray-100 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-800/50'
-                                        }`}
-                                        aria-pressed={isLiked}
-                                        aria-label={isLiked ? `Unlike rating, currently ${rating.like_count} likes` : `Like rating, currently ${rating.like_count} likes`}
+                                          onClick={() => onToggleLike({ ...rating, pub_id: pub.id })}
+                                          className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold ${
+                                              isLiked
+                                              ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'
+                                              : 'bg-gray-100 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-800/50'
+                                          }`}
+                                          aria-pressed={isLiked}
+                                          aria-label={isLiked ? `Unlike rating, currently ${rating.like_count} likes` : `Like rating, currently ${rating.like_count} likes`}
                                       >
                                           <i className={`${isLiked ? 'fas' : 'far'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
                                           <span>{rating.like_count || 0}</span>
