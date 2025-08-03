@@ -4,7 +4,7 @@ import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
 import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, extractPostcode, normalizePubNameForComparison } from './utils.js';
-import { trackEvent } from './analytics.js';
+import { initializeAnalytics, trackEvent } from './analytics.js';
 
 import MobileLayout from './components/MobileLayout.jsx';
 import DesktopLayout from './components/DesktopLayout.jsx';
@@ -16,6 +16,7 @@ import AddPubModal from './components/AddPubModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
 import StatsPage from './components/StatsPage.jsx';
 import PubScoreExplanationModal from './components/PubScoreExplanationModal.jsx';
+import CookieConsentBanner from './components/CookieConsentBanner.jsx';
 
 const App = () => {
   // --- STATE MANAGEMENT ---
@@ -103,6 +104,9 @@ const App = () => {
   const [friendsList, setFriendsList] = useState([]); // The actual list of friends
   const [isFetchingFriendsList, setIsFetchingFriendsList] = useState(false);
 
+  // Cookie Consent State
+  const [cookieConsent, setCookieConsent] = useState(null);
+
 
   // --- HOOKS ---
   const isDesktop = useIsDesktop();
@@ -110,8 +114,29 @@ const App = () => {
   const initialSettingsLoad = useRef(true);
   const radiusUpdateTimeout = useRef(null);
   
-  // --- ANALYTICS ---
+  // --- ANALYTICS & CONSENT ---
   
+  useEffect(() => {
+    const storedConsent = localStorage.getItem('stoutly-cookie-consent');
+    if (storedConsent === 'granted') {
+      initializeAnalytics();
+    }
+    setCookieConsent(storedConsent);
+  }, []);
+
+  const handleAcceptCookies = () => {
+    localStorage.setItem('stoutly-cookie-consent', 'granted');
+    setCookieConsent('granted');
+    initializeAnalytics();
+    trackEvent('cookie_consent_change', { consent_status: 'granted' });
+  };
+
+  const handleDeclineCookies = () => {
+    localStorage.setItem('stoutly-cookie-consent', 'denied');
+    setCookieConsent('denied');
+    trackEvent('cookie_consent_change', { consent_status: 'denied' });
+  };
+
   // More specific screen view tracking
   useEffect(() => {
     let screenName = activeTab;
@@ -1420,20 +1445,19 @@ const App = () => {
   if (userProfile?.is_banned) {
     return <BannedPage userProfile={userProfile} onLogout={() => supabase.auth.signOut()} />;
   }
-
-  if (isDesktop) {
-      return (
-        <>
-            {renderModals()}
-            <DesktopLayout {...layoutProps} />
-        </>
-      );
-  }
+  
+  const AppContent = isDesktop ? <DesktopLayout {...layoutProps} /> : <MobileLayout {...layoutProps} />;
 
   return (
     <>
-        {renderModals()}
-        <MobileLayout {...layoutProps} />
+      {renderModals()}
+      {AppContent}
+      {cookieConsent === null && (
+        <CookieConsentBanner
+          onAccept={handleAcceptCookies}
+          onDecline={handleDeclineCookies}
+        />
+      )}
     </>
   );
 };

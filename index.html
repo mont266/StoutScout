@@ -58,22 +58,6 @@
       }
     }
     </script>
-
-    <!-- Google Analytics - This script is added to enable GA4 tracking -->
-    <!-- The Measurement ID is injected by Vite from your .env file (VITE_GA_MEASUREMENT_ID) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=%VITE_GA_MEASUREMENT_ID%"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      const gaId = "%VITE_GA_MEASUREMENT_ID%";
-      // Only run the config if the ID was actually injected by Vite.
-      // Vite replaces the variable with an empty string if it's not set.
-      if (gaId) {
-        gtag('config', gaId);
-      }
-    </script>
     
     <script type="module" src="/index.tsx"></script>
   <script type="importmap">

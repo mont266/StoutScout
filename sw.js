@@ -69,6 +69,7 @@ const urlsToCache = [
   '/components/AlertModal.jsx',
   '/components/PubScoreExplanationModal.jsx',
   '/components/CoachMark.jsx',
+  '/components/CookieConsentBanner.jsx',
 ];
 
 self.addEventListener('install', event => {
