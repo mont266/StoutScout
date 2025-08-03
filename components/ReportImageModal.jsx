@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const REPORT_REASONS = [
     "Not a pint of Guinness",
@@ -10,6 +11,14 @@ const REPORT_REASONS = [
 const ReportImageModal = ({ onClose, onSubmit }) => {
     const [selectedReason, setSelectedReason] = useState('');
 
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
     const handleSubmit = (e) => {
         e.preventDefault();
         if (selectedReason) {
@@ -19,7 +28,7 @@ const ReportImageModal = ({ onClose, onSubmit }) => {
         }
     };
 
-    return (
+    const modalContent = (
         <div 
             className="fixed inset-0 bg-black/60 z-[1400] flex items-end sm:items-center justify-center p-4 animate-modal-fade-in"
             onClick={onClose}
@@ -80,6 +89,11 @@ const ReportImageModal = ({ onClose, onSubmit }) => {
             </div>
         </div>
     );
+
+    const modalRoot = document.getElementById('modal-root');
+    if (!modalRoot) return null;
+
+    return createPortal(modalContent, modalRoot);
 };
 
 export default ReportImageModal;

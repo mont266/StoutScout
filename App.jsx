@@ -384,21 +384,9 @@ const App = () => {
   }, [session, fetchSocialData]);
 
   useEffect(() => {
-    const lockOrientation = async () => {
-      // Check if the Screen Orientation API is supported
-      if (screen.orientation && typeof screen.orientation.lock === 'function') {
-        try {
-          // Attempt to lock the orientation to portrait-primary
-          await screen.orientation.lock('portrait-primary');
-        } catch (error) {
-          // Log a warning if it fails (e.g., on desktop or unsupported browsers)
-          console.warn('Failed to lock screen orientation:', error);
-        }
-      }
-    };
-
-    lockOrientation();
-  }, []);
+    const root = window.document.documentElement;
+    root.classList.toggle('dark', settings.theme === 'dark');
+  }, [settings.theme]);
 
 
   // --- CORE APP LOGIC & HANDLERS ---
@@ -500,11 +488,6 @@ const App = () => {
     }
   }, [realUserLocation, locationError]);
 
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.toggle('dark', settings.theme === 'dark');
-  }, [settings.theme]);
-
   // Popup visibility timers
   useEffect(() => { if (reviewPopupInfo) { const timer = setTimeout(() => setReviewPopupInfo(null), 3000); return () => clearTimeout(timer); } }, [reviewPopupInfo]);
   useEffect(() => { if (updateConfirmationInfo) { const timer = setTimeout(() => setUpdateConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [updateConfirmationInfo]);
@@ -526,28 +509,28 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    const combinedPubsMap = new Map();
+    // A small distance in meters to consider two pubs the same location.
+    const PROXIMITY_THRESHOLD_METERS = 50;
+    
+    // 1. Start with our database pubs as the source of truth.
+    const combinedPubs = [...dbPubs];
+    
+    // 2. Iterate through Nominatim API results and add them only if they are not duplicates of existing DB pubs.
+    nominatimResults.forEach(nominatimPub => {
+        const isDuplicate = dbPubs.some(dbPub => {
+            if (!nominatimPub.location || !dbPub.location) return false;
+            const distance = getDistance(nominatimPub.location, dbPub.location);
+            const namesMatch = normalizePubNameForComparison(nominatimPub.name) === normalizePubNameForComparison(dbPub.name);
+            return distance < PROXIMITY_THRESHOLD_METERS && namesMatch;
+        });
 
-    // 1. Add all Nominatim pubs to the map.
-    nominatimResults.forEach(place => {
-      combinedPubsMap.set(place.id, {
-        id: place.id,
-        name: place.name,
-        address: place.address,
-        location: place.location,
-        country_code: place.country_code,
-        country_name: place.country_name,
-      });
+        if (!isDuplicate) {
+            combinedPubs.push(nominatimPub);
+        }
     });
     
-    // 2. Add all DB pubs, overwriting any duplicates from Nominatim.
-    dbPubs.forEach(pub => {
-        combinedPubsMap.set(pub.id, { ...pub });
-    });
-
-    // 3. Convert map to an array and filter by the search radius.
-    const allPubsInArea = Array.from(combinedPubsMap.values());
-    const pubsInRadius = allPubsInArea.filter(pub => {
+    // 3. Filter the combined list by the search radius.
+    const pubsInRadius = combinedPubs.filter(pub => {
         if (!pub.location) return false;
         const distance = getDistance(pub.location, searchOrigin);
         return distance <= settings.radius;
@@ -1272,28 +1255,37 @@ const App = () => {
     }
   };
 
-  const handleUpdateAvatar = async (newAvatarId) => {
+  const handleUpdateAvatar = useCallback(async (newAvatarId) => {
     if (!session || !userProfile) return;
+    trackEvent('update_avatar', { avatar_style: JSON.parse(newAvatarId)?.style });
 
     try {
-        const avatarData = JSON.parse(newAvatarId);
-        trackEvent('update_avatar', { avatar_style: avatarData.style });
+        const originalAvatarId = userProfile.avatar_id;
+        // Optimistic update for instant UI feedback
+        setUserProfile(currentProfile => ({ ...currentProfile, avatar_id: newAvatarId }));
+        setIsAvatarModalOpen(false); // Close modal immediately
 
         const { error } = await supabase
             .from('profiles')
             .update({ avatar_id: newAvatarId })
             .eq('id', userProfile.id);
 
-        if (error) throw error;
-
-        await fetchUserData(); 
-        setIsAvatarModalOpen(false);
-
+        if (error) {
+            // Revert on error
+            setUserProfile(currentProfile => ({ ...currentProfile, avatar_id: originalAvatarId }));
+            throw error;
+        }
+        // No need to fetch user data again due to optimistic update
     } catch (error) {
         console.error("Error updating avatar:", error);
         alert(`Could not update avatar: ${error.message}`);
     }
-  };
+  }, [session, userProfile]);
+
+  const pendingRequestsCount = useMemo(() => {
+    if (!session || !userProfile) return 0;
+    return friendships.filter(f => f.status === 'pending' && f.action_user_id !== userProfile.id).length;
+  }, [friendships, session, userProfile]);
 
   const layoutProps = {
       isDesktop,
@@ -1321,6 +1313,7 @@ const App = () => {
       levelRequirements,
       settingsSubView, handleViewAdminPage,
       onOpenScoreExplanation: () => setIsPubScoreModalOpen(true),
+      pendingRequestsCount,
       
       // Implemented handlers
       handleViewProfile,
@@ -1332,6 +1325,7 @@ const App = () => {
       handleBackFromFriendsList: () => setViewingFriendsOf(null),
       handleFindPlace,
       handleFindCurrentPub,
+      handleUpdateAvatar,
       
       // Implemented "Add Pub" flow handlers
       handleAddPubClick: handleAddPubClick,
@@ -1341,7 +1335,6 @@ const App = () => {
       // Stubs
       handleSettingsChange: setSettings,
       handleSetSimulatedLocation: () => {},
-      handleUpdateAvatar: handleUpdateAvatar,
   };
 
   const renderModals = () => (

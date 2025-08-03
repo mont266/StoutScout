@@ -9,6 +9,7 @@ import { getMobileOS } from '../utils.js';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import ContactModal from './ContactModal.jsx';
 import FeedbackModal from './FeedbackModal.jsx';
+import KofiModal from './KofiModal.jsx';
 
 
 // This component is no longer a modal, but a full page for settings
@@ -18,6 +19,7 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
   const [isLocating, setIsLocating] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [isKofiModalOpen, setIsKofiModalOpen] = useState(false);
   
   const handleUnitChange = (unit) => onSettingsChange({ ...settings, unit });
   const handleThemeChange = (theme) => onSettingsChange({ ...settings, theme });
@@ -58,6 +60,11 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
   const handleIosInstallClick = () => {
     trackEvent('share', { method: 'Add to Home Screen', content_type: 'app' });
     onShowIosInstall();
+  };
+
+  const handleDonateClick = () => {
+    trackEvent('click_donate_kofi');
+    setIsKofiModalOpen(true);
   };
 
   const isKm = settings.unit === 'km';
@@ -105,6 +112,7 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
 
   return (
     <>
+      <KofiModal isOpen={isKofiModalOpen} onClose={() => setIsKofiModalOpen(false)} />
       {isContactModalOpen && <ContactModal userProfile={userProfile} session={session} onClose={() => setIsContactModalOpen(false)} />}
       {isFeedbackModalOpen && <FeedbackModal userProfile={userProfile} onClose={() => setIsFeedbackModalOpen(false)} />}
       <div className="p-4 sm:p-6 space-y-8">
@@ -262,6 +270,23 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
               )}
             </div>
           )}
+
+          {/* Support Us Section */}
+           <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white px-2">Support Stoutly</h3>
+              <div className="px-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      If you enjoy using Stoutly, please consider supporting its development. Every contribution helps keep the app running and ad-free!
+                  </p>
+                  <button
+                      onClick={handleDonateClick}
+                      className="w-full flex items-center justify-center space-x-3 bg-amber-500 text-black font-bold py-3 px-4 rounded-lg hover:bg-amber-400 transition-colors"
+                  >
+                      <i className="fas fa-heart"></i>
+                      <span>Buy me a pint</span>
+                  </button>
+              </div>
+          </div>
 
           {/* Support & Feedback Section */}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-2">

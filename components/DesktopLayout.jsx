@@ -53,6 +53,7 @@ const DesktopLayout = (props) => {
         // Stats props
         StatsPage,
         onOpenScoreExplanation,
+        pendingRequestsCount,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -213,7 +214,7 @@ const DesktopLayout = (props) => {
     const isFullScreenTab = ['stats', 'moderation'].includes(activeTab);
 
     return (
-        <div className="w-full h-dvh flex bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-sans antialiased">
+        <div className="w-full h-dvh flex">
             <DesktopNav
                 activeTab={activeTab}
                 onTabChange={handleTabChange}
@@ -221,6 +222,7 @@ const DesktopLayout = (props) => {
                 userProfile={userProfile}
                 levelRequirements={levelRequirements}
                 onLoginRequest={() => setIsAuthOpen(true)}
+                pendingRequestsCount={pendingRequestsCount}
             />
 
             {/* Main Content Area */}

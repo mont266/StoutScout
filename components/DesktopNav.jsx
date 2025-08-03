@@ -2,7 +2,7 @@ import React from 'react';
 import Icon from './Icon.jsx';
 import ProfileAvatar from './ProfileAvatar.jsx';
 
-const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, tooltipPosition = 'right' }) => {
+const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, tooltipPosition = 'right', notificationCount = 0 }) => {
   const isActive = activeTab === tab.id;
 
   const handleClick = () => {
@@ -31,6 +31,9 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
         aria-label={tab.label}
         aria-current={isActive ? 'page' : undefined}
       >
+        {notificationCount > 0 && (
+            <span className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+        )}
         <i className={`fas ${tab.icon} fa-fw`}></i>
       </button>
       <div className={`${baseTooltipClasses} ${positionClasses}`}>
@@ -40,7 +43,7 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
   );
 };
 
-const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements }) => {
+const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements, pendingRequestsCount }) => {
   const mainTabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
@@ -59,7 +62,13 @@ const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequ
       <div className="w-full border-t border-gray-200 dark:border-gray-700 my-2"></div>
       
       {mainTabs.map(tab => (
-        <NavButton key={tab.id} tab={tab} {...{ activeTab, onTabChange, onLoginRequest, userProfile }} tooltipPosition="right" />
+        <NavButton
+            key={tab.id}
+            tab={tab}
+            {...{ activeTab, onTabChange, onLoginRequest, userProfile }}
+            tooltipPosition="right"
+            notificationCount={tab.id === 'community' ? pendingRequestsCount : 0}
+        />
       ))}
       
       <div className="!mt-auto flex flex-col items-center space-y-4">

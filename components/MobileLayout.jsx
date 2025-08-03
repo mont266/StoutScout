@@ -24,7 +24,7 @@ import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 
-const TabBar = ({ activeTab, onTabChange }) => {
+const TabBar = ({ activeTab, onTabChange, pendingRequestsCount }) => {
   const tabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
@@ -38,7 +38,7 @@ const TabBar = ({ activeTab, onTabChange }) => {
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`flex flex-col items-center justify-center w-24 h-16 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+            className={`relative flex flex-col items-center justify-center w-24 h-16 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
               activeTab === tab.id
                 ? 'text-amber-500 dark:text-amber-400'
                 : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -46,6 +46,9 @@ const TabBar = ({ activeTab, onTabChange }) => {
             aria-label={tab.label}
             aria-current={activeTab === tab.id ? 'page' : undefined}
           >
+            {tab.id === 'community' && pendingRequestsCount > 0 && (
+              <span className="absolute top-3 right-7 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>
+            )}
             <i className={`fas ${tab.icon} fa-lg`}></i>
             <span className="text-xs mt-1 font-semibold">{tab.label}</span>
           </button>
@@ -87,13 +90,14 @@ const MobileLayout = (props) => {
         StatsPage,
         settingsSubView, handleViewAdminPage,
         onOpenScoreExplanation,
+        pendingRequestsCount,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
     const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
     return (
-        <div className="w-full max-w-md mx-auto h-dvh flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased">
+        <div className="w-full max-w-md mx-auto h-dvh flex flex-col overflow-hidden">
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
             {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(false)} />}
@@ -285,7 +289,7 @@ const MobileLayout = (props) => {
                 )}
             </main>
 
-            <TabBar activeTab={activeTab} onTabChange={props.handleTabChange} />
+            <TabBar activeTab={activeTab} onTabChange={props.handleTabChange} pendingRequestsCount={pendingRequestsCount} />
 
             {/* Popups and Modals (sit outside main content flow) */}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}

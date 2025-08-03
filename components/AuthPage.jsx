@@ -12,6 +12,7 @@ const AuthPage = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
+  const [showResendLink, setShowResendLink] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -30,6 +31,7 @@ const AuthPage = ({ onClose }) => {
     setMessage(null);
     setPassword('');
     setConfirmPassword('');
+    setShowResendLink(false);
     // keep email and username for convenience
   };
 
@@ -67,7 +69,13 @@ const AuthPage = ({ onClose }) => {
         // onAuthStateChange in App.jsx will handle closing modal on success
       }
     } catch (err) {
-      setError(err.error_description || err.message);
+      const errorMessage = err.error_description || err.message;
+      setError(errorMessage);
+
+      if (errorMessage.toLowerCase().includes('email not confirmed')) {
+        setShowResendLink(true);
+      }
+
       if (view === 'signIn') {
         trackEvent('login_failed', { error_message: err.message });
       } else if (view === 'signUp') {
@@ -77,6 +85,27 @@ const AuthPage = ({ onClose }) => {
       setLoading(false);
     }
   };
+
+  const handleResendVerification = async () => {
+    setLoading(true);
+    setError(null);
+    setShowResendLink(false);
+    trackEvent('resend_verification_request');
+
+    const { error: resendError } = await supabase.auth.resend({
+      type: 'signup',
+      email: email,
+    });
+
+    if (resendError) {
+      setError(resendError.message);
+      setShowResendLink(true); // Allow user to try again
+    } else {
+      setMessage("A new verification link has been sent to your email.");
+    }
+    setLoading(false);
+  };
+
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
@@ -172,6 +201,18 @@ const AuthPage = ({ onClose }) => {
                     </div>
                 )}
                 {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                {showResendLink && (
+                    <p className="text-center text-sm -mt-2">
+                        <button
+                            type="button"
+                            onClick={handleResendVerification}
+                            disabled={loading}
+                            className="text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50"
+                        >
+                            Resend verification email
+                        </button>
+                    </p>
+                )}
                 <button type="submit" disabled={loading} className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-amber-300 flex items-center justify-center">
                     {loading && <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-black mr-2"></div>}
                     {loading ? 'Please wait...' : view === 'signUp' ? 'Sign Up' : 'Sign In'}
