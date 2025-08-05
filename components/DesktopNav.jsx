@@ -43,7 +43,7 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
   );
 };
 
-const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements, pendingRequestsCount }) => {
+const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements, unreadNotificationsCount }) => {
   const mainTabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
@@ -67,7 +67,7 @@ const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequ
             tab={tab}
             {...{ activeTab, onTabChange, onLoginRequest, userProfile }}
             tooltipPosition="right"
-            notificationCount={tab.id === 'community' ? pendingRequestsCount : 0}
+            notificationCount={tab.id === 'community' ? unreadNotificationsCount : 0}
         />
       ))}
       

@@ -23,8 +23,10 @@ import FriendsListPage from './FriendsListPage.jsx';
 import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
+import ReportCommentModal from './ReportCommentModal.jsx';
+import NotificationToast from './NotificationToast.jsx';
 
-const TabBar = ({ activeTab, onTabChange, pendingRequestsCount }) => {
+const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount }) => {
   const tabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
@@ -46,7 +48,7 @@ const TabBar = ({ activeTab, onTabChange, pendingRequestsCount }) => {
             aria-label={tab.label}
             aria-current={activeTab === tab.id ? 'page' : undefined}
           >
-            {tab.id === 'community' && pendingRequestsCount > 0 && (
+            {tab.id === 'community' && unreadNotificationsCount > 0 && (
               <span className="absolute top-3 right-7 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>
             )}
             <i className={`fas ${tab.icon} fa-lg`}></i>
@@ -64,12 +66,12 @@ const MobileLayout = (props) => {
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
         activeTab, locationError, settings, filter, handleFilterChange,
         handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
-        handleSelectPub, selectedPubId, handleNominatimResults, handleMapMove,
+        handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
         refreshTrigger, handleFindCurrentPub, getDistance, isListExpanded,
         setIsListExpanded, getAverageRating, resultsAreCapped,
         isDbPubsLoaded, initialSearchComplete, renderProfile, session, handleViewProfile,
         handleSettingsChange, handleSetSimulatedLocation, userProfile, handleLogout,
-        handleViewPub, selectedPub, existingUserRatingForSelectedPub, handleRatePub,
+        existingUserRatingForSelectedPub, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, handleBackFromProfileView,
@@ -90,7 +92,14 @@ const MobileLayout = (props) => {
         StatsPage,
         settingsSubView, handleViewAdminPage,
         onOpenScoreExplanation,
-        pendingRequestsCount,
+        unreadNotificationsCount,
+        // Comments and notifications
+        notifications, onMarkNotificationsAsRead,
+        commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment,
+        reportCommentInfo, onCloseReportCommentModal, onSubmitReportComment,
+        // Moderation
+        reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
+        toastNotification, onCloseToast, onToastClick,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -101,7 +110,16 @@ const MobileLayout = (props) => {
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
             {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(false)} />}
+            {reportCommentInfo.isOpen && <ReportCommentModal comment={reportCommentInfo.comment} onClose={onCloseReportCommentModal} onSubmit={onSubmitReportComment} />}
             <SubmittingRatingModal isVisible={isSubmittingRating} />
+            {toastNotification && (
+                <NotificationToast
+                    key={toastNotification.id} // Use key to force re-mount on new notification
+                    notification={toastNotification}
+                    onClick={onToastClick}
+                    onClose={onCloseToast}
+                />
+            )}
 
             <Header 
                 activeTab={activeTab}
@@ -129,14 +147,23 @@ const MobileLayout = (props) => {
                             activeSubTab={communitySubTab}
                             onSubTabChange={setCommunitySubTab}
                             onViewPub={handleSelectPub}
+                            unreadNotificationsCount={unreadNotificationsCount}
+                            notifications={notifications}
+                            onMarkNotificationsAsRead={onMarkNotificationsAsRead}
+                            commentsByRating={commentsByRating}
+                            isCommentsLoading={isCommentsLoading}
+                            onFetchComments={onFetchComments}
+                            onAddComment={onAddComment}
+                            onDeleteComment={onDeleteComment}
+                            onReportComment={onReportComment}
                         />
                     )}
                     {activeTab === 'settings' && (() => {
                         if (settingsSubView === 'stats') {
-                            return <StatsPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} />;
+                            return <StatsPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onViewPub={handleSelectPub} userProfile={userProfile} onAdminDeleteComment={onAdminDeleteComment} />;
                         }
                         if (settingsSubView === 'moderation') {
-                            return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} />;
+                            return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
                         }
                         if (legalPageView === 'terms') {
                             return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
@@ -243,10 +270,10 @@ const MobileLayout = (props) => {
                 </div>
 
                 {/* Full Screen Pub Details View (within main content area) */}
-                <div className={`absolute inset-0 z-[1100] bg-gray-100 dark:bg-gray-900 transition-transform duration-300 ease-in-out ${selectedPub ? 'translate-x-0' : 'translate-x-full'}`}>
-                    {selectedPub && (
+                <div className={`absolute inset-0 z-[1100] bg-gray-100 dark:bg-gray-900 transition-transform duration-300 ease-in-out ${selectedPubId ? 'translate-x-0' : 'translate-x-full'}`}>
+                    {props.selectedPub && (
                         <PubDetails
-                            pub={selectedPub}
+                            pub={props.selectedPub}
                             onClose={() => handleSelectPub(null)}
                             onRate={handleRatePub}
                             getAverageRating={getAverageRating}
@@ -260,6 +287,14 @@ const MobileLayout = (props) => {
                             onToggleLike={onToggleLike}
                             isSubmittingRating={isSubmittingRating}
                             onOpenScoreExplanation={onOpenScoreExplanation}
+                            commentsByRating={commentsByRating}
+                            isCommentsLoading={isCommentsLoading}
+                            onFetchComments={onFetchComments}
+                            onAddComment={onAddComment}
+                            onDeleteComment={onDeleteComment}
+                            onReportComment={onReportComment}
+                            highlightedRatingId={highlightedRatingId}
+                            highlightedCommentId={highlightedCommentId}
                         />
                     )}
                 </div>
@@ -289,7 +324,7 @@ const MobileLayout = (props) => {
                 )}
             </main>
 
-            <TabBar activeTab={activeTab} onTabChange={props.handleTabChange} pendingRequestsCount={pendingRequestsCount} />
+            <TabBar activeTab={activeTab} onTabChange={props.handleTabChange} unreadNotificationsCount={unreadNotificationsCount} />
 
             {/* Popups and Modals (sit outside main content flow) */}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}

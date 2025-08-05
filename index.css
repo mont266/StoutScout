@@ -29,3 +29,17 @@
 .map-tiles-dark {
   filter: brightness(1.4) contrast(0.9) saturate(0.9);
 }
+
+@keyframes highlight {
+  0% { background-color: rgba(251, 191, 36, 0); } /* amber-400 */
+  50% { background-color: rgba(251, 191, 36, 0.3); }
+  100% { background-color: rgba(251, 191, 36, 0); }
+}
+
+.highlight-rating {
+  animation: highlight 2.5s ease-in-out;
+}
+
+.highlight-comment {
+  animation: highlight 2.5s ease-in-out;
+}

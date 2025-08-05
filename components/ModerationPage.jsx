@@ -6,25 +6,26 @@ import { formatTimeAgo } from '../utils.js';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import AlertModal from './AlertModal.jsx';
 
-const TabButton = ({ label, isActive, onClick }) => (
+const TabButton = ({ label, count, isActive, onClick }) => (
     <button
         onClick={onClick}
-        className={`flex-1 py-3 text-sm font-bold transition-all duration-300 border-b-2 ${
+        className={`flex-1 py-3 text-sm font-bold transition-all duration-300 border-b-2 flex items-center justify-center gap-2 ${
             isActive 
                 ? 'text-red-500 border-red-500' 
                 : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-red-500/70 hover:border-red-500/30'
         }`}
     >
-        {label}
+        <span>{label}</span>
+        {count > 0 && <span className="bg-red-500/20 text-red-700 dark:text-red-300 text-xs font-bold px-2 py-0.5 rounded-full">{count}</span>}
     </button>
 );
 
-const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
-    const [activeTab, setActiveTab] = useState('users'); // 'users' or 'images'
+const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments, onFetchReportedComments, onResolveCommentReport }) => {
+    const [activeTab, setActiveTab] = useState('users'); // 'users', 'images', 'comments'
     const [flaggedUsers, setFlaggedUsers] = useState([]);
     const [reportedImages, setReportedImages] = useState([]);
-    const [loading, setLoading] = useState({ users: true, images: true });
-    const [error, setError] = useState({ users: null, images: null });
+    const [loading, setLoading] = useState({ users: true, images: true, comments: true });
+    const [error, setError] = useState({ users: null, images: null, comments: null });
     const [processingActionId, setProcessingActionId] = useState(null); // stores user or report ID being processed
     const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [alertInfo, setAlertInfo] = useState({ isOpen: false });
@@ -48,7 +49,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
 
     const fetchReportedImages = useCallback(async () => {
         setLoading(p => ({ ...p, images: true }));
-        setError(p => ({ ...p, images: null }));
+        setError(p => ({...p, images: null}));
         trackEvent('refresh_moderation_list', { type: 'images' });
 
         const { data, error } = await supabase
@@ -56,9 +57,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
             .select(`
                 *,
                 rating:ratings!inner(
-                  id,
-                  image_url,
-                  user_id,
+                  id, image_url, user_id,
                   uploader:profiles!user_id (id, username, avatar_id),
                   pub:pubs!pub_id (name)
                 ),
@@ -78,28 +77,27 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
     }, []);
 
     useEffect(() => {
-        if (activeTab === 'users') {
-            fetchFlaggedUsers();
-        } else if (activeTab === 'images') {
-            fetchReportedImages();
+        if (activeTab === 'users') fetchFlaggedUsers();
+        if (activeTab === 'images') fetchReportedImages();
+        if (activeTab === 'comments') {
+            setLoading(p => ({ ...p, comments: true }));
+            onFetchReportedComments().finally(() => setLoading(p => ({ ...p, comments: false })));
         }
-    }, [activeTab, fetchFlaggedUsers, fetchReportedImages]);
+    }, [activeTab, fetchFlaggedUsers, fetchReportedImages, onFetchReportedComments]);
 
     const handleRefresh = () => {
-        if (activeTab === 'users') {
-            fetchFlaggedUsers();
-        } else {
-            fetchReportedImages();
-        }
+        if (activeTab === 'users') fetchFlaggedUsers();
+        if (activeTab === 'images') fetchReportedImages();
+        if (activeTab === 'comments') onFetchReportedComments();
     };
     
-    const confirmResolveReport = (report, action) => {
+    const confirmResolveImageReport = (report, action) => {
         setConfirmation({
             isOpen: true,
             title: `Confirm Action: ${action.charAt(0).toUpperCase() + action.slice(1)}`,
             message: `Are you sure you want to '${action}' this image? This action is permanent.`,
             onConfirm: async () => {
-                await handleResolveReport(report, action);
+                await handleResolveImageReport(report, action);
                 setConfirmation({ isOpen: false });
             },
             confirmText: action.charAt(0).toUpperCase() + action.slice(1),
@@ -107,7 +105,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
         });
     };
 
-    const handleResolveReport = async (report, action) => {
+    const handleResolveImageReport = async (report, action) => {
         setProcessingActionId(report.id);
         trackEvent('resolve_image_report', { report_id: report.id, action });
 
@@ -250,20 +248,20 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
                             </div>
                              <div className="font-bold text-red-600 dark:text-red-400 mt-1">Reason: {report.reason}</div>
                             <div className="mt-2 text-sm">
-                                <p>Uploader: <button onClick={() => onViewProfile(report.rating.uploader.id, 'moderation')} className="font-semibold hover:underline text-amber-600 dark:text-amber-400">{report.rating.uploader.username}</button></p>
+                                <p>Uploader: <button onClick={() => onViewProfile(report.rating.uploader.id, 'moderation_images')} className="font-semibold hover:underline text-amber-600 dark:text-amber-400">{report.rating.uploader.username}</button></p>
                                 <p>Pub: <span className="font-semibold">{report.rating.pub?.name || 'Unknown Pub'}</span></p>
                             </div>
                         </div>
                         <div className="flex-shrink-0 p-3 flex sm:flex-col items-center justify-around sm:justify-center gap-2 border-t sm:border-t-0 sm:border-l border-gray-200 dark:border-gray-700">
                             <button 
-                                onClick={() => confirmResolveReport(report, 'allow')}
+                                onClick={() => confirmResolveImageReport(report, 'allow')}
                                 disabled={processingActionId === report.id}
                                 className="w-full sm:w-auto bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-300 font-bold py-2 px-4 rounded-lg hover:bg-green-200 dark:hover:bg-green-700/50 transition-colors text-sm disabled:opacity-50"
                             >
                                 {processingActionId === report.id ? '...' : 'Allow'}
                             </button>
                              <button 
-                                onClick={() => confirmResolveReport(report, 'remove')}
+                                onClick={() => confirmResolveImageReport(report, 'remove')}
                                 disabled={processingActionId === report.id}
                                 className="w-full sm:w-auto bg-red-100 text-red-800 dark:bg-red-800/50 dark:text-red-300 font-bold py-2 px-4 rounded-lg hover:bg-red-200 dark:hover:bg-red-700/50 transition-colors text-sm disabled:opacity-50"
                             >
@@ -274,9 +272,56 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
                 )})}
             </ul>
         );
-    }
-    
-    const isLoading = activeTab === 'users' ? loading.users : loading.images;
+    };
+
+    const renderReportedComments = () => {
+        if (loading.comments) return <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-400 mx-auto mt-8"></div>;
+        if (reportedComments.length === 0) return (
+            <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <i className="fas fa-check-circle fa-2x mb-2 text-green-500"></i>
+                <p className="font-semibold">All clear!</p>
+                <p className="text-sm">No comments are currently waiting for review.</p>
+            </div>
+        );
+        return (
+            <ul className="space-y-4">
+                {reportedComments.map(report => (
+                    <li key={report.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg shadow-md border-l-4 border-red-500 p-3">
+                        <div className="flex flex-col sm:flex-row">
+                            <div className="flex-grow">
+                                <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                                    <p className="font-mono text-sm text-gray-700 dark:text-gray-200 break-words">"{report.comment.content}"</p>
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    <p>Comment by: <button onClick={() => onViewProfile(report.comment.author.id, 'moderation_comments')} className="font-semibold hover:underline text-amber-600 dark:text-amber-400">{report.comment.author.username}</button></p>
+                                    <p>Reported by: <span className="font-semibold">{report.reporter?.username || 'Unknown'}</span> for: <span className="font-bold text-red-600 dark:text-red-400">{report.reason}</span></p>
+                                    <p>Time: {formatTimeAgo(new Date(report.created_at).getTime())}</p>
+                                </div>
+                            </div>
+                            <div className="flex-shrink-0 p-3 pt-4 sm:pt-3 flex sm:flex-col items-center justify-around sm:justify-center gap-2">
+                                <button
+                                    onClick={() => onResolveCommentReport(report, 'ignore')}
+                                    disabled={processingActionId === report.id}
+                                    className="w-full sm:w-auto bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-300 font-bold py-2 px-4 rounded-lg hover:bg-green-200 dark:hover:bg-green-700/50 transition-colors text-sm disabled:opacity-50"
+                                >
+                                    {processingActionId === report.id ? '...' : 'Ignore'}
+                                </button>
+                                <button
+                                    onClick={() => onResolveCommentReport(report, 'remove')}
+                                    disabled={processingActionId === report.id}
+                                    className="w-full sm:w-auto bg-red-100 text-red-800 dark:bg-red-800/50 dark:text-red-300 font-bold py-2 px-4 rounded-lg hover:bg-red-200 dark:hover:bg-red-700/50 transition-colors text-sm disabled:opacity-50"
+                                >
+                                    {processingActionId === report.id ? '...' : 'Remove'}
+                                </button>
+                            </div>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        );
+    };
+
+    const isLoading = loading[activeTab];
 
     return (
         <>
@@ -323,8 +368,9 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
                     </div>
                     <div className="mt-2 border-b border-gray-200 dark:border-gray-700">
                         <div className="flex">
-                            <TabButton label="Flagged Users" isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />
-                            <TabButton label="Reported Images" isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
+                            <TabButton label="Flagged Users" count={flaggedUsers.length} isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+                            <TabButton label="Reported Images" count={reportedImages.length} isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
+                            <TabButton label="Reported Comments" count={reportedComments.length} isActive={activeTab === 'comments'} onClick={() => setActiveTab('comments')} />
                         </div>
                     </div>
                 </div>
@@ -332,6 +378,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh }) => {
                 <div className="flex-grow p-4 overflow-y-auto">
                     {activeTab === 'users' && renderFlaggedUsers()}
                     {activeTab === 'images' && renderReportedImages()}
+                    {activeTab === 'comments' && renderReportedComments()}
                 </div>
             </div>
         </>

@@ -18,6 +18,7 @@ import StatsPage from './components/StatsPage.jsx';
 import PubScoreExplanationModal from './components/PubScoreExplanationModal.jsx';
 import CookieConsentBanner from './components/CookieConsentBanner.jsx';
 import { OnlineStatusContext } from './contexts/OnlineStatusContext.jsx';
+import AlertModal from './components/AlertModal.jsx';
 
 
 const App = () => {
@@ -35,6 +36,8 @@ const App = () => {
   const [allRatings, setAllRatings] = useState(new Map());
   const [pubScores, setPubScores] = useState(new Map());
   const [selectedPubId, setSelectedPubId] = useState(null);
+  const [highlightedRatingId, setHighlightedRatingId] = useState(null);
+  const [highlightedCommentId, setHighlightedCommentId] = useState(null);
   const [filter, setFilter] = useState(FilterType.Distance);
   const [isListExpanded, setIsListExpanded] = useState(true);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
@@ -75,6 +78,8 @@ const App = () => {
   const [rankUpInfo, setRankUpInfo] = useState(null);
   const [addPubSuccessInfo, setAddPubSuccessInfo] = useState(null);
   const [isPubScoreModalOpen, setIsPubScoreModalOpen] = useState(false);
+  const [toastNotification, setToastNotification] = useState(null);
+  const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '', theme: 'info' });
   
   const [levelRequirements, setLevelRequirements] = useState([]);
   
@@ -105,6 +110,12 @@ const App = () => {
   const [viewingFriendsOf, setViewingFriendsOf] = useState(null); // The user whose friends list is being viewed
   const [friendsList, setFriendsList] = useState([]); // The actual list of friends
   const [isFetchingFriendsList, setIsFetchingFriendsList] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [commentsByRating, setCommentsByRating] = useState(new Map());
+  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
+  const [reportCommentInfo, setReportCommentInfo] = useState({ isOpen: false, comment: null });
+  const [reportedComments, setReportedComments] = useState([]);
+
 
   // Cookie Consent State
   const [cookieConsent, setCookieConsent] = useState(null);
@@ -273,13 +284,12 @@ const App = () => {
     // Step 1: Fetch all public ratings without joining profile data yet.
     const { data: ratingsData, error: ratingsError } = await supabase
       .from('ratings')
-      .select('id, pub_id, user_id, price, quality, created_at, exact_price, image_url, like_count')
+      .select('id, pub_id, user_id, price, quality, created_at, exact_price, image_url, like_count, comment_count')
       .eq('is_private', false)
       .order('created_at', { ascending: false });
   
     if (ratingsError) {
       console.error("Critical error fetching ratings:", ratingsError);
-      setAllRatings(new Map());
       return;
     }
   
@@ -290,7 +300,6 @@ const App = () => {
   
     if (profilesError) {
       console.error("Critical error fetching profiles:", profilesError);
-      setAllRatings(new Map()); // Fail gracefully
       return;
     }
   
@@ -350,6 +359,16 @@ const App = () => {
     if (friendsError) console.error("Error fetching friendships:", friendsError);
     else setFriendships(friendsData || []);
 
+    // Fetch notifications
+    const { data: notificationsData, error: notificationsError } = await supabase
+      .from('notifications')
+      .select('*, actor:actor_id(id, username, avatar_id)')
+      .eq('recipient_id', userId)
+      .order('created_at', { ascending: false });
+    if (notificationsError) console.error("Error fetching notifications:", notificationsError);
+    else setNotifications(notificationsData || []);
+
+
   }, []);
 
   const handleDataRefresh = useCallback(async () => {
@@ -396,6 +415,62 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, [fetchAllRatings, fetchPubScores, fetchDbPubs]);
   
+  // Real-time notifications listener
+  // Depends on the primitive `userId` to prevent re-subscribing on every render.
+  const userId = session?.user?.id;
+  useEffect(() => {
+      if (!userId) return;
+  
+      const handleNewNotification = async (payload) => {
+        const newNotification = payload.new;
+        let actorProfile = null;
+        
+        if (newNotification.actor_id) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, username, avatar_id')
+            .eq('id', newNotification.actor_id)
+            .single();
+          
+          if (error) {
+            console.error("Realtime listener failed to fetch actor profile:", error);
+            actorProfile = { id: newNotification.actor_id, username: 'A user', avatar_id: null };
+          } else {
+            actorProfile = data;
+          }
+        }
+
+        const fullNotification = { ...newNotification, actor: actorProfile };
+        setNotifications(prev => [fullNotification, ...prev]);
+        setToastNotification(fullNotification);
+      };
+
+      const channel = supabase
+        .channel(`user-notifications:${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `recipient_id=eq.${userId}`,
+          },
+          handleNewNotification
+        )
+        .subscribe();
+  
+      return () => {
+        supabase.removeChannel(channel);
+      };
+  }, [userId]);
+
+  const handleToastClick = () => {
+    trackEvent('notification_toast_clicked');
+    handleTabChange('community');
+    setCommunitySubTab('notifications');
+    setToastNotification(null); // Dismiss the toast
+  };
+
   const fetchLevelRequirements = async () => {
     const { data, error } = await supabase
         .from('level_requirements')
@@ -927,8 +1002,13 @@ const App = () => {
     }
 }, [session, userProfile, userRatings, handleDataRefresh]);
   
-  const handleSelectPub = useCallback((pub) => {
+  const handleSelectPub = useCallback((pub, highlightOptions = {}) => {
+    const { highlightRatingId: ratingId, highlightCommentId: commentId } = highlightOptions;
     const pubId = pub ? pub.id : null;
+    
+    setHighlightedRatingId(ratingId || null);
+    setHighlightedCommentId(commentId || null);
+
     if (!pubId) {
       setSelectedPubId(null);
       return;
@@ -1184,7 +1264,7 @@ const App = () => {
     setProfileViewOrigin(null);
 
     // This logic handles returning to the correct sub-tab in the community section
-    if (origin === 'leaderboard' || origin === 'friends' || origin === 'requests' || origin === 'community') {
+    if (origin === 'leaderboard' || origin === 'friends' || origin === 'notifications' || origin === 'community') {
         setCommunitySubTab(origin);
         setActiveTab('community');
     } else if (origin && origin.startsWith('community')) {
@@ -1221,22 +1301,41 @@ const App = () => {
   
   const handleFriendAction = async (friendshipId, newStatus) => {
       trackEvent('friend_request_action', { friendship_id: friendshipId, action: newStatus });
-      const { error } = await supabase
-          .from('friendships')
-          .update({ 
-              status: newStatus, 
-              action_user_id: session.user.id,
-              updated_at: new Date().toISOString()
-          })
-          .eq('id', friendshipId);
-      
-      if (error) {
-          alert(`Error updating friendship: ${error.message}`);
-      } else {
-          await Promise.all([
-              fetchSocialData(session.user.id),
-              fetchUserData(), // To update friend count
-          ]);
+
+      // 'declined' is used for both unfriending and declining a request.
+      // In both cases, we want to remove the row so a new request can be sent later.
+      if (newStatus === 'declined') {
+          const { error } = await supabase
+              .from('friendships')
+              .delete()
+              .eq('id', friendshipId);
+
+          if (error) {
+              alert(`Error updating friendship: ${error.message}`);
+          } else {
+              await Promise.all([
+                  fetchSocialData(session.user.id),
+                  fetchUserData(), // To update friend count
+              ]);
+          }
+      } else { // This handles 'accepted'
+          const { error } = await supabase
+              .from('friendships')
+              .update({ 
+                  status: newStatus, 
+                  action_user_id: session.user.id,
+                  updated_at: new Date().toISOString()
+              })
+              .eq('id', friendshipId);
+          
+          if (error) {
+              alert(`Error updating friendship: ${error.message}`);
+          } else {
+              await Promise.all([
+                  fetchSocialData(session.user.id),
+                  fetchUserData(), // To update friend count
+              ]);
+          }
       }
   };
   
@@ -1428,17 +1527,198 @@ const App = () => {
     }
   }, [session, userProfile]);
 
-  const pendingRequestsCount = useMemo(() => {
-    if (!session || !userProfile) return 0;
-    return friendships.filter(f => f.status === 'pending' && f.action_user_id !== userProfile.id).length;
-  }, [friendships, session, userProfile]);
+  const unreadNotificationsCount = useMemo(() => {
+    return notifications.filter(n => !n.is_read).length;
+  }, [notifications]);
+  
+  // --- COMMENTS & NOTIFICATIONS HANDLERS ---
+  
+  const fetchCommentsForRating = useCallback(async (ratingId) => {
+    setIsCommentsLoading(true);
+    const { data, error } = await supabase
+      .from('comments')
+      .select('id, created_at, content, user:user_id(id, username, avatar_id, level, is_developer)')
+      .eq('rating_id', ratingId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error("Error fetching comments:", error);
+    } else {
+      setCommentsByRating(prev => new Map(prev).set(ratingId, data));
+    }
+    setIsCommentsLoading(false);
+  }, []);
+
+  const handleAddComment = useCallback(async (ratingId, content) => {
+    if (!session) return;
+    trackEvent('add_comment', { rating_id: ratingId });
+
+    const { data: newComment, error } = await supabase
+      .from('comments')
+      .insert({ rating_id: ratingId, user_id: session.user.id, content })
+      .select('id, created_at, content, user:user_id(id, username, avatar_id, level, is_developer)')
+      .single();
+
+    if (error) {
+        if (error.message.includes('Please wait a moment')) {
+            setAlertInfo({
+                isOpen: true,
+                title: 'You are commenting too quickly!',
+                message: 'To prevent spam, we have a limit on how frequently you can comment. Please wait a moment before trying again.',
+                theme: 'info',
+            });
+        } else {
+             setAlertInfo({
+                isOpen: true,
+                title: 'Error',
+                message: `Could not post comment: ${error.message}`,
+                theme: 'error',
+            });
+        }
+    } else {
+      setCommentsByRating(prev => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(ratingId) || [];
+        newMap.set(ratingId, [...existing, newComment]);
+        return newMap;
+      });
+      // A full refresh is needed to get the updated comment_count from the DB trigger.
+      await fetchAllRatings(); 
+    }
+  }, [session, fetchAllRatings]);
+
+  const handleDeleteComment = useCallback(async (commentId, ratingId) => {
+    trackEvent('delete_comment', { comment_id: commentId });
+    const { error } = await supabase.from('comments').delete().eq('id', commentId);
+
+    if (error) {
+      alert(`Error deleting comment: ${error.message}`);
+    } else {
+      setCommentsByRating(prev => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(ratingId) || [];
+        newMap.set(ratingId, existing.filter(c => c.id !== commentId));
+        return newMap;
+      });
+      await fetchAllRatings();
+    }
+  }, [fetchAllRatings]);
+
+  const handleOpenReportCommentModal = (comment) => {
+    setReportCommentInfo({ isOpen: true, comment });
+  };
+
+  const handleReportComment = useCallback(async (reason) => {
+    if (!reportCommentInfo.comment) return;
+    const { id: commentId } = reportCommentInfo.comment;
+
+    trackEvent('report_comment', { comment_id: commentId, reason });
+    const { error } = await supabase.rpc('report_comment', {
+      p_comment_id: commentId,
+      p_reason: reason,
+    });
+
+    setReportCommentInfo({ isOpen: false, comment: null }); // Close modal
+
+    if (error) {
+      setAlertInfo({
+        isOpen: true,
+        title: 'Report Failed',
+        message: `There was an error reporting this comment: ${error.message}`,
+        theme: 'error',
+      });
+    } else {
+      setAlertInfo({
+        isOpen: true,
+        title: 'Comment Reported',
+        message: 'Thank you for helping keep the community safe. Our moderation team will review it shortly.',
+        theme: 'success',
+      });
+    }
+  }, [reportCommentInfo]);
+
+  const handleMarkNotificationsAsRead = useCallback(async () => {
+    if (!session || unreadNotificationsCount === 0) return;
+    trackEvent('mark_notifications_read');
+
+    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .in('id', unreadIds);
+
+    if (error) {
+      console.error("Error marking notifications as read:", error);
+    } else {
+      // Optimistic update
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    }
+  }, [session, notifications, unreadNotificationsCount]);
+  
+  // --- MODERATION HANDLERS (for reported comments) ---
+
+  const fetchReportedComments = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('reported_comments')
+      .select(`
+        *,
+        comment:comments!inner(
+          id, content, created_at,
+          author:profiles!comments_user_id_fkey(id, username, avatar_id)
+        ),
+        reporter:profiles!reported_comments_reporter_id_fkey(id, username)
+      `)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true });
+    
+    if (error) {
+      console.error("Error fetching reported comments:", error);
+    } else {
+      setReportedComments(data || []);
+    }
+  }, []);
+
+  const handleResolveCommentReport = useCallback(async (report, action) => {
+    trackEvent('resolve_comment_report', { report_id: report.id, action });
+    
+    const { error } = await supabase.functions.invoke('resolve-comment-report', {
+      body: { report_id: report.id, action: action }
+    });
+    
+    if (error) {
+      alert(`Failed to resolve report: ${error.context?.responseJson?.error || error.message}`);
+    } else {
+      // Optimistically remove from list
+      setReportedComments(prev => prev.filter(r => r.id !== report.id));
+      if (action === 'remove') {
+          // If a comment was removed, we should refresh all ratings to update comment counts
+          await fetchAllRatings();
+      }
+    }
+  }, [fetchAllRatings]);
+
+  const handleAdminDeleteComment = useCallback(async (commentId) => {
+      trackEvent('admin_delete_comment', { comment_id: commentId });
+      try {
+          const { error } = await supabase.functions.invoke('delete-comment-admin', {
+              body: { comment_id: commentId }
+          });
+          if (error) throw error;
+          await fetchAllRatings();
+          return { success: true };
+      } catch (error) {
+          console.error("Failed to delete comment as admin:", error);
+          return { success: false, error: `Could not delete comment: ${error.context?.responseJson?.error || error.message}` };
+      }
+  }, [fetchAllRatings]);
+
 
   const layoutProps = {
       isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
       activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
       handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
-      handleSelectPub, selectedPubId, handleNominatimResults, handleMapMove,
+      handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
       refreshTrigger, getDistance, isListExpanded, setIsListExpanded,
       getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
       renderProfile, session, userProfile, handleLogout: () => supabase.auth.signOut(),
@@ -1459,7 +1739,9 @@ const App = () => {
       levelRequirements,
       settingsSubView, handleViewAdminPage,
       onOpenScoreExplanation: () => setIsPubScoreModalOpen(true),
-      pendingRequestsCount,
+      unreadNotificationsCount,
+      notifications,
+      commentsByRating, isCommentsLoading,
       
       // Implemented handlers
       handleViewProfile,
@@ -1473,14 +1755,35 @@ const App = () => {
       handleFindCurrentPub,
       handleUpdateAvatar,
       
+      // Comments & Notifications
+      onFetchComments: fetchCommentsForRating,
+      onAddComment: handleAddComment,
+      onDeleteComment: handleDeleteComment,
+      onReportComment: handleOpenReportCommentModal,
+      onMarkNotificationsAsRead: handleMarkNotificationsAsRead,
+      
       // Implemented "Add Pub" flow handlers
       handleAddPubClick: handleAddPubClick,
       handleConfirmNewPub: handleConfirmNewPub,
       handleCancelPubPlacement: handleCancelPubPlacement,
+
+      // Moderation
+      reportedComments,
+      onFetchReportedComments: fetchReportedComments,
+      onResolveCommentReport: handleResolveCommentReport,
+      onAdminDeleteComment: handleAdminDeleteComment,
+      reportCommentInfo,
+      onCloseReportCommentModal: () => setReportCommentInfo({ isOpen: false, comment: null }),
+      onSubmitReportComment: handleReportComment,
       
       // Stubs
       handleSettingsChange: setSettings,
       handleSetSimulatedLocation: () => {},
+
+      // Toast Notification
+      toastNotification,
+      onCloseToast: () => setToastNotification(null),
+      onToastClick: handleToastClick,
   };
 
   const renderModals = () => (
@@ -1490,6 +1793,14 @@ const App = () => {
             <AddPubModal 
                 onClose={handleCancelPubPlacement}
                 onSubmit={handleStartPubPlacement}
+            />
+        )}
+        {alertInfo.isOpen && (
+            <AlertModal
+                onClose={() => setAlertInfo({ isOpen: false })}
+                title={alertInfo.title}
+                message={alertInfo.message}
+                theme={alertInfo.theme}
             />
         )}
     </>

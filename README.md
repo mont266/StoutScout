@@ -12,7 +12,7 @@ Stoutly is a modern, mobile-first web application designed to help users find th
 
 ## ✨ Core Features
 
--   **Interactive Map Exploration**: Find pubs and bars near you or anywhere in the world using an integrated Google Map.
+-   **Interactive Map Exploration**: Find pubs and bars near you or anywhere in the world using an integrated map.
 -   **Community-Driven Ratings**: Rate pints based on **Quality** and **Price**. Submit exact prices to contribute to a global price index.
 -   **Pint Gallery**: Upload photos of your pints and browse a gallery of submissions from other users.
 -   **User Profiles & Gamification**:
@@ -33,11 +33,9 @@ Stoutly is a modern, mobile-first web application designed to help users find th
 -   **Frontend**: [React](https://reactjs.org/) (with Hooks)
 -   **Build Tool**: [Vite](https://vitejs.dev/)
 -   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
--   **Mapping**: [Google Maps Platform](https://developers.google.com/maps) (Maps JavaScript API, Places API)
+-   **Mapping**: [Leaflet](https://leafletjs.com/) / [React Leaflet](https://react-leaflet.js.org/) with map data from [OpenStreetMap](https://www.openstreetmap.org/)
 -   **Backend-as-a-Service**: [Supabase](https://supabase.io/)
     -   **Authentication**: Manages user sign-up and login.
     -   **Postgres Database**: Stores all user, pub, and rating data.
     -   **Storage**: Hosts user-uploaded pint images.
     -   **Edge Functions**: Powers secure, server-side logic for moderation and user management.
-
----

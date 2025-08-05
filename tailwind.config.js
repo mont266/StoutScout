@@ -12,6 +12,7 @@ export default {
         'fade-in-down': 'fadeInDown 0.3s ease-out forwards',
         'fade-in-up': 'fadeInUp 0.3s ease-out forwards',
         'pulse-halo': 'pulseHalo 1.5s ease-in-out infinite',
+        'fade-out-up': 'fadeOutUp 0.3s ease-in forwards',
       },
       keyframes: {
         fadeInDown: {
@@ -32,6 +33,16 @@ export default {
           '100%': {
             opacity: '1',
             transform: 'translateY(0) scale(1)',
+          },
+        },
+        fadeOutUp: {
+          '0%': {
+            opacity: '1',
+            transform: 'translateY(0) scale(1)',
+          },
+          '100%': {
+            opacity: '0',
+            transform: 'translateY(-1rem) scale(0.95)',
           },
         },
         pulseHalo: {

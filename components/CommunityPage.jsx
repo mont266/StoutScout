@@ -3,11 +3,11 @@ import { trackEvent } from '../analytics.js';
 import LeaderboardPage from './LeaderboardPage.jsx';
 import CommunityFeed from './CommunityFeed.jsx';
 import FriendsFeed from './FriendsFeed.jsx';
-import FriendRequestsPage from './FriendRequestsPage.jsx';
+import NotificationsPage from './NotificationsPage.jsx';
 import ImageModal from './ImageModal.jsx';
 import ScrollToTopButton from './ScrollToTopButton.jsx';
 
-const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange, onViewPub }) => {
+const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment }) => {
     const [imageToView, setImageToView] = useState(null);
     const [showScrollButton, setShowScrollButton] = useState(false);
     const [feedFilter, setFeedFilter] = useState({ sortBy: 'created_at', timePeriod: 'all' });
@@ -43,14 +43,19 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
             return () => container.removeEventListener('scroll', handleScroll);
         }
     }, []);
-
-    const pendingRequests = friendships.filter(f => f.status === 'pending' && f.action_user_id !== userProfile.id);
+    
+    // Mark notifications as read when the tab is viewed
+    useEffect(() => {
+        if (activeSubTab === 'notifications' && unreadNotificationsCount > 0) {
+            onMarkNotificationsAsRead();
+        }
+    }, [activeSubTab, unreadNotificationsCount, onMarkNotificationsAsRead]);
 
     const subTabs = [
         { id: 'community', label: 'Community', icon: 'fa-globe-europe' },
         { id: 'friends', label: 'Friends', icon: 'fa-user-friends' },
         { id: 'leaderboard', label: 'Leaderboard', icon: 'fa-trophy' },
-        { id: 'requests', label: 'Requests', icon: 'fa-envelope', notificationCount: pendingRequests.length },
+        { id: 'notifications', label: 'Notifications', icon: 'fa-bell', notificationCount: unreadNotificationsCount },
     ];
 
     const handleViewImage = (rating) => {
@@ -104,10 +109,10 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
 
                 {/* Content Area */}
                 <main ref={scrollContainerRef} className="flex-grow overflow-y-auto">
-                    {activeSubTab === 'community' && <CommunityFeed onViewProfile={(id) => onViewProfile(id, 'community')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} />}
-                    {activeSubTab === 'friends' && <FriendsFeed onViewProfile={(id) => onViewProfile(id, 'friends')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} />}
+                    {activeSubTab === 'community' && <CommunityFeed onViewProfile={(id) => onViewProfile(id, 'community')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} />}
+                    {activeSubTab === 'friends' && <FriendsFeed onViewProfile={(id) => onViewProfile(id, 'friends')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} />}
                     {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} />}
-                    {activeSubTab === 'requests' && <FriendRequestsPage requests={pendingRequests} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'requests')} onDataRefresh={onDataRefresh} />}
+                    {activeSubTab === 'notifications' && <NotificationsPage notifications={notifications} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'notifications')} onDataRefresh={onDataRefresh} onViewPub={onViewPub} friendships={friendships} />}
                 </main>
 
                 <ScrollToTopButton show={showScrollButton} onClick={scrollToTop} />

@@ -150,7 +150,7 @@ const UserSearch = ({ onBack, onViewProfile, userProfile, onFriendRequest, onFri
 };
 
 
-const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, userProfile, friendships, onFriendRequest, onFriendAction, allRatings, onViewPub, filter, onFilterChange }) => {
+const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, userProfile, friendships, onFriendRequest, onFriendAction, allRatings, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment }) => {
     const [view, setView] = useState('feed'); // 'feed' or 'search'
     const [ratings, setRatings] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -186,6 +186,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
             const formattedData = data.map(r => ({
                 id: r.rating_id, created_at: r.created_at, quality: r.quality, price: r.price,
                 exact_price: r.exact_price, image_url: r.image_url, like_count: r.like_count,
+                comment_count: r.comment_count, // Added from RPC
                 pub_id: r.pub_id,
                 pub_name: r.pub_name, pub_address: r.pub_address,
                 pub_lat: r.pub_lat,
@@ -193,7 +194,11 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                 user: { id: r.uploader_id, username: r.uploader_username, avatar_id: r.uploader_avatar_id, level: r.uploader_level }
             }));
             
-            setRatings(prev => pageNum === 1 ? formattedData : [...prev, ...formattedData]);
+            setRatings(prev => {
+                const combined = pageNum === 1 ? formattedData : [...prev, ...formattedData];
+                const uniqueRatingsMap = new Map(combined.map(item => [item.id, item]));
+                return Array.from(uniqueRatingsMap.values());
+            });
             if (data.length < PAGE_SIZE) setHasMore(false);
 
         } catch (err) {
@@ -204,9 +209,8 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         }
     }, [hasFriends, filter]);
     
-    // Optimistically update the feed's local state
+    // Optimistically update the feed's local state for likes
     const handleFeedToggleLike = (ratingToToggle) => {
-        // First, update the local state for an instant UI change
         setRatings(currentRatings => 
             currentRatings.map(rating => {
                 if (rating.id === ratingToToggle.id) {
@@ -219,9 +223,33 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                 return rating;
             })
         );
-
-        // Then, call the global handler from App.jsx to manage the database and global state
         onToggleLike(ratingToToggle);
+    };
+
+    // Optimistically update comment count on add
+    const handleFeedAddComment = async (ratingId, content) => {
+        await onAddComment(ratingId, content);
+        setRatings(currentRatings =>
+            currentRatings.map(rating => {
+                if (rating.id === ratingId) {
+                    return { ...rating, comment_count: (rating.comment_count || 0) + 1 };
+                }
+                return rating;
+            })
+        );
+    };
+
+    // Optimistically update comment count on delete
+    const handleFeedDeleteComment = async (commentId, ratingId) => {
+        await onDeleteComment(commentId, ratingId);
+        setRatings(currentRatings =>
+            currentRatings.map(rating => {
+                if (rating.id === ratingId) {
+                    return { ...rating, comment_count: Math.max(0, (rating.comment_count || 1) - 1) };
+                }
+                return rating;
+            })
+        );
     };
 
     const handleRefresh = useCallback(() => {
@@ -356,6 +384,13 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                         onLoginRequest={onLoginRequest}
                         onViewImage={onViewImage}
                         onViewPub={onViewPub}
+                        loggedInUserProfile={loggedInUserProfile}
+                        comments={commentsByRating.get(rating.id)}
+                        isCommentsLoading={isCommentsLoading}
+                        onFetchComments={onFetchComments}
+                        onAddComment={handleFeedAddComment}
+                        onDeleteComment={handleFeedDeleteComment}
+                        onReportComment={onReportComment}
                     />
                 ))}
                 <div ref={loaderRef} className="h-10 text-center">

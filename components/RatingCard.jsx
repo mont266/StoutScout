@@ -1,15 +1,26 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Avatar from './Avatar.jsx';
 import StarRating from './StarRating.jsx';
 import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
+import CommentsSection from './CommentsSection.jsx';
 
-const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub }) => {
+const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment }) => {
 
-    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng } = rating;
+    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng, comment_count } = rating;
+    const [isCommentsVisible, setIsCommentsVisible] = useState(false);
 
     const isLiked = userLikes && userLikes.has(id);
     const currencyInfo = getCurrencyInfo(pub_address);
     const rankData = user.level ? getRankData(user.level) : null;
+
+    useEffect(() => {
+        if (isCommentsVisible && onFetchComments) {
+            // Only fetch if comments aren't already loaded for this rating
+            if (!comments) {
+                onFetchComments(id);
+            }
+        }
+    }, [isCommentsVisible, id, onFetchComments, comments]);
 
     const handlePubClick = () => {
         if (!onViewPub) return;
@@ -27,7 +38,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+        <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-md">
             {/* Card Header */}
             <div className="p-3 flex items-center space-x-3 border-b border-gray-200 dark:border-gray-700">
                 <button onClick={() => onViewProfile(user.id, 'community')} className="flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
@@ -76,19 +87,6 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                             <StarRating rating={quality} color="text-amber-400" />
                         </div>
                     </div>
-                     <button
-                        onClick={() => onToggleLike ? onToggleLike(rating) : onLoginRequest()}
-                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold ${
-                            isLiked
-                            ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'
-                            : 'bg-gray-100 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-800/50'
-                        }`}
-                        aria-pressed={isLiked}
-                        aria-label={isLiked ? `Unlike rating, currently ${like_count} likes` : `Like rating, currently ${like_count} likes`}
-                      >
-                          <i className={`${isLiked ? 'fas' : 'far'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
-                          <span>{like_count || 0}</span>
-                      </button>
                  </div>
                  
                  {exact_price > 0 && (
@@ -102,6 +100,46 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                     </div>
                 )}
             </div>
+
+             {/* Action Bar */}
+            <div className="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-around">
+                 <button
+                    onClick={() => onToggleLike ? onToggleLike(rating) : onLoginRequest()}
+                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center ${
+                        isLiked
+                        ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                    aria-pressed={isLiked}
+                    aria-label={isLiked ? `Unlike rating, currently ${like_count} likes` : `Like rating, currently ${like_count} likes`}
+                  >
+                      <i className={`${isLiked ? 'fas' : 'far'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
+                      <span>{like_count || 0}</span>
+                  </button>
+                   <button
+                    onClick={() => setIsCommentsVisible(prev => !prev)}
+                    className="flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    aria-expanded={isCommentsVisible}
+                  >
+                      <i className="far fa-comment"></i>
+                      <span>{comment_count || 0}</span>
+                  </button>
+            </div>
+
+            {/* Comments Section */}
+            {isCommentsVisible && (
+                <CommentsSection 
+                    ratingId={id}
+                    comments={comments}
+                    isLoading={isCommentsLoading}
+                    currentUserProfile={loggedInUserProfile}
+                    onAddComment={onAddComment}
+                    onDeleteComment={onDeleteComment}
+                    onReportComment={onReportComment}
+                    onLoginRequest={onLoginRequest}
+                    onViewProfile={onViewProfile}
+                />
+            )}
         </div>
     );
 };

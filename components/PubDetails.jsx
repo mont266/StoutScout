@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import StarRating from './StarRating.jsx';
 import RatingForm from './RatingForm.jsx';
 import ImageModal from './ImageModal.jsx';
@@ -9,6 +9,7 @@ import { formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import Avatar from './Avatar.jsx';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import AlertModal from './AlertModal.jsx';
+import CommentsSection from './CommentsSection.jsx';
 
 const StatCard = ({ label, value, icon, color }) => (
     <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md flex flex-col items-center justify-center text-center">
@@ -75,13 +76,55 @@ const ScoreGauge = ({ score }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation }) => {
+const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId }) => {
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
   const [isRatingFormExpanded, setIsRatingFormExpanded] = useState(!existingUserRating && !!session);
   const [confirmation, setConfirmation] = useState({ isOpen: false });
   const [alertInfo, setAlertInfo] = useState({ isOpen: false });
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [visibleComments, setVisibleComments] = useState({});
+  const ratingsListRef = useRef(null);
+
+  useEffect(() => {
+    if (highlightedRatingId && ratingsListRef.current) {
+      setTimeout(() => {
+        const element = ratingsListRef.current.querySelector(`[data-rating-id="${highlightedRatingId}"]`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('highlight-rating');
+          setTimeout(() => {
+            element.classList.remove('highlight-rating');
+          }, 2500); // Highlight for 2.5 seconds
+        }
+      }, 350); // Increased from 100 to wait for panel transition to complete
+    }
+  }, [highlightedRatingId, pub.ratings]);
+  
+    useEffect(() => {
+        if (highlightedCommentId) {
+            const commentRatingId = Object.keys(commentsByRating.get(pub.id) || {}).find(ratingId =>
+                commentsByRating.get(pub.id)[ratingId]?.some(c => c.id === highlightedCommentId)
+            );
+
+            // Automatically open the comment section for the relevant rating
+            if (commentRatingId && !visibleComments[commentRatingId]) {
+                 toggleComments(commentRatingId);
+            }
+            
+            setTimeout(() => {
+                const element = document.getElementById(`comment-${highlightedCommentId}`);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    element.classList.add('highlight-comment');
+                    setTimeout(() => {
+                        element.classList.remove('highlight-comment');
+                    }, 2500);
+                }
+            }, 400); // Delay to allow for comment section to open
+        }
+    }, [highlightedCommentId, commentsByRating, pub.id, visibleComments]);
+
 
   const avgPrice = getAverageRating(pub.ratings, 'price');
   const avgQuality = getAverageRating(pub.ratings, 'quality');
@@ -202,6 +245,16 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
         setIsRatingFormExpanded(false);
     }
   }
+  
+  const toggleComments = (ratingId) => {
+    setVisibleComments(prev => {
+        const isVisible = !!prev[ratingId];
+        if (!isVisible) {
+            onFetchComments(ratingId);
+        }
+        return { ...prev, [ratingId]: !isVisible };
+    });
+  };
 
   const renderYourRatingSection = () => {
     if (!session) {
@@ -224,7 +277,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
     
     return (
         <Section title="Your Rating">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">
                 <button
                     onClick={() => setIsRatingFormExpanded(prev => !prev)}
                     className="w-full p-4 text-left font-bold text-lg text-amber-600 dark:text-amber-400 flex justify-between items-center hover:bg-gray-50/50 dark:hover:bg-gray-700/50 transition-colors"
@@ -368,85 +421,66 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
             
             {pub.ratings.length > 0 && (
                  <Section title="Recent Ratings">
-                    <ul className="space-y-3">
-                        {pub.ratings.slice(0, 5).map((rating) => {
+                    <ul ref={ratingsListRef} className="space-y-3">
+                        {pub.ratings.slice(0, 10).map((rating) => {
                             const isOwnRating = session?.user?.id === rating.user.id;
                             const canAdminRemove = loggedInUserProfile?.is_developer && !isOwnRating;
                             const isLiked = userLikes && userLikes.has(rating.id);
 
                             return (
-                            <li key={rating.id} className="p-3 bg-white dark:bg-gray-800 rounded-lg flex items-start space-x-3 shadow-md">
-                                <button
-                                    onClick={() => onViewProfile && onViewProfile(rating.user.id, 'pubDetails')}
-                                    disabled={!onViewProfile}
-                                    className={`rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${isOwnRating ? 'ring-2 ring-amber-500' : 'ring-transparent focus:ring-amber-500'}`}
-                                    aria-label={`View profile for ${rating.user.username}`}
-                                >
-                                    <Avatar avatarId={rating.user.avatar_id} className="w-10 h-10" />
-                                </button>
-                                <div className="flex-grow min-w-0">
-                                    <div className="flex justify-between items-center">
-                                        <button
-                                            onClick={() => onViewProfile && onViewProfile(rating.user.id, 'pubDetails')}
-                                            disabled={!onViewProfile}
-                                            className="font-semibold text-gray-800 dark:text-gray-200 hover:text-amber-600 dark:hover:text-amber-400 transition-colors hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded"
-                                            aria-label={`View profile for ${rating.user.username}`}
-                                        >
-                                            {rating.user.username}
-                                        </button>
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(new Date(rating.created_at).getTime())}</span>
-                                    </div>
-                                    <div className="flex items-center space-x-4 mt-1">
-                                        <div className="flex items-center space-x-1 text-sm" title="Price">
-                                            <i className="fas fa-tag text-green-500/80"></i>
-                                            <StarRating rating={rating.price} color="text-green-400" />
+                            <li key={rating.id} data-rating-id={rating.id} className="relative bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                                <div className="p-3 flex items-start space-x-3">
+                                    <button
+                                        onClick={() => onViewProfile && onViewProfile(rating.user.id, 'pubDetails')}
+                                        disabled={!onViewProfile}
+                                        className={`rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${isOwnRating ? 'ring-2 ring-amber-500' : 'ring-transparent focus:ring-amber-500'}`}
+                                        aria-label={`View profile for ${rating.user.username}`}
+                                    >
+                                        <Avatar avatarId={rating.user.avatar_id} className="w-10 h-10" />
+                                    </button>
+                                    <div className="flex-grow min-w-0">
+                                        <div className="flex justify-between items-center">
+                                            <button
+                                                onClick={() => onViewProfile && onViewProfile(rating.user.id, 'pubDetails')}
+                                                disabled={!onViewProfile}
+                                                className="font-semibold text-gray-800 dark:text-gray-200 hover:text-amber-600 dark:hover:text-amber-400 transition-colors hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded"
+                                                aria-label={`View profile for ${rating.user.username}`}
+                                            >
+                                                {rating.user.username}
+                                            </button>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(new Date(rating.created_at).getTime())}</span>
                                         </div>
-                                         <div className="flex items-center space-x-1 text-sm" title="Quality">
-                                            <i className="fas fa-beer text-amber-500/80"></i>
-                                            <StarRating rating={rating.quality} color="text-amber-400" />
+                                        <div className="flex items-center space-x-4 mt-1">
+                                            <div className="flex items-center space-x-1 text-sm" title="Price">
+                                                <i className="fas fa-tag text-green-500/80"></i>
+                                                <StarRating rating={rating.price} color="text-green-400" />
+                                            </div>
+                                             <div className="flex items-center space-x-1 text-sm" title="Quality">
+                                                <i className="fas fa-beer text-amber-500/80"></i>
+                                                <StarRating rating={rating.quality} color="text-amber-400" />
+                                            </div>
                                         </div>
-                                    </div>
-                                    {rating.exact_price > 0 && (
-                                        <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">
-                                            Paid: <span className="font-bold text-gray-700 dark:text-white">{currencyInfo.symbol}{rating.exact_price.toFixed(2)}</span>
-                                        </p>
-                                    )}
-                                    <div className="mt-2 flex justify-between items-end">
-                                      {rating.image_url ? (
-                                        <div className="flex items-end space-x-2">
-                                          <button onClick={() => setImageToView({ ...rating, uploaderName: rating.user.username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
-                                            <img src={rating.image_url} alt="Pint of Guinness" className="w-20 h-20 object-cover" />
-                                          </button>
-                                          <div className="flex flex-col gap-1">
-                                            {session && !isOwnRating && (
-                                                <button 
-                                                  onClick={() => setReportModalInfo({ isOpen: true, rating })}
-                                                  className="h-8 px-2 flex items-center justify-center bg-gray-200 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                                                  aria-label="Report image"
-                                                  title="Report image"
-                                                >
-                                                  <i className="fas fa-flag"></i>
+                                        {rating.exact_price > 0 && (
+                                            <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">
+                                                Paid: <span className="font-bold text-gray-700 dark:text-white">{currencyInfo.symbol}{rating.exact_price.toFixed(2)}</span>
+                                            </p>
+                                        )}
+                                        {rating.image_url && (
+                                            <div className="mt-2">
+                                                <button onClick={() => setImageToView({ ...rating, uploaderName: rating.user.username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
+                                                    <img src={rating.image_url} alt="Pint of Guinness" className="w-24 h-24 object-cover" />
                                                 </button>
-                                            )}
-                                            {canAdminRemove && (
-                                                <button 
-                                                    onClick={() => confirmAdminRemoveImage(rating)}
-                                                    className="h-8 px-2 flex items-center justify-center bg-red-200 dark:bg-red-700/80 text-red-600 dark:text-red-300 rounded-md hover:bg-red-300 dark:hover:bg-red-900/50 hover:text-red-700 dark:hover:text-red-400 transition-colors"
-                                                    aria-label="Admin: Remove Photo"
-                                                    title="Admin: Remove Photo"
-                                                >
-                                                    <i className="fas fa-trash-alt"></i>
-                                                </button>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ) : <div></div> /* Empty div to maintain layout */}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-around">
                                       <button
                                           onClick={() => onToggleLike({ ...rating, pub_id: pub.id })}
-                                          className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold ${
+                                          className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center ${
                                               isLiked
                                               ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'
-                                              : 'bg-gray-100 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-800/50'
+                                              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                                           }`}
                                           aria-pressed={isLiked}
                                           aria-label={isLiked ? `Unlike rating, currently ${rating.like_count} likes` : `Like rating, currently ${rating.like_count} likes`}
@@ -454,8 +488,28 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                           <i className={`${isLiked ? 'fas' : 'far'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
                                           <span>{rating.like_count || 0}</span>
                                       </button>
-                                    </div>
+                                       <button
+                                            onClick={() => toggleComments(rating.id)}
+                                            className="flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                            aria-expanded={visibleComments[rating.id]}
+                                        >
+                                            <i className="far fa-comment"></i>
+                                            <span>{rating.comment_count || 0}</span>
+                                        </button>
                                 </div>
+                                {visibleComments[rating.id] && (
+                                    <CommentsSection 
+                                        ratingId={rating.id}
+                                        comments={commentsByRating.get(rating.id)}
+                                        isLoading={isCommentsLoading}
+                                        currentUserProfile={loggedInUserProfile}
+                                        onAddComment={onAddComment}
+                                        onDeleteComment={onDeleteComment}
+                                        onReportComment={onReportComment}
+                                        onLoginRequest={onLoginRequest}
+                                        onViewProfile={onViewProfile}
+                                    />
+                                )}
                             </li>
                         )})}
                     </ul>

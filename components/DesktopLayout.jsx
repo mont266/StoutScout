@@ -23,18 +23,20 @@ import FriendsListPage from './FriendsListPage.jsx';
 import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
+import ReportCommentModal from './ReportCommentModal.jsx';
+import NotificationToast from './NotificationToast.jsx';
 
 const DesktopLayout = (props) => {
     const {
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
         activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
         handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
-        handleSelectPub, selectedPubId, handleNominatimResults, handleMapMove,
+        handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
         refreshTrigger, handleFindCurrentPub, getDistance,
         getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
         renderProfile, session, userProfile, handleViewProfile, handleBackFromProfileView,
         handleSettingsChange, handleSetSimulatedLocation, handleLogout,
-        selectedPub, existingUserRatingForSelectedPub, handleRatePub,
+        existingUserRatingForSelectedPub, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
@@ -53,7 +55,14 @@ const DesktopLayout = (props) => {
         // Stats props
         StatsPage,
         onOpenScoreExplanation,
-        pendingRequestsCount,
+        unreadNotificationsCount,
+        // Comments and notifications
+        notifications, onMarkNotificationsAsRead,
+        commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment,
+        reportCommentInfo, onCloseReportCommentModal, onSubmitReportComment,
+        // Moderation
+        reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
+        toastNotification, onCloseToast, onToastClick,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -85,10 +94,10 @@ const DesktopLayout = (props) => {
         }
 
         if (activeTab === 'map') {
-            if (selectedPub) {
+            if (props.selectedPub) {
                 return (
                     <PubDetails 
-                        pub={selectedPub} 
+                        pub={props.selectedPub} 
                         onClose={() => handleSelectPub(null)}
                         onRate={handleRatePub}
                         getAverageRating={getAverageRating}
@@ -102,6 +111,14 @@ const DesktopLayout = (props) => {
                         onToggleLike={onToggleLike}
                         isSubmittingRating={isSubmittingRating}
                         onOpenScoreExplanation={onOpenScoreExplanation}
+                        commentsByRating={commentsByRating}
+                        isCommentsLoading={isCommentsLoading}
+                        onFetchComments={onFetchComments}
+                        onAddComment={onAddComment}
+                        onDeleteComment={onDeleteComment}
+                        onReportComment={onReportComment}
+                        highlightedRatingId={highlightedRatingId}
+                        highlightedCommentId={highlightedCommentId}
                     />
                 );
             }
@@ -148,7 +165,7 @@ const DesktopLayout = (props) => {
         }
 
         if (activeTab === 'community') {
-            if (viewedProfile) { // If we clicked a profile from the community tab
+             if (viewedProfile) { // If we clicked a profile from the community tab
                 return renderProfile(handleBackFromProfileView);
             }
             return (
@@ -166,6 +183,15 @@ const DesktopLayout = (props) => {
                     activeSubTab={communitySubTab}
                     onSubTabChange={setCommunitySubTab}
                     onViewPub={handleSelectPub}
+                    unreadNotificationsCount={unreadNotificationsCount}
+                    notifications={notifications}
+                    onMarkNotificationsAsRead={onMarkNotificationsAsRead}
+                    commentsByRating={commentsByRating}
+                    isCommentsLoading={isCommentsLoading}
+                    onFetchComments={onFetchComments}
+                    onAddComment={onAddComment}
+                    onDeleteComment={onDeleteComment}
+                    onReportComment={onReportComment}
                 />
             );
         }
@@ -222,7 +248,7 @@ const DesktopLayout = (props) => {
                 userProfile={userProfile}
                 levelRequirements={levelRequirements}
                 onLoginRequest={() => setIsAuthOpen(true)}
-                pendingRequestsCount={pendingRequestsCount}
+                unreadNotificationsCount={unreadNotificationsCount}
             />
 
             {/* Main Content Area */}
@@ -268,6 +294,9 @@ const DesktopLayout = (props) => {
                     <StatsPage 
                         onBack={() => handleTabChange('settings')} 
                         onViewProfile={handleViewProfile}
+                        onViewPub={handleSelectPub}
+                        userProfile={userProfile}
+                        onAdminDeleteComment={onAdminDeleteComment}
                     />
                 </div>
 
@@ -277,6 +306,9 @@ const DesktopLayout = (props) => {
                         onViewProfile={handleViewProfile}
                         onBack={() => handleTabChange('settings')}
                         onDataRefresh={handleDataRefresh}
+                        reportedComments={reportedComments}
+                        onFetchReportedComments={onFetchReportedComments}
+                        onResolveCommentReport={onResolveCommentReport}
                     />
                 </div>
             </div>
@@ -285,6 +317,7 @@ const DesktopLayout = (props) => {
             <SubmittingRatingModal isVisible={isSubmittingRating} />
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
+            {reportCommentInfo.isOpen && <ReportCommentModal comment={reportCommentInfo.comment} onClose={onCloseReportCommentModal} onSubmit={onSubmitReportComment} />}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
             {updateConfirmationInfo && <UpdateConfirmationPopup key={updateConfirmationInfo.key} />}
             {deleteConfirmationInfo && <DeleteConfirmationPopup key={deleteConfirmationInfo.key} />}
@@ -297,6 +330,14 @@ const DesktopLayout = (props) => {
                     currentAvatarId={userProfile.avatar_id}
                     onSelect={handleUpdateAvatar}
                     onClose={() => setIsAvatarModalOpen(false)}
+                />
+            )}
+            {toastNotification && (
+                <NotificationToast
+                    key={toastNotification.id}
+                    notification={toastNotification}
+                    onClick={onToastClick}
+                    onClose={onCloseToast}
                 />
             )}
         </div>

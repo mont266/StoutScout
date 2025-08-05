@@ -73,6 +73,11 @@ const urlsToCache = [
   '/components/KofiModal.jsx',
   '/components/CookieConsentBanner.jsx',
   '/components/OnlineUsersPage.jsx',
+  '/components/CommentsSection.jsx',
+  '/components/ReportCommentModal.jsx',
+  '/components/AllCommentsPage.jsx',
+  '/components/NotificationToast.jsx',
+  '/components/CommentContent.jsx',
 ];
 
 self.addEventListener('install', event => {

@@ -9,6 +9,7 @@ import useIsDesktop from '../hooks/useIsDesktop.js';
 import TimeSeriesChart from './TimeSeriesChart.jsx';
 import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
 import OnlineUsersPage from './OnlineUsersPage.jsx';
+import AllCommentsPage from './AllCommentsPage.jsx';
 
 const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString(), onClick, className = '', subValue = null }) => (
     <div
@@ -65,7 +66,7 @@ const formatPercent = (numerator, denominator) => {
     return `(${percentage.toFixed(1)}%)`;
 }
 
-const StatsPage = ({ onBack, onViewProfile }) => {
+const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDeleteComment }) => {
     const [stats, setStats] = useState({});
     const [countryStats, setCountryStats] = useState([]);
     const [timeSeriesData, setTimeSeriesData] = useState([]);
@@ -144,6 +145,10 @@ const StatsPage = ({ onBack, onViewProfile }) => {
 
     if (currentView === 'image_gallery') {
         return <ImageGallery totalImages={stats?.total_uploaded_images || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
+    }
+    
+    if (currentView === 'all_comments') {
+        return <AllCommentsPage totalComments={stats?.total_comments || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} onViewPub={onViewPub} loggedInUserProfile={userProfile} onAdminDeleteComment={onAdminDeleteComment} />;
     }
 
     const renderLoading = () => (
@@ -230,6 +235,7 @@ const StatsPage = ({ onBack, onViewProfile }) => {
                     <div className="grid grid-cols-2 gap-4">
                         <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
                         <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
+                        <StatCard label="Total Comments" value={stats.total_comments} icon="fa-comments" onClick={() => handleViewChange('all_comments')} />
                         <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
                         <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
                         <StatCard label="Avatar Adoption" value={stats.users_with_avatars} icon="fa-user-circle" subValue={formatPercent(stats.users_with_avatars, stats.total_users)} className="col-span-2" />
@@ -289,6 +295,7 @@ const StatsPage = ({ onBack, onViewProfile }) => {
             <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
                 <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
                 <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
+                <StatCard label="Total Comments" value={stats.total_comments} icon="fa-comments" onClick={() => handleViewChange('all_comments')} />
                 <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
                 <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
                 <StatCard label="Avatar Adoption Rate" value={stats.users_with_avatars} icon="fa-user-circle" subValue={formatPercent(stats.users_with_avatars, stats.total_users)} />

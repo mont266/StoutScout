@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://www.stoutly.co.uk/sitemap.xml
