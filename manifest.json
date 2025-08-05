@@ -2,18 +2,72 @@
   "name": "Stoutly",
   "short_name": "Stoutly",
   "description": "Stoutly helps you find and rate the best pints of Guinness based on price, quality, and your location.",
+  "id": "/?source=pwa",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "scope": "/",
   "background_color": "#111827",
   "theme_color": "#2C1F17",
+  "categories": ["food", "drink", "lifestyle", "social"],
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><rect width='100' height='100' rx='22' fill='%232C1F17'/><g transform='translate(10, 11.6) scale(0.8)'><path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F' stroke='%23F59E0B' stroke-width='4'/><path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/></g></svg>",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/mobile-map.png",
+      "sizes": "1170x2532",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Explore nearby pubs on the interactive map."
+    },
+    {
+      "src": "/screenshots/mobile-details.png",
+      "sizes": "1170x2532",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "View detailed ratings, prices, and photos for any pub."
+    },
+    {
+      "src": "/screenshots/mobile-profile.png",
+      "sizes": "1170x2532",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Track your ratings, level up, and earn new ranks!"
+    },
+    {
+      "src": "/screenshots/mobile-community.png",
+      "sizes": "1170x2532",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "See what the community is rating in the live feed."
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Explore Nearby",
+      "short_name": "Explore",
+      "description": "Find pubs near your current location",
+      "url": "/?tab=map",
+      "icons": [{ "src": "/icons/shortcut-explore-96.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "My Profile",
+      "short_name": "Profile",
+      "description": "View your ratings and rank progress",
+      "url": "/?tab=profile",
+      "icons": [{ "src": "/icons/shortcut-profile-96.png", "sizes": "96x96", "type": "image/png" }]
     }
   ]
 }
