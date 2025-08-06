@@ -18,15 +18,15 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "data:image/svg+xml,%3csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg' width='192' height='192'%3e%3cg transform='translate(10, 11.6) scale(0.8)'%3e%3cpath d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F' stroke='%23F59E0B' stroke-width='4'/%3e%3cpath d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/%3e%3c/g%3e%3c/svg%3e",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "data:image/svg+xml,%3csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3e%3crect width='100' height='100' rx='22' fill='%232C1F17'/%3e%3cg transform='translate(10, 11.6) scale(0.8)'%3e%3cpath d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F' stroke='%23F59E0B' stroke-width='4'/%3e%3cpath d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/%3e%3c/g%3e%3c/svg%3e",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ],
@@ -66,14 +66,14 @@
       "short_name": "Explore",
       "description": "Find pubs near your current location",
       "url": "/?tab=map",
-      "icons": [{ "src": "/icons/shortcut-explore-96.png", "sizes": "96x96", "type": "image/png" }]
+      "icons": [{ "src": "data:image/svg+xml,%3csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3e%3cg transform='translate(10, 11.6) scale(0.8)'%3e%3cpath d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%23F59E0B'/%3e%3c/g%3e%3c/svg%3e", "sizes": "96x96", "type": "image/svg+xml" }]
     },
     {
       "name": "My Profile",
       "short_name": "Profile",
       "description": "View your ratings and rank progress",
       "url": "/?tab=profile",
-      "icons": [{ "src": "/icons/shortcut-profile-96.png", "sizes": "96x96", "type": "image/png" }]
+      "icons": [{ "src": "data:image/svg+xml,%3csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3e%3cg transform='translate(10, 11.6) scale(0.8)'%3e%3cpath d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%23F59E0B'/%3e%3c/g%3e%3c/svg%3e", "sizes": "96x96", "type": "image/svg+xml" }]
     }
   ]
 }
