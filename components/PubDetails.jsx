@@ -450,7 +450,12 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                             </button>
                                             <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(new Date(rating.created_at).getTime())}</span>
                                         </div>
-                                        <div className="flex items-center space-x-4 mt-1">
+                                        {rating.message && (
+                                            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md border-l-4 border-gray-200 dark:border-gray-600">
+                                               "{rating.message}"
+                                            </p>
+                                        )}
+                                        <div className="flex items-center space-x-4 mt-2">
                                             <div className="flex items-center space-x-1 text-sm" title="Price">
                                                 <i className="fas fa-tag text-green-500/80"></i>
                                                 <StarRating rating={rating.price} color="text-green-400" />

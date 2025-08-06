@@ -6,7 +6,7 @@ import CommentsSection from './CommentsSection.jsx';
 
 const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment }) => {
 
-    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng, comment_count } = rating;
+    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng, comment_count, message } = rating;
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
 
     const isLiked = userLikes && userLikes.has(id);
@@ -40,7 +40,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
     return (
         <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-md">
             {/* Card Header */}
-            <div className="p-3 flex items-center space-x-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="p-3 flex items-center space-x-3">
                 <button onClick={() => onViewProfile(user.id, 'community')} className="flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
                      <Avatar avatarId={user.avatar_id} className="w-10 h-10" />
                 </button>
@@ -66,6 +66,15 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                 </div>
                  <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">{formatTimeAgo(new Date(created_at).getTime())}</span>
             </div>
+
+            {/* Message */}
+            {message && (
+                <div className="px-3 pb-2">
+                    <p className="text-gray-800 dark:text-gray-200 text-sm italic bg-gray-50 dark:bg-gray-700/50 p-3 rounded-md border-l-4 border-gray-200 dark:border-gray-600">
+                        "{message}"
+                    </p>
+                </div>
+            )}
 
             {/* Image */}
             {image_url && (

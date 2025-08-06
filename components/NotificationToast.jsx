@@ -26,12 +26,19 @@ const NotificationToast = ({ notification, onClick, onClose }) => {
   const { actor, type, metadata } = notification;
 
   let message = 'sent you a notification.';
+  let icon = 'fa-bell';
   if (type === 'friend_request') {
     message = 'sent you a friend request.';
+    icon = 'fa-user-plus';
+  } else if (type === 'friend_request_accepted') {
+    message = 'has accepted your friend request.';
+    icon = 'fa-user-check';
   } else if (type === 'new_comment') {
     message = 'commented on your rating.';
+    icon = 'fa-comment';
   } else if (type === 'like_milestone') {
     message = `Your rating received ${metadata?.like_count || 'many'} likes! 🎉`;
+    icon = 'fa-heart';
   }
   
   // For like milestones, the actor is the user themselves, so we don't show "You"
@@ -50,7 +57,7 @@ const NotificationToast = ({ notification, onClick, onClose }) => {
           <div className="flex-shrink-0 relative">
             <Avatar avatarId={actor?.avatar_id} className="w-10 h-10" />
             <span className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center border-2 border-gray-800 dark:border-gray-900">
-                <i className={`fas ${type === 'friend_request' ? 'fa-user-plus' : 'fa-bell'} text-xs`}></i>
+                <i className={`fas ${icon} text-xs`}></i>
             </span>
           </div>
           <div className="flex-grow pt-1 min-w-0">

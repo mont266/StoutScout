@@ -284,7 +284,7 @@ const App = () => {
     // Step 1: Fetch all public ratings without joining profile data yet.
     const { data: ratingsData, error: ratingsError } = await supabase
       .from('ratings')
-      .select('id, pub_id, user_id, price, quality, created_at, exact_price, image_url, like_count, comment_count')
+      .select('id, pub_id, user_id, price, quality, created_at, exact_price, image_url, like_count, comment_count, message')
       .eq('is_private', false)
       .order('created_at', { ascending: false });
   
@@ -496,7 +496,7 @@ const App = () => {
 
     // Fetch user profile and friend count in parallel
     const [profileResult, friendCountResult] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('profiles').select('*, accepts_marketing').eq('id', userId).single(),
         supabase.rpc('get_friends_count', { user_id_param: userId }).single()
     ]);
 
@@ -526,7 +526,7 @@ const App = () => {
     // If profile exists, fetch ratings.
     const { data: userRatingsData, error: ratingsError } = await supabase
         .from('ratings')
-        .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, pubs(id, name, address, lat, lng)')
+        .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -536,7 +536,7 @@ const App = () => {
     } else {
         mappedUserRatings = (userRatingsData || []).map(r => ({
           id: r.id, pubId: r.pub_id,
-          rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
+          rating: { price: r.price, quality: r.quality, exact_price: r.exact_price, message: r.message },
           timestamp: new Date(r.created_at).getTime(),
           pubName: r.pubs?.name || 'Unknown',
           pubAddress: r.pubs?.address || 'Unknown',
@@ -877,6 +877,7 @@ const App = () => {
             price_rating: newRating.price,
             has_exact_price: !!newRating.exact_price,
             has_image: !!imageFile,
+            has_message: !!newRating.message,
             is_private: newRating.is_private,
             value: newRating.exact_price || 0, // GA4 standard parameter for value
             currency: currencyInfo.code, // GA4 standard parameter for currency
@@ -927,6 +928,7 @@ const App = () => {
             exact_price: newRating.exact_price,
             is_private: newRating.is_private,
             image_url: imageUrl,
+            message: newRating.message,
         };
 
         isUpdating
@@ -1226,7 +1228,7 @@ const App = () => {
         // We only fetch non-private ratings for other users.
         const { data: ratings, error: ratingsError } = await supabase
             .from('ratings')
-            .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, pubs(id, name, address, lat, lng)')
+            .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng)')
             .eq('user_id', userId)
             .eq('is_private', false) // Important: respect privacy
             .order('created_at', { ascending: false });
@@ -1235,7 +1237,7 @@ const App = () => {
 
         const mappedRatings = (ratings || []).map(r => ({
             id: r.id, pubId: r.pub_id,
-            rating: { price: r.price, quality: r.quality, exact_price: r.exact_price },
+            rating: { price: r.price, quality: r.quality, exact_price: r.exact_price, message: r.message },
             timestamp: new Date(r.created_at).getTime(),
             pubName: r.pubs?.name || 'Unknown',
             pubAddress: r.pubs?.address || 'Unknown',
@@ -1711,6 +1713,31 @@ const App = () => {
           return { success: false, error: `Could not delete comment: ${error.context?.responseJson?.error || error.message}` };
       }
   }, [fetchAllRatings]);
+  
+  const handleMarketingConsentChange = useCallback(async (newValue) => {
+    if (!session || !userProfile) return;
+    trackEvent('change_setting', { setting_name: 'marketing_consent', value: newValue });
+    // Optimistic update
+    const originalValue = userProfile.accepts_marketing;
+    setUserProfile(current => ({ ...current, accepts_marketing: newValue }));
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ accepts_marketing: newValue })
+      .eq('id', userProfile.id);
+      
+    if (error) {
+      console.error("Error updating marketing consent:", error);
+      // Revert on error
+      setUserProfile(current => ({ ...current, accepts_marketing: originalValue }));
+      setAlertInfo({
+        isOpen: true,
+        title: 'Update Failed',
+        message: `Could not save your preference: ${error.message}`,
+        theme: 'error',
+      });
+    }
+  }, [session, userProfile]);
 
 
   const layoutProps = {
@@ -1784,6 +1811,9 @@ const App = () => {
       toastNotification,
       onCloseToast: () => setToastNotification(null),
       onToastClick: handleToastClick,
+      
+      // New handler for marketing consent
+      handleMarketingConsentChange,
   };
 
   const renderModals = () => (

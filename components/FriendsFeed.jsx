@@ -186,7 +186,8 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
             const formattedData = data.map(r => ({
                 id: r.rating_id, created_at: r.created_at, quality: r.quality, price: r.price,
                 exact_price: r.exact_price, image_url: r.image_url, like_count: r.like_count,
-                comment_count: r.comment_count, // Added from RPC
+                comment_count: r.comment_count,
+                message: r.message,
                 pub_id: r.pub_id,
                 pub_name: r.pub_name, pub_address: r.pub_address,
                 pub_lat: r.pub_lat,

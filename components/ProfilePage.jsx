@@ -598,6 +598,12 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                                 </div>
                                             </div>
 
+                                            {r.rating.message && (
+                                                <blockquote className="mb-3 p-3 text-sm italic text-gray-700 dark:text-gray-300 border-l-4 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900/50 rounded-r-lg">
+                                                    "{r.rating.message}"
+                                                </blockquote>
+                                            )}
+
                                             <div className="flex space-x-4 items-start">
                                                 {r.image_url && (
                                                     <button onClick={() => setImageToView(ratingForModal)} className="flex-shrink-0 rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
