@@ -53,7 +53,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                             <i className={`fas ${rankData.icon} text-sm text-amber-500 dark:text-amber-400`} title={rankData.name}></i>
                         )}
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={pub_name}>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 break-words" title={pub_name}>
                         rated a pint at{' '}
                         <button
                             onClick={handlePubClick}
