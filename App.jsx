@@ -129,6 +129,7 @@ const App = () => {
   const locationPermissionTracked = useRef(false);
   const initialSettingsLoad = useRef(true);
   const radiusUpdateTimeout = useRef(null);
+  const didProcessUrlParams = useRef(false);
   
   // --- ANALYTICS & CONSENT ---
   
@@ -380,6 +381,84 @@ const App = () => {
       ]);
   }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchSocialData, session]);
 
+  const handleCancelPubPlacement = useCallback(() => {
+    trackEvent('add_pub_cancel', { step: pubPlacementState ? 'placement' : 'modal' });
+    setIsAddPubModalOpen(false);
+    setPubPlacementState(null);
+    setFinalPlacementLocation(null);
+    setIsConfirmingLocation(false);
+  }, [pubPlacementState]);
+
+  const handleTabChange = useCallback((tab) => {
+    // On mobile, close the details panel when switching main tabs.
+    if (!isDesktop) {
+        setSelectedPubId(null);
+    }
+
+    // Cancel pub placement if user navigates away
+    if (pubPlacementState) {
+        handleCancelPubPlacement();
+    }
+
+    // When user explicitly changes tabs, reset all sub-view states
+    setLegalPageView(null);
+    setSettingsSubView(null);
+    setViewingFriendsOf(null);
+    setFriendsList([]);
+    setViewedProfile(null);
+    setViewedRatings([]);
+    setProfileViewOrigin(null);
+
+    // When the user explicitly clicks the Community tab, reset to the main feed.
+    if (tab === 'community') {
+        setCommunitySubTab('community');
+    }
+
+    // Tabs requiring auth
+    if ((tab === 'profile' || tab === 'community' || tab === 'moderation' || tab === 'stats') && !session) {
+      setIsAuthOpen(true);
+      return;
+    }
+    // Tabs requiring developer or team member role
+    if ((tab === 'stats') && !(userProfile?.is_developer || userProfile?.is_team_member)) {
+        setActiveTab('map'); // Fail silently to map
+        return;
+    }
+    // Tabs requiring ONLY developer role
+    if ((tab === 'moderation') && !userProfile?.is_developer) {
+        setActiveTab('map'); // Fail silently to map
+        return;
+    }
+
+    setActiveTab(tab);
+  }, [isDesktop, pubPlacementState, session, userProfile, handleCancelPubPlacement]);
+
+  useEffect(() => {
+    // This effect runs once when loading is complete to handle initial routing from URL params.
+    if (loading || didProcessUrlParams.current) {
+      return;
+    }
+    
+    didProcessUrlParams.current = true;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const page = urlParams.get('page');
+    const tab = urlParams.get('tab');
+
+    if (page === 'terms') {
+      // Manually set state to show the legal page within the settings tab.
+      // We don't call handleTabChange because it resets the legal page view.
+      setLegalPageView('terms');
+      setActiveTab('settings');
+    } else if (page === 'privacy') {
+      setLegalPageView('privacy');
+      setActiveTab('settings');
+    } else if (tab) {
+      // Use handleTabChange for PWA shortcuts as it contains auth logic.
+      handleTabChange(tab);
+    }
+  }, [loading, handleTabChange]);
+
   useEffect(() => {
     setLoading(true);
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -405,7 +484,14 @@ const App = () => {
         if (session) {
             setIsAuthOpen(false);
         } else {
-            setActiveTab('map');
+            const urlParams = new URLSearchParams(window.location.search);
+            const page = urlParams.get('page');
+
+            // Don't reset to map view if user is trying to access a legal page directly
+            if (page !== 'terms' && page !== 'privacy') {
+              setActiveTab('map');
+            }
+            
             setViewedProfile(null);
             setFriendships([]);
             setUserLikes(new Set());
@@ -415,6 +501,7 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, [fetchAllRatings, fetchPubScores, fetchDbPubs]);
   
+
   // Real-time notifications listener
   // Depends on the primitive `userId` to prevent re-subscribing on every render.
   const userId = session?.user?.id;
@@ -1119,58 +1206,6 @@ const App = () => {
     }
   }, [session, userLikes, allRatings, fetchAllRatings]);
   
-  const handleCancelPubPlacement = useCallback(() => {
-    trackEvent('add_pub_cancel', { step: pubPlacementState ? 'placement' : 'modal' });
-    setIsAddPubModalOpen(false);
-    setPubPlacementState(null);
-    setFinalPlacementLocation(null);
-    setIsConfirmingLocation(false);
-  }, [pubPlacementState]);
-
-  const handleTabChange = useCallback((tab) => {
-    // On mobile, close the details panel when switching main tabs.
-    if (!isDesktop) {
-        setSelectedPubId(null);
-    }
-
-    // Cancel pub placement if user navigates away
-    if (pubPlacementState) {
-        handleCancelPubPlacement();
-    }
-
-    // When user explicitly changes tabs, reset all sub-view states
-    setLegalPageView(null);
-    setSettingsSubView(null);
-    setViewingFriendsOf(null);
-    setFriendsList([]);
-    setViewedProfile(null);
-    setViewedRatings([]);
-    setProfileViewOrigin(null);
-
-    // When the user explicitly clicks the Community tab, reset to the main feed.
-    if (tab === 'community') {
-        setCommunitySubTab('community');
-    }
-
-    // Tabs requiring auth
-    if ((tab === 'profile' || tab === 'community' || tab === 'moderation' || tab === 'stats') && !session) {
-      setIsAuthOpen(true);
-      return;
-    }
-    // Tabs requiring developer or team member role
-    if ((tab === 'stats') && !(userProfile?.is_developer || userProfile?.is_team_member)) {
-        setActiveTab('map'); // Fail silently to map
-        return;
-    }
-    // Tabs requiring ONLY developer role
-    if ((tab === 'moderation') && !userProfile?.is_developer) {
-        setActiveTab('map'); // Fail silently to map
-        return;
-    }
-
-    setActiveTab(tab);
-  }, [isDesktop, pubPlacementState, session, userProfile, handleCancelPubPlacement]);
-
   const handleViewLegal = (page) => {
     trackEvent('view_legal_page', { page_name: page });
     setLegalPageView(page);
