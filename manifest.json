@@ -2,6 +2,8 @@
   "name": "Stoutly",
   "short_name": "Stoutly",
   "description": "Stoutly helps you find and rate the best pints of Guinness based on price, quality, and your location.",
+  "lang": "en-GB",
+  "dir": "ltr",
   "id": "/?source=pwa",
   "start_url": "/",
   "display": "standalone",
@@ -10,6 +12,10 @@
   "background_color": "#111827",
   "theme_color": "#2C1F17",
   "categories": ["food", "drink", "lifestyle", "social"],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icons/icon-192.png",
