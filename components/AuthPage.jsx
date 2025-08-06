@@ -9,6 +9,7 @@ const AuthPage = ({ onClose }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [acceptsMarketing, setAcceptsMarketing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
@@ -53,12 +54,15 @@ const AuthPage = ({ onClose }) => {
           email,
           password,
           options: {
-            data: { username },
+            data: {
+              username,
+              accepts_marketing: acceptsMarketing,
+            },
           },
         });
 
         if (signUpError) throw signUpError;
-        trackEvent('sign_up', { method: 'email' });
+        trackEvent('sign_up', { method: 'email', marketing_consent: acceptsMarketing });
 
         if (data.user && !data.session) {
           setMessage("We've sent a confirmation link to your email. Please click it to complete your registration.");
@@ -195,10 +199,26 @@ const AuthPage = ({ onClose }) => {
                     <input id="password" className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </div>
                 {view === 'signUp' && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="confirm-password">Confirm Password</label>
-                        <input id="confirm-password" className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
-                    </div>
+                    <>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="confirm-password">Confirm Password</label>
+                            <input id="confirm-password" className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                        </div>
+                        <div className="pt-2">
+                            <label htmlFor="accepts-marketing" className="flex items-start space-x-3 cursor-pointer">
+                                <input
+                                id="accepts-marketing"
+                                type="checkbox"
+                                checked={acceptsMarketing}
+                                onChange={(e) => setAcceptsMarketing(e.target.checked)}
+                                className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-500 text-amber-600 focus:ring-amber-500"
+                                />
+                                <span className="text-sm text-gray-600 dark:text-gray-400">
+                                Be the first to know! Notify me about new features, community events, and exclusive Stoutly news.
+                                </span>
+                            </label>
+                        </div>
+                    </>
                 )}
                 {error && <p className="text-red-500 text-sm text-center">{error}</p>}
                 {showResendLink && (

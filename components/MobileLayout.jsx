@@ -100,6 +100,7 @@ const MobileLayout = (props) => {
         // Moderation
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
+        handleMarketingConsentChange,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -185,6 +186,7 @@ const MobileLayout = (props) => {
                                 installPromptEvent={installPromptEvent}
                                 setInstallPromptEvent={setInstallPromptEvent}
                                 onShowIosInstall={() => setIsIosInstallModalOpen(true)}
+                                onMarketingConsentChange={handleMarketingConsentChange}
                             />
                         );
                     })()}

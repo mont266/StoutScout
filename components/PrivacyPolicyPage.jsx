@@ -21,17 +21,18 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const PrivacyPolicyPage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Privacy Policy" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 4, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 6, 2025</p>
             <p>Your privacy is important to us. This Privacy Policy explains how Stoutly ("we," "us," or "our") collects, uses, and shares information about you when you use our Service.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Information We Collect</h2>
             <p className="font-bold">Information You Provide to Us:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li><strong>Account Information:</strong> When you create an account, we collect your email address and the username you choose. Your password is encrypted and managed by our backend provider, Supabase; we never see it in plain text.</li>
-                <li><strong>Profile Information:</strong> We collect information you add to your profile, such as your selected avatar.</li>
+                <li><strong>Profile Information:</strong> We collect information you add to your profile, such as your selected or uploaded avatar/profile picture.</li>
                 <li><strong>Ratings and Reviews:</strong> We collect the ratings you submit, which include your scores for price and quality, and optionally, the exact price paid.</li>
                 <li><strong>Photographs:</strong> If you choose to add a photo to your rating, we collect and store the image file you upload. This image will be associated with your rating and profile.</li>
                 <li><strong>Comments:</strong> We collect any comments you post on ratings, which are linked to your account.</li>
+                <li><strong>Marketing Preferences:</strong> We collect your preference for receiving marketing communications from us.</li>
             </ul>
             
             <p className="font-bold mt-4">Information We Collect Automatically:</p>
@@ -45,10 +46,11 @@ const PrivacyPolicyPage = ({ onBack }) => {
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li>Provide, maintain, and improve the Service.</li>
                 <li>Authenticate users and allow you to sign in to your account.</li>
-                <li>Display your ratings, comments, and profile information to the community (e.g., on leaderboards and pub detail pages).</li>
+                <li>Display your ratings, comments, profile picture, and other profile information to the community (e.g., on leaderboards and pub detail pages).</li>
                 <li>Display the photographs you've submitted alongside your ratings to the community.</li>
                 <li>Personalize your experience (e.g., by saving your theme and distance unit preferences).</li>
                 <li>Communicate with you for password recovery and other essential service notifications.</li>
+                <li>Send you marketing emails about new features, news, offers, and community events, but only if you have given us your explicit consent to do so.</li>
                 <li>Monitor and analyze trends, usage, and activities in connection with our Service.</li>
                 <li>Moderate the platform and prevent malicious activity.</li>
             </ul>
@@ -70,8 +72,9 @@ const PrivacyPolicyPage = ({ onBack }) => {
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">4. Your Rights and Choices</h2>
             <ul className="list-disc list-inside space-y-2 pl-4">
-                <li><strong>Account Information:</strong> You can see and review your profile information and ratings at any time within the "Profile" section of the app. You can also update your ratings.</li>
+                <li><strong>Account Information:</strong> You can see, review, and update your profile information, including your avatar, at any time within the "Profile" and "Settings" sections of the app.</li>
                 <li><strong>Managing Your Content:</strong> You can delete a comment you've posted or remove a photograph you've uploaded at any time. This will remove it from our servers.</li>
+                <li><strong>Marketing Preferences:</strong> You can opt-in or opt-out of receiving marketing emails from us at any time. You can manage your preference via the toggle in the "Settings" section of the app.</li>
                 <li><strong>Location Information:</strong> You can prevent us from collecting location information by changing the permissions on your device or browser. If you do, the map and distance-based features may not function correctly.</li>
                 <li><strong>Account Deletion:</strong> If you wish to delete your account, please contact us through the form in the app's settings. Please note that upon deletion, we may retain certain anonymized or aggregated data that does not identify you.</li>
             </ul>

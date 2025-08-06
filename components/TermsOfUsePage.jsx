@@ -20,7 +20,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const TermsOfUsePage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Terms of Use" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 4, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 6, 2025</p>
             <p>Welcome to Stoutly! These Terms of Use ("Terms") govern your access to and use of the Stoutly web application and any related services (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Description of Service</h2>
@@ -39,6 +39,7 @@ const TermsOfUsePage = ({ onBack }) => {
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li>Post ratings that are not made in good faith, are intentionally misleading, or are based on anything other than your own personal experience.</li>
                 <li>Post, upload, or share any content (including comments and photos) that is illegal, defamatory, obscene, pornographic, harassing, hateful, graphically violent, infringing on third-party intellectual property rights, or invasive of another's privacy.</li>
+                <li>Upload a profile picture that is not your own likeness or an appropriate avatar, or that contains nudity, violence, hate speech, or infringes on third-party copyrights (e.g., a cartoon character you do not have rights to use).</li>
                 <li>Upload photographs that are not of the pint of Guinness you are rating, or that contain inappropriate subject matter.</li>
                 <li>Engage in "review bombing," spamming, or other malicious activities intended to manipulate ratings or harass other users.</li>
                 <li>Attempt to gain unauthorized access to the Service, other users' accounts, or our backend systems.</li>
@@ -47,7 +48,7 @@ const TermsOfUsePage = ({ onBack }) => {
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">4. User-Generated Content</h2>
             <ul className="list-disc list-inside space-y-2 pl-4">
-                <li><strong>Your Content:</strong> You retain ownership of the content you submit to the Service, including your ratings, comments, reviews, photographs, and other materials (collectively, "User Content").</li>
+                <li><strong>Your Content:</strong> You retain ownership of the content you submit to the Service, including your ratings, comments, reviews, profile pictures, photographs, and other materials (collectively, "User Content").</li>
                 <li><strong>License to Us:</strong> By submitting User Content, you grant Stoutly a worldwide, non-exclusive, royalty-free, perpetual license to use, display, reproduce, modify (for formatting), and distribute your User Content in connection with operating and promoting the Service. This allows us to, for example, show your rating, comments, and photograph on the Service, include you on the leaderboard, and feature your content in promotional materials for Stoutly (such as on our social media channels or website). We will always credit your username when doing so.</li>
                 <li><strong>Public Display:</strong> You understand and agree that your username, avatar, rank, ratings, and comments will be publicly visible to other users of the Service.</li>
                 <li><strong>Content Warranty:</strong> You represent and warrant that you own or have the necessary licenses, rights, consents, and permissions to publish the User Content you submit. You further agree that the User Content you submit will not contain third-party copyrighted material, or material that is subject to other third-party proprietary rights, unless you have permission from the rightful owner of the material.</li>
@@ -56,7 +57,7 @@ const TermsOfUsePage = ({ onBack }) => {
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">5. Moderation and Termination</h2>
             <p>We are committed to maintaining a high-quality and trustworthy platform. We reserve the right, but do not have the obligation, to:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
-                <li>Monitor, screen, or remove any User Content at our sole discretion, including comments or photographs that we deem inappropriate or in violation of these Terms.</li>
+                <li>Monitor, screen, or remove any User Content at our sole discretion, including comments, profile pictures, or photographs that we deem inappropriate or in violation of these Terms.</li>
                 <li>Suspend or permanently terminate your account for any reason, without notice, especially for violations of these Terms. Our decisions on moderation and termination are final.</li>
             </ul>
 
