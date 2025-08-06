@@ -9,8 +9,8 @@
   "display": "standalone",
   "orientation": "portrait-primary",
   "scope": "/",
-  "background_color": "#111827",
-  "theme_color": "#2C1F17",
+  "background_color": "#1F2937",
+  "theme_color": "#F59E0B",
   "categories": ["food", "drink", "lifestyle", "social"],
   "launch_handler": {
     "client_mode": ["navigate-existing", "auto"]
@@ -33,28 +33,28 @@
   "screenshots": [
     {
       "src": "/screenshots/mobile-map.png",
-      "sizes": "1170x2532",
+      "sizes": "364x794",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Explore nearby pubs on the interactive map."
     },
     {
       "src": "/screenshots/mobile-details.png",
-      "sizes": "1170x2532",
+      "sizes": "355x792",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "View detailed ratings, prices, and photos for any pub."
     },
     {
       "src": "/screenshots/mobile-profile.png",
-      "sizes": "1170x2532",
+      "sizes": "357x791",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Track your ratings, level up, and earn new ranks!"
     },
     {
       "src": "/screenshots/mobile-community.png",
-      "sizes": "1170x2532",
+      "sizes": "354x794",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "See what the community is rating in the live feed."
