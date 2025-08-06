@@ -8,20 +8,24 @@ const Avatar = ({ avatarId, className = 'w-24 h-24' }) => {
     setHasError(false);
   }, [avatarId]);
   
-  let isDicebear = false;
-  let dicebearUrl = '';
+  let avatarUrl = '';
+  let avatarType = 'default';
 
-  // Only try to parse and use the avatarId if it exists and hasn't errored out.
   if (avatarId && !hasError) {
     try {
-      const parsedAvatar = JSON.parse(avatarId);
-      if (parsedAvatar && parsedAvatar.type === 'dicebear') {
-        isDicebear = true;
-        const { style, seed } = parsedAvatar;
-        dicebearUrl = `https://api.dicebear.com/8.x/${style}/svg?seed=${encodeURIComponent(seed || 'default')}&radius=50`;
+      const parsed = JSON.parse(avatarId);
+      if (parsed) {
+        if (parsed.type === 'dicebear' && parsed.style) {
+          avatarType = 'dicebear';
+          const { style, seed } = parsed;
+          avatarUrl = `https://api.dicebear.com/8.x/${style}/svg?seed=${encodeURIComponent(seed || 'default')}&radius=50`;
+        } else if (parsed.type === 'uploaded' && parsed.url) {
+          avatarType = 'uploaded';
+          avatarUrl = parsed.url;
+        }
       }
     } catch (e) {
-      // Not a valid JSON string (e.g., legacy or null), so it will fall through to the default icon.
+      // Not a valid JSON string, treat as default.
     }
   }
   
@@ -35,10 +39,10 @@ const Avatar = ({ avatarId, className = 'w-24 h-24' }) => {
     // It creates the circular shape, clips the content, has a fallback background,
     // and centers the fallback icon.
     <div className={`${className} rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center`}>
-      {isDicebear && !hasError ? (
+      {avatarType !== 'default' && avatarUrl ? (
         <img
-          src={dicebearUrl}
-          alt="User-generated avatar"
+          src={avatarUrl}
+          alt="User avatar"
           // object-cover ensures the image fills the circle, letting overflow-hidden clip it.
           className="w-full h-full object-cover"
           // If the image fails to load, trigger a re-render to show the fallback.
