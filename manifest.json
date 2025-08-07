@@ -18,19 +18,19 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "https://www.stoutly.co.uk/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "https://www.stoutly.co.uk/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/maskable_icon.png",
+      "src": "https://www.stoutly.co.uk/icons/maskable_icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -38,28 +38,28 @@
   ],
   "screenshots": [
     {
-      "src": "/screenshots/mobile-map.png",
+      "src": "https://www.stoutly.co.uk/screenshots/mobile-map.png",
       "sizes": "364x794",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Explore nearby pubs on the interactive map."
     },
     {
-      "src": "/screenshots/mobile-details.png",
+      "src": "https://www.stoutly.co.uk/screenshots/mobile-details.png",
       "sizes": "355x792",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "View detailed ratings, prices, and photos for any pub."
     },
     {
-      "src": "/screenshots/mobile-profile.png",
+      "src": "https://www.stoutly.co.uk/screenshots/mobile-profile.png",
       "sizes": "357x791",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Track your ratings, level up, and earn new ranks!"
     },
     {
-      "src": "/screenshots/mobile-community.png",
+      "src": "https://www.stoutly.co.uk/screenshots/mobile-community.png",
       "sizes": "354x794",
       "type": "image/png",
       "form_factor": "narrow",
@@ -72,14 +72,14 @@
       "short_name": "Explore",
       "description": "Find pubs near your current location",
       "url": "/?tab=map",
-      "icons": [{ "src": "data:image/svg+xml,%3csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3e%3cg transform='translate(10, 11.6) scale(0.8)'%3e%3cpath d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%23F59E0B'/%3e%3c/g%3e%3c/svg%3e", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [{ "src": "https://www.stoutly.co.uk/icons/maskable_icon.png", "sizes": "512x512", "type": "image/png" }]
     },
     {
       "name": "My Profile",
       "short_name": "Profile",
       "description": "View your ratings and rank progress",
       "url": "/?tab=profile",
-      "icons": [{ "src": "data:image/svg+xml,%3csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3e%3cg transform='translate(10, 11.6) scale(0.8)'%3e%3cpath d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%23F59E0B'/%3e%3c/g%3e%3c/svg%3e", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [{ "src": "https://www.stoutly.co.uk/icons/maskable_icon.png", "sizes": "512x512", "type": "image/png" }]
     }
   ]
 }
