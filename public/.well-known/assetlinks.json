@@ -1,5 +1,5 @@
 [{
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target" : { "namespace": "android_app", "package_name": "uk.co.stoutly.twa",
-               "sha256_cert_fingerprints": ["BD:85:14:88:80:C6:72:93:17:D2:36:FB:65:DF:C2:88:03:D6:72:C5:85:43:86:7F:C8:97:0B:C8:7D:10:58:C9"] }
+               "sha256_cert_fingerprints": ["E2:70:61:E4:6E:4F:C2:A0:39:4A:19:8F:C2:B0:F4:38:0B:6D:8C:5A:77:0D:CE:02:7B:CF:CD:DF:09:BB:BE:15"] }
 }]
