@@ -71,7 +71,7 @@ const TermsOfUsePage = ({ onBack }) => {
             <p>We may modify these Terms at any time. We will post the revised Terms and update the "Last Updated" date. Your continued use of the Service after any modification constitutes your acceptance of the new Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">9. Contact Us</h2>
-            <p>If you have any questions about these Terms, please contact us at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a> or through the "Contact Us" form in the app's settings.</p>
+            <p>If you have any questions about these Terms, please contact us at admin@stoutly.co.uk or through the "Contact Us" form in the app's settings.</p>
         </LegalPageWrapper>
     );
 };

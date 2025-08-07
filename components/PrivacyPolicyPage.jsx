@@ -90,7 +90,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
             <p>We may update this Privacy Policy from time to time. If we make changes, we will notify you by revising the date at the top of the policy.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Contact Us</h2>
-            <p>If you have any questions about this Privacy Policy, please contact us at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a> or through the "Contact Us" form in the app's settings.</p>
+            <p>If you have any questions about this Privacy Policy, please contact us at admin@stoutly.co.uk or through the "Contact Us" form in the app's settings.</p>
         </LegalPageWrapper>
     );
 };
