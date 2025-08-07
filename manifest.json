@@ -30,7 +30,7 @@
       "purpose": "any"
     },
     {
-      "src": "https://www.stoutly.co.uk/icons/maskable_icon.png",
+      "src": "https://www.stoutly.co.uk/icons/icon_maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -72,14 +72,14 @@
       "short_name": "Explore",
       "description": "Find pubs near your current location",
       "url": "/?tab=map",
-      "icons": [{ "src": "https://www.stoutly.co.uk/icons/maskable_icon.png", "sizes": "512x512", "type": "image/png" }]
+      "icons": [{ "src": "https://www.stoutly.co.uk/icons/icon_maskable.png", "sizes": "512x512", "type": "image/png" }]
     },
     {
       "name": "My Profile",
       "short_name": "Profile",
       "description": "View your ratings and rank progress",
       "url": "/?tab=profile",
-      "icons": [{ "src": "https://www.stoutly.co.uk/icons/maskable_icon.png", "sizes": "512x512", "type": "image/png" }]
+      "icons": [{ "src": "https://www.stoutly.co.uk/icons/icon_maskable.png", "sizes": "512x512", "type": "image/png" }]
     }
   ]
 }
