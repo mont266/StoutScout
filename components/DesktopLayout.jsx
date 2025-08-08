@@ -25,7 +25,6 @@ import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
-import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 
 const DesktopLayout = (props) => {
     const {
@@ -81,7 +80,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={handleBackFromFriendsList}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={onFriendAction}
+                    onFriendAction={handleFriendAction}
                 />
             );
         }
@@ -265,13 +264,6 @@ const DesktopLayout = (props) => {
                         {renderContentPanel()}
                     </aside>
                     <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
-                        {locationPermissionStatus === 'denied' && 
-                            !(settings.developerMode && settings.simulatedLocation) && (
-                            <LocationPermissionPrompt 
-                                status={locationPermissionStatus} 
-                                onRequestPermission={requestLocationPermission}
-                            />
-                        )}
                         <MapComponent
                             pubs={sortedPubs} userLocation={userLocation}
                             center={mapCenter}
@@ -288,7 +280,7 @@ const DesktopLayout = (props) => {
                             onPlacementPinMove={handlePlacementPinMove}
                             isDesktop={isDesktop}
                         />
-                        {(locationError && locationPermissionStatus !== 'denied') && 
+                        {(locationError) && 
                             !(settings.developerMode && settings.simulatedLocation) && 
                             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
                         }

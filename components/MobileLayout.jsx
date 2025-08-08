@@ -25,7 +25,6 @@ import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
-import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 
 const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount }) => {
   const tabs = [
@@ -197,7 +196,7 @@ const MobileLayout = (props) => {
                 
                 {/* Map View Container - kept visible to preserve map state */}
                 <div className={`flex-grow flex flex-col overflow-hidden ${activeTab === 'map' ? '' : 'hidden'}`}>
-                    {locationError && locationPermissionStatus !== 'denied' && 
+                    {locationError && 
                         !(settings.developerMode && settings.simulatedLocation) && 
                         <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>
                     }
@@ -209,13 +208,6 @@ const MobileLayout = (props) => {
                         isRefreshing={isRefreshing}
                     />
                     <div className="flex-grow min-h-0 relative">
-                        {locationPermissionStatus === 'denied' && 
-                            !(settings.developerMode && settings.simulatedLocation) && (
-                            <LocationPermissionPrompt 
-                                status={locationPermissionStatus} 
-                                onRequestPermission={requestLocationPermission}
-                            />
-                        )}
                         {isSearchExpanded ? (
                              <div className="absolute top-4 left-4 right-4 z-[1000] animate-fade-in-down">
                                 <MapSearchBar
