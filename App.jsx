@@ -48,6 +48,7 @@ const App = () => {
   const [mapCenter, setMapCenter] = useState(DEFAULT_LOCATION); // The visual center of the map
   const [searchOrigin, setSearchOrigin] = useState(DEFAULT_LOCATION); // The center of the last search, used for sorting
   const [locationError, setLocationError] = useState(null);
+  const [locationPermissionStatus, setLocationPermissionStatus] = useState('checking');
   const [resultsAreCapped, setResultsAreCapped] = useState(false);
   const [initialLocationSet, setInitialLocationSet] = useState(false);
   const [showSearchAreaButton, setShowSearchAreaButton] = useState(false);
@@ -734,25 +735,68 @@ const App = () => {
     }
   }, []);
 
+  const requestLocationPermission = useCallback(() => {
+    trackEvent('location_permission_requested');
+    if (!navigator.geolocation) {
+        setLocationPermissionStatus('denied');
+        setLocationError("Geolocation is not supported by your browser.");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            if (!locationPermissionTracked.current) {
+                trackEvent('location_permission_result', { status: 'granted' });
+                locationPermissionTracked.current = true;
+            }
+            setLocationPermissionStatus('granted');
+            const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+            setRealUserLocation(newLocation);
+            setLocationError(null);
+
+            if (!initialLocationSet) {
+                setSearchOrigin(newLocation);
+                setMapCenter(newLocation);
+                setInitialLocationSet(true);
+                setSearchOnNextMoveEnd(true);
+            }
+        },
+        (error) => {
+            if (!locationPermissionTracked.current) {
+                const status = error.code === error.PERMISSION_DENIED ? 'denied' : 'error';
+                trackEvent('location_permission_result', { status, error_code: error.code, error_message: error.message });
+                locationPermissionTracked.current = true;
+            }
+
+            if (error.code === error.PERMISSION_DENIED) {
+                setLocationError("Location access denied.");
+                setLocationPermissionStatus('denied');
+            } else {
+                setLocationError("Could not get your location. Please check your device's location services and try again.");
+                setLocationPermissionStatus('checking'); // Hides prompt, allows error banner to show
+            }
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+    );
+  }, [initialLocationSet]);
+
+  // New effect to automatically request permission on load if it's in the 'prompt' state.
+  useEffect(() => {
+    if (locationPermissionStatus === 'prompt' && !initialLocationSet) {
+      requestLocationPermission();
+    }
+  }, [locationPermissionStatus, requestLocationPermission, initialLocationSet]);
+
   const handleFindCurrentPub = useCallback(() => {
-    if (realUserLocation && (realUserLocation.lat !== DEFAULT_LOCATION.lat || realUserLocation.lng !== DEFAULT_LOCATION.lng)) {
+    if (locationPermissionStatus === 'granted' && realUserLocation && (realUserLocation.lat !== DEFAULT_LOCATION.lat || realUserLocation.lng !== DEFAULT_LOCATION.lng)) {
         trackEvent('recenter_map');
-        // Set both the search origin and map center to the user's location.
         setSearchOrigin(realUserLocation);
         setMapCenter(realUserLocation);
-        
-        // Signal to perform a search after the map finishes its "flyTo" animation.
         setSearchOnNextMoveEnd(true);
-    } else if (locationError) {
-        // If there's a location error (e.g., permission denied), we can inform the user.
-        alert(`Could not get your location. Please check your browser's location settings. Error: ${locationError}`);
-        trackEvent('recenter_map_failed', { reason: 'location_error', message: locationError });
     } else {
-        // If location is not yet available but there is no error.
-        alert("Still trying to find your location. Please wait a moment.");
-        trackEvent('recenter_map_failed', { reason: 'location_not_ready' });
+        requestLocationPermission();
     }
-  }, [realUserLocation, locationError]);
+  }, [realUserLocation, locationPermissionStatus, requestLocationPermission]);
 
   // Popup visibility timers
   useEffect(() => { if (reviewPopupInfo) { const timer = setTimeout(() => setReviewPopupInfo(null), 3000); return () => clearTimeout(timer); } }, [reviewPopupInfo]);
@@ -845,53 +889,77 @@ const App = () => {
   };
 
   useEffect(() => {
-    if (!navigator.geolocation) {
-        setLocationError("Geolocation is not supported.");
-        if (!locationPermissionTracked.current) {
-            trackEvent('location_permission_result', { status: 'unsupported' });
-            locationPermissionTracked.current = true;
-        }
-        return;
+    if (!navigator.geolocation || !navigator.permissions) {
+      setLocationError("Geolocation is not supported by your browser.");
+      setLocationPermissionStatus('denied');
+      return;
     }
-    const watcher = navigator.geolocation.watchPosition(
-      (position) => {
-        if (!locationPermissionTracked.current) {
-            trackEvent('location_permission_result', { status: 'granted' });
-            locationPermissionTracked.current = true;
-        }
-        const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-        setRealUserLocation(newLocation);
-        setLocationError(null);
-      },
-      (error) => { 
-        if (!locationPermissionTracked.current) {
-            const status = error.code === error.PERMISSION_DENIED ? 'denied' : 'error';
-            trackEvent('location_permission_result', { status, error_code: error.code, error_message: error.message });
-            locationPermissionTracked.current = true;
-        }
-        const message = error.code === error.PERMISSION_DENIED ? "Location access denied." : "Could not get location.";
-        if (!settings.developerMode || !settings.simulatedLocation) {
-            setLocationError(message);
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-    return () => navigator.geolocation.clearWatch(watcher);
-  }, [settings.developerMode, settings.simulatedLocation]);
+
+    let permissionStatus;
+    const handlePermissionChange = () => {
+      setLocationPermissionStatus(permissionStatus.state);
+    };
+
+    navigator.permissions.query({ name: 'geolocation' }).then(status => {
+      permissionStatus = status;
+      setLocationPermissionStatus(permissionStatus.state);
+      permissionStatus.addEventListener('change', handlePermissionChange);
+    }).catch(error => {
+        console.error("Could not query geolocation permission:", error);
+        setLocationPermissionStatus('denied');
+        setLocationError("Could not request location access.");
+    });
+
+    return () => {
+      if (permissionStatus) {
+        permissionStatus.removeEventListener('change', handlePermissionChange);
+      }
+    };
+  }, []);
 
   useEffect(() => {
-    // This effect now handles setting the initial location and triggering the first search.
+    let watcherId = null;
+
+    if (locationPermissionStatus === 'granted') {
+        watcherId = navigator.geolocation.watchPosition(
+            (position) => {
+                if (!locationPermissionTracked.current) {
+                    trackEvent('location_permission_result', { status: 'granted' });
+                    locationPermissionTracked.current = true;
+                }
+                const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+                setRealUserLocation(newLocation);
+                setLocationError(null);
+            },
+            (error) => {
+                const message = error.code === error.PERMISSION_DENIED ? "Location access was revoked." : "Could not get your location.";
+                setLocationError(message);
+                if (error.code === error.PERMISSION_DENIED) {
+                    setLocationPermissionStatus('denied');
+                }
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
+    
+    return () => {
+        if (watcherId) {
+            navigator.geolocation.clearWatch(watcherId);
+        }
+    };
+  }, [locationPermissionStatus]);
+
+  useEffect(() => {
     const effectiveLocation = (settings.developerMode && settings.simulatedLocation)
       ? settings.simulatedLocation.coords : realUserLocation;
     
-    setUserLocation(effectiveLocation); // This keeps the blue dot location live
+    setUserLocation(effectiveLocation);
 
-    // On first load, center the map on the user and trigger a search AFTER the map moves.
     if (effectiveLocation !== DEFAULT_LOCATION && !initialLocationSet) {
       setSearchOrigin(effectiveLocation);
       setMapCenter(effectiveLocation);
       setInitialLocationSet(true);
-      setSearchOnNextMoveEnd(true); // Signal to search after map settles
+      setSearchOnNextMoveEnd(true);
     }
   }, [settings.developerMode, settings.simulatedLocation, realUserLocation, initialLocationSet]);
   
@@ -1804,6 +1872,7 @@ const App = () => {
       unreadNotificationsCount,
       notifications,
       commentsByRating, isCommentsLoading,
+      locationPermissionStatus,
       
       // Implemented handlers
       handleViewProfile,
@@ -1815,6 +1884,7 @@ const App = () => {
       handleBackFromFriendsList: () => setViewingFriendsOf(null),
       handleFindPlace,
       handleFindCurrentPub,
+      requestLocationPermission,
       handleUpdateAvatar,
       
       // Comments & Notifications

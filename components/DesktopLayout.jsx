@@ -25,9 +25,11 @@ import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
+import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 
 const DesktopLayout = (props) => {
     const {
+        isDesktop,
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
         activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
         handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
@@ -47,6 +49,7 @@ const DesktopLayout = (props) => {
         handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
         handleFindPlace,
         levelRequirements,
+        locationPermissionStatus, requestLocationPermission,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
@@ -78,7 +81,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={handleBackFromFriendsList}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={handleFriendAction}
+                    onFriendAction={onFriendAction}
                 />
             );
         }
@@ -262,6 +265,13 @@ const DesktopLayout = (props) => {
                         {renderContentPanel()}
                     </aside>
                     <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
+                        {locationPermissionStatus === 'denied' && 
+                            !(settings.developerMode && settings.simulatedLocation) && (
+                            <LocationPermissionPrompt 
+                                status={locationPermissionStatus} 
+                                onRequestPermission={requestLocationPermission}
+                            />
+                        )}
                         <MapComponent
                             pubs={sortedPubs} userLocation={userLocation}
                             center={mapCenter}
@@ -276,8 +286,10 @@ const DesktopLayout = (props) => {
                             pubPlacementState={pubPlacementState}
                             finalPlacementLocation={finalPlacementLocation}
                             onPlacementPinMove={handlePlacementPinMove}
+                            isDesktop={isDesktop}
                         />
-                        {locationError && !(settings.developerMode && settings.simulatedLocation) && 
+                        {(locationError && locationPermissionStatus !== 'denied') && 
+                            !(settings.developerMode && settings.simulatedLocation) && 
                             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
                         }
                         <button

@@ -86,6 +86,7 @@ const MapComponent = ({
   searchOnNextMoveEnd, onSearchAfterMove,
   // Props for pub placement flow
   pubPlacementState, finalPlacementLocation, onPlacementPinMove,
+  isDesktop,
 }) => {
   const mapRef = useRef(null);
 
@@ -223,10 +224,10 @@ const MapComponent = ({
       </MapContainer>
       
       {showSearchAreaButton && (
-        <div className="absolute top-[84px] left-1/2 -translate-x-1/2 z-[1000]">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
           <button
             onClick={onSearchThisArea}
-            className="px-4 py-2 bg-amber-500 text-black font-bold rounded-full shadow-lg hover:bg-amber-400 transition-colors flex items-center space-x-2 animate-fade-in-down"
+            className={`bg-amber-500 text-black font-bold rounded-full shadow-lg hover:bg-amber-400 transition-colors flex items-center animate-fade-in-down ${isDesktop ? 'px-4 py-2 space-x-2' : 'px-3 py-1.5 text-sm space-x-1.5'}`}
           >
             <i className="fas fa-search-location"></i>
             <span>Search This Area</span>
