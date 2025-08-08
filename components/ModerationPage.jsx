@@ -21,11 +21,12 @@ const TabButton = ({ label, count, isActive, onClick }) => (
 );
 
 const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments, onFetchReportedComments, onResolveCommentReport }) => {
-    const [activeTab, setActiveTab] = useState('users'); // 'users', 'images', 'comments'
+    const [activeTab, setActiveTab] = useState('users'); // 'users', 'images', 'comments', 'edits'
     const [flaggedUsers, setFlaggedUsers] = useState([]);
     const [reportedImages, setReportedImages] = useState([]);
-    const [loading, setLoading] = useState({ users: true, images: true, comments: true });
-    const [error, setError] = useState({ users: null, images: null, comments: null });
+    const [suggestedEdits, setSuggestedEdits] = useState([]);
+    const [loading, setLoading] = useState({ users: true, images: true, comments: true, edits: true });
+    const [error, setError] = useState({ users: null, images: null, comments: null, edits: null });
     const [processingActionId, setProcessingActionId] = useState(null); // stores user or report ID being processed
     const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [alertInfo, setAlertInfo] = useState({ isOpen: false });
@@ -75,22 +76,83 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments
         }
         setLoading(p => ({ ...p, images: false }));
     }, []);
+    
+    const fetchSuggestedEdits = useCallback(async () => {
+        setLoading(p => ({ ...p, edits: true }));
+        setError(p => ({...p, edits: null}));
+        trackEvent('refresh_moderation_list', { type: 'edits' });
+
+        const { data, error } = await supabase
+            .from('pub_edit_suggestions')
+            .select('*, user:user_id(id, username, avatar_id)')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error('Error fetching suggested edits:', error);
+            setError(p => ({...p, edits: 'Could not load suggested edits.'}));
+            setSuggestedEdits([]);
+        } else {
+            setSuggestedEdits(data || []);
+        }
+        setLoading(p => ({ ...p, edits: false }));
+    }, []);
+
 
     useEffect(() => {
         if (activeTab === 'users') fetchFlaggedUsers();
         if (activeTab === 'images') fetchReportedImages();
+        if (activeTab === 'edits') fetchSuggestedEdits();
         if (activeTab === 'comments') {
             setLoading(p => ({ ...p, comments: true }));
             onFetchReportedComments().finally(() => setLoading(p => ({ ...p, comments: false })));
         }
-    }, [activeTab, fetchFlaggedUsers, fetchReportedImages, onFetchReportedComments]);
+    }, [activeTab, fetchFlaggedUsers, fetchReportedImages, fetchSuggestedEdits, onFetchReportedComments]);
 
     const handleRefresh = () => {
         if (activeTab === 'users') fetchFlaggedUsers();
         if (activeTab === 'images') fetchReportedImages();
+        if (activeTab === 'edits') fetchSuggestedEdits();
         if (activeTab === 'comments') onFetchReportedComments();
     };
     
+    const handleApproveEdit = async (suggestionId) => {
+        setProcessingActionId(suggestionId);
+        try {
+            const { error } = await supabase.rpc('approve_suggestion', {
+                p_suggestion_id: suggestionId,
+            });
+            if (error) throw new Error(error.message);
+
+            setAlertInfo({ isOpen: true, title: 'Success', message: 'Pub edit approved and applied successfully.', theme: 'success' });
+            setSuggestedEdits(prev => prev.filter(s => s.id !== suggestionId));
+            onDataRefresh(); // Refresh all app data to reflect changes
+        } catch (error) {
+            console.error('Failed to approve edit:', error);
+            setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Failed to approve edit: ${error.message}`, theme: 'error' });
+        } finally {
+            setProcessingActionId(null);
+        }
+    };
+    
+    const handleRejectEdit = async (suggestionId) => {
+        setProcessingActionId(suggestionId);
+        try {
+            const { error } = await supabase.rpc('reject_suggestion', {
+                p_suggestion_id: suggestionId,
+            });
+            if (error) throw new Error(error.message);
+
+            setAlertInfo({ isOpen: true, title: 'Success', message: 'Suggestion has been rejected.', theme: 'success' });
+            setSuggestedEdits(prev => prev.filter(s => s.id !== suggestionId));
+        } catch (error) {
+            console.error('Failed to reject edit:', error);
+            setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Failed to reject edit: ${error.message}`, theme: 'error' });
+        } finally {
+            setProcessingActionId(null);
+        }
+    };
+
     const confirmResolveImageReport = (report, action) => {
         setConfirmation({
             isOpen: true,
@@ -320,6 +382,51 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments
             </ul>
         );
     };
+    
+    const renderSuggestedEdits = () => {
+        if (loading.edits) return <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-400 mx-auto mt-8"></div>;
+        if (error.edits) return <div className="text-center text-red-500 p-6 bg-red-500/10 rounded-lg">{error.edits}</div>;
+        if (suggestedEdits.length === 0) return (
+             <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <i className="fas fa-check-circle fa-2x mb-2 text-green-500"></i>
+                <p className="font-semibold">All clear!</p>
+                <p className="text-sm">No pub edits are currently waiting for review.</p>
+            </div>
+        );
+
+        return (
+            <ul className="space-y-4">
+                {suggestedEdits.map(s => {
+                    const isProcessing = processingActionId === s.id;
+                    return (
+                        <li key={s.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg shadow-md border-l-4 border-amber-500 p-3">
+                            <div className="flex items-center space-x-3 mb-2">
+                                <Avatar avatarId={s.user.avatar_id} className="w-8 h-8 flex-shrink-0" />
+                                <div>
+                                    <button onClick={() => onViewProfile(s.user.id, 'moderation_edits')} className="font-semibold hover:underline text-amber-600 dark:text-amber-400">{s.user.username}</button>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{formatTimeAgo(new Date(s.created_at).getTime())}</span>
+                                </div>
+                            </div>
+                             <div className="space-y-2 text-sm p-2 bg-gray-100 dark:bg-gray-900/50 rounded-md">
+                                <p><strong>Pub ID:</strong> <span className="font-mono text-xs">{s.pub_id}</span></p>
+                                <p><strong>New Name:</strong> <span className="font-semibold">{s.suggested_data.name}</span></p>
+                                <p><strong>Mark as Closed:</strong> <span className={`font-semibold ${s.suggested_data.is_closed ? 'text-red-500' : 'text-gray-500'}`}>{s.suggested_data.is_closed ? 'Yes' : 'No'}</span></p>
+                                {s.notes && <p className="pt-2 border-t border-gray-200 dark:border-gray-700"><strong>Notes:</strong> <span className="italic">"{s.notes}"</span></p>}
+                            </div>
+                            <div className="flex items-center justify-end gap-2 mt-3">
+                                <button onClick={() => handleRejectEdit(s.id)} disabled={isProcessing} className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold py-2 px-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-xs disabled:opacity-50">
+                                    {isProcessing ? '...' : 'Reject'}
+                                </button>
+                                <button onClick={() => handleApproveEdit(s.id)} disabled={isProcessing} className="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 transition-colors text-sm disabled:opacity-50">
+                                    {isProcessing ? '...' : 'Approve'}
+                                </button>
+                            </div>
+                        </li>
+                    )
+                })}
+            </ul>
+        );
+    };
 
     const isLoading = loading[activeTab];
 
@@ -371,6 +478,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments
                             <TabButton label="Flagged Users" count={flaggedUsers.length} isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />
                             <TabButton label="Reported Images" count={reportedImages.length} isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
                             <TabButton label="Reported Comments" count={reportedComments.length} isActive={activeTab === 'comments'} onClick={() => setActiveTab('comments')} />
+                            <TabButton label="Suggested Edits" count={suggestedEdits.length} isActive={activeTab === 'edits'} onClick={() => setActiveTab('edits')} />
                         </div>
                     </div>
                 </div>
@@ -379,6 +487,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments
                     {activeTab === 'users' && renderFlaggedUsers()}
                     {activeTab === 'images' && renderReportedImages()}
                     {activeTab === 'comments' && renderReportedComments()}
+                    {activeTab === 'edits' && renderSuggestedEdits()}
                 </div>
             </div>
         </>

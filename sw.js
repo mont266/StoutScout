@@ -78,6 +78,7 @@ const urlsToCache = [
   '/components/AllCommentsPage.jsx',
   '/components/NotificationToast.jsx',
   '/components/CommentContent.jsx',
+  '/components/SuggestEditModal.jsx',
 ];
 
 self.addEventListener('install', event => {

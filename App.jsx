@@ -13,6 +13,7 @@ import useIsDesktop from './hooks/useIsDesktop.js';
 import ProfilePage from './components/ProfilePage.jsx';
 import BannedPage from './components/BannedPage.jsx';
 import AddPubModal from './components/AddPubModal.jsx';
+import SuggestEditModal from './components/SuggestEditModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
 import StatsPage from './components/StatsPage.jsx';
 import PubScoreExplanationModal from './components/PubScoreExplanationModal.jsx';
@@ -85,6 +86,8 @@ const App = () => {
   const [levelRequirements, setLevelRequirements] = useState([]);
   
   const [dbPubs, setDbPubs] = useState([]);
+  const [closedOsmPubIds, setClosedOsmPubIds] = useState(new Set());
+  const [osmPubOverrides, setOsmPubOverrides] = useState(new Map());
   
   const [isDbPubsLoaded, setIsDbPubsLoaded] = useState(false);
   const [initialSearchComplete, setInitialSearchComplete] = useState(false);
@@ -104,6 +107,10 @@ const App = () => {
   const [pubPlacementState, setPubPlacementState] = useState(null);
   const [finalPlacementLocation, setFinalPlacementLocation] = useState(null);
   const [isConfirmingLocation, setIsConfirmingLocation] = useState(false);
+
+  // "Suggest Edit" state
+  const [isSuggestEditModalOpen, setIsSuggestEditModalOpen] = useState(false);
+  const [pubToEdit, setPubToEdit] = useState(null);
 
   // Social Features State
   const [friendships, setFriendships] = useState([]);
@@ -260,7 +267,7 @@ const App = () => {
 
 
   const fetchDbPubs = useCallback(async () => {
-    const { data, error } = await supabase.from('pubs_with_dynamic_pricing_info').select('id, name, address, lat, lng, country_code, country_name, is_dynamic_price_area, area_identifier, area_rating_count');
+    const { data, error } = await supabase.from('pubs_with_dynamic_pricing_info').select('id, name, address, lat, lng, country_code, country_name, is_dynamic_price_area, area_identifier, area_rating_count, is_closed');
     if (error) {
       console.error("Error fetching rated pubs from DB:", error);
     } else {
@@ -270,6 +277,7 @@ const App = () => {
         address: p.address,
         country_code: p.country_code,
         country_name: p.country_name,
+        is_closed: p.is_closed,
         location: { lat: p.lat, lng: p.lng },
         is_dynamic_price_area: p.is_dynamic_price_area,
         area_identifier: p.area_identifier,
@@ -278,6 +286,34 @@ const App = () => {
       setDbPubs(formatted);
     }
     setIsDbPubsLoaded(true);
+  }, []);
+
+  const fetchClosedOsmPubs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('closed_osm_pubs')
+      .select('osm_id');
+    
+    if (error) {
+        console.error("Error fetching closed OSM pubs:", error);
+    } else {
+        setClosedOsmPubIds(new Set((data || []).map(p => p.osm_id)));
+    }
+  }, []);
+
+  const fetchOsmPubOverrides = useCallback(async () => {
+    const { data, error } = await supabase
+        .from('osm_pub_overrides')
+        .select('osm_id, name');
+    
+    if (error) {
+        console.error("Error fetching OSM pub overrides:", error);
+    } else {
+        const overridesMap = new Map();
+        for (const override of data || []) {
+            overridesMap.set(override.osm_id, { name: override.name });
+        }
+        setOsmPubOverrides(overridesMap);
+    }
   }, []);
 
   const fetchAllRatings = useCallback(async () => {
@@ -378,9 +414,11 @@ const App = () => {
           fetchAllRatings(),
           fetchPubScores(),
           fetchDbPubs(),
+          fetchClosedOsmPubs(),
+          fetchOsmPubOverrides(),
           session?.user?.id ? fetchSocialData(session.user.id) : Promise.resolve(),
       ]);
-  }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchSocialData, session]);
+  }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchClosedOsmPubs, fetchOsmPubOverrides, fetchSocialData, session]);
 
   const handleCancelPubPlacement = useCallback(() => {
     trackEvent('add_pub_cancel', { step: pubPlacementState ? 'placement' : 'modal' });
@@ -471,6 +509,8 @@ const App = () => {
     fetchPubScores();
     fetchLevelRequirements();
     fetchDbPubs();
+    fetchClosedOsmPubs();
+    fetchOsmPubOverrides();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         if (_event === 'SIGNED_IN') {
@@ -500,7 +540,7 @@ const App = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchAllRatings, fetchPubScores, fetchDbPubs]);
+  }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchClosedOsmPubs, fetchOsmPubOverrides]);
   
 
   // Real-time notifications listener
@@ -743,12 +783,10 @@ const App = () => {
         return;
     }
 
-    // Attempt 1: Quick, low-accuracy fix.
     navigator.geolocation.getCurrentPosition(
         (position) => {
-            // Success on the first try!
             if (!locationPermissionTracked.current) {
-                trackEvent('location_permission_result', { status: 'granted', accuracy: 'coarse' });
+                trackEvent('location_permission_result', { status: 'granted' });
                 locationPermissionTracked.current = true;
             }
             setLocationPermissionStatus('granted');
@@ -764,48 +802,21 @@ const App = () => {
             }
         },
         (error) => {
-            // Low-accuracy failed, let's try high accuracy with a longer timeout as a fallback.
-            trackEvent('location_attempt_failed', { accuracy: 'coarse', error_code: error.code, error_message: error.message });
-            
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    // High accuracy fallback succeeded.
-                    if (!locationPermissionTracked.current) {
-                        trackEvent('location_permission_result', { status: 'granted', accuracy: 'fine' });
-                        locationPermissionTracked.current = true;
-                    }
-                    setLocationPermissionStatus('granted');
-                    const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-                    setRealUserLocation(newLocation);
-                    setLocationError(null);
+            if (!locationPermissionTracked.current) {
+                const status = error.code === error.PERMISSION_DENIED ? 'denied' : 'error';
+                trackEvent('location_permission_result', { status, error_code: error.code, error_message: error.message });
+                locationPermissionTracked.current = true;
+            }
 
-                    if (!initialLocationSet) {
-                        setSearchOrigin(newLocation);
-                        setMapCenter(newLocation);
-                        setInitialLocationSet(true);
-                        setSearchOnNextMoveEnd(true);
-                    }
-                },
-                (finalError) => {
-                    // Both attempts failed.
-                    if (!locationPermissionTracked.current) {
-                        const status = finalError.code === finalError.PERMISSION_DENIED ? 'denied' : 'error';
-                        trackEvent('location_permission_result', { status, accuracy: 'fine', error_code: finalError.code, error_message: finalError.message });
-                        locationPermissionTracked.current = true;
-                    }
-        
-                    if (finalError.code === finalError.PERMISSION_DENIED) {
-                        setLocationError("Location access denied.");
-                        setLocationPermissionStatus('denied');
-                    } else {
-                        setLocationError("Could not get location. Ensure GPS is on and try again, perhaps outdoors.");
-                        setLocationPermissionStatus('checking'); 
-                    }
-                },
-                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 } // High accuracy options
-            );
+            if (error.code === error.PERMISSION_DENIED) {
+                setLocationError("Location access denied.");
+                setLocationPermissionStatus('denied');
+            } else {
+                setLocationError("Could not get your location. Please check your device's location services and try again.");
+                setLocationPermissionStatus('checking'); // Hides prompt, allows error banner to show
+            }
         },
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 } // Low accuracy options
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   }, [initialLocationSet]);
 
@@ -854,22 +865,28 @@ const App = () => {
     // 1. Start with our database pubs as the source of truth.
     const combinedPubs = [...dbPubs];
     
-    // 2. Iterate through Nominatim API results and add them only if they are not duplicates of existing DB pubs.
+    // 2. Iterate through Nominatim API results and add them only if they are not duplicates or blacklisted.
     nominatimResults.forEach(nominatimPub => {
+        if (closedOsmPubIds.has(nominatimPub.id)) {
+            return; // Skip this pub if it's on the closed list
+        }
+
+        // Apply name override if it exists
+        const override = osmPubOverrides.get(nominatimPub.id);
+        if (override) {
+            nominatimPub.name = override.name;
+        }
+
         const isDuplicate = dbPubs.some(dbPub => {
             if (!nominatimPub.location || !dbPub.location) return false;
             
             const distance = getDistance(nominatimPub.location, dbPub.location);
-            // Quick exit if pubs are not close to each other.
             if (distance >= PROXIMITY_THRESHOLD_METERS) {
                 return false;
             }
 
             const normalizedNominatimName = normalizePubNameForComparison(nominatimPub.name);
             const normalizedDbName = normalizePubNameForComparison(dbPub.name);
-
-            // Fuzzy name match: check if one name is a substring of the other.
-            // This handles cases like "The Pub" vs "The Pub - Pub Chain".
             const namesMatch = normalizedNominatimName.includes(normalizedDbName) || normalizedDbName.includes(normalizedNominatimName);
 
             return namesMatch;
@@ -880,9 +897,9 @@ const App = () => {
         }
     });
     
-    // 3. Filter the combined list by the search radius.
+    // 3. Filter the combined list by the search radius and closed status.
     const pubsInRadius = combinedPubs.filter(pub => {
-        if (!pub.location) return false;
+        if (!pub.location || pub.is_closed) return false; 
         const distance = getDistance(pub.location, searchOrigin);
         return distance <= settings.radius;
     });
@@ -902,7 +919,7 @@ const App = () => {
     });
 
     setPubs(finalPubsList);
-  }, [nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance]);
+  }, [nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance, closedOsmPubIds, osmPubOverrides]);
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   
@@ -950,44 +967,31 @@ const App = () => {
     let watcherId = null;
 
     if (locationPermissionStatus === 'granted') {
-      const handleSuccess = (position) => {
-        if (!locationPermissionTracked.current) {
-          trackEvent('location_permission_result', { status: 'granted' });
-          locationPermissionTracked.current = true;
-        }
-        const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-        setRealUserLocation(newLocation);
-        setLocationError(null);
-
-        // Center the map on the first successful location fix.
-        if (!initialLocationSet) {
-          setSearchOrigin(newLocation);
-          setMapCenter(newLocation);
-          setInitialLocationSet(true);
-          setSearchOnNextMoveEnd(true);
-        }
-      };
-
-      const handleError = (error) => {
-        let message = "Could not get your location. ";
-        switch(error.code) {
-            case error.PERMISSION_DENIED:
-                message = "Location access was revoked.";
-                setLocationPermissionStatus('denied');
-                break;
-            case error.POSITION_UNAVAILABLE:
-                message += "Ensure GPS is enabled and you have a clear view of the sky.";
-                break;
-            case error.TIMEOUT:
-                message += "Request timed out. Please try again in a moment.";
-                break;
-        }
-        setLocationError(message);
-      };
-      
-      const options = { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 };
-
-      watcherId = navigator.geolocation.watchPosition(handleSuccess, handleError, options);
+        watcherId = navigator.geolocation.watchPosition(
+            (position) => {
+                if (!locationPermissionTracked.current) {
+                    trackEvent('location_permission_result', { status: 'granted' });
+                    locationPermissionTracked.current = true;
+                }
+                const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+                setRealUserLocation(newLocation);
+                setLocationError(null);
+            },
+            (error) => {
+                // Only show a generic "could not get location" error if we never successfully found the user.
+                // This prevents the error banner from flashing if watchPosition times out after an initial success.
+                // Always show an error if permission is explicitly revoked.
+                if (realUserLocation === DEFAULT_LOCATION || error.code === error.PERMISSION_DENIED) {
+                    const message = error.code === error.PERMISSION_DENIED ? "Location access was revoked." : "Could not get your location.";
+                    setLocationError(message);
+                }
+                
+                if (error.code === error.PERMISSION_DENIED) {
+                    setLocationPermissionStatus('denied');
+                }
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
     }
     
     return () => {
@@ -995,7 +999,7 @@ const App = () => {
             navigator.geolocation.clearWatch(watcherId);
         }
     };
-  }, [locationPermissionStatus, initialLocationSet]);
+  }, [locationPermissionStatus, realUserLocation]);
 
   useEffect(() => {
     const effectiveLocation = (settings.developerMode && settings.simulatedLocation)
@@ -1045,7 +1049,7 @@ const App = () => {
         case FilterType.PubScore:
           return (b.pub_score ?? -1) - (a.pub_score ?? -1);
         case FilterType.Price: return getComparablePrice(a) - getComparablePrice(b);
-        case FilterType.Quality: return getAverageRating(b.ratings, 'quality') - getAverageRating(b.ratings, 'quality');
+        case FilterType.Quality: return getAverageRating(b.ratings, 'quality') - getAverageRating(a.ratings, 'quality');
         default: return getDistance(a.location, searchOrigin) - getDistance(b.location, searchOrigin);
       }
     });
@@ -1890,6 +1894,52 @@ const App = () => {
     }
   }, [session, userProfile]);
 
+  const handleOpenSuggestEditModal = useCallback((pub) => {
+    if (!session) {
+      setIsAuthOpen(true);
+      return;
+    }
+    trackEvent('suggest_edit_open', { pub_id: pub.id });
+    setPubToEdit(pub);
+    setIsSuggestEditModalOpen(true);
+  }, [session]);
+
+  const handleSubmitEditSuggestion = useCallback(async (suggestionData) => {
+    if (!pubToEdit) return;
+
+    trackEvent('suggest_edit_submit', {
+        pub_id: pubToEdit.id,
+        has_new_name: !!suggestionData.suggested_data.name,
+        marked_as_closed: suggestionData.suggested_data.is_closed,
+        has_notes: !!suggestionData.notes,
+    });
+
+    const { error } = await supabase.rpc('submit_pub_edit', {
+        p_pub_id: pubToEdit.id,
+        p_suggested_data: suggestionData.suggested_data,
+        p_notes: suggestionData.notes,
+    });
+
+    setIsSuggestEditModalOpen(false);
+    setPubToEdit(null);
+
+    if (error) {
+        setAlertInfo({
+            isOpen: true,
+            title: 'Submission Failed',
+            message: `Could not submit your suggestion: ${error.message}`,
+            theme: 'error',
+        });
+    } else {
+        setAlertInfo({
+            isOpen: true,
+            title: 'Suggestion Submitted!',
+            message: 'Thank you for helping keep Stoutly up to date. Your suggestion has been sent for review.',
+            theme: 'success',
+        });
+    }
+  }, [pubToEdit]);
+
 
   const layoutProps = {
       isDesktop,
@@ -1947,6 +1997,9 @@ const App = () => {
       handleConfirmNewPub: handleConfirmNewPub,
       handleCancelPubPlacement: handleCancelPubPlacement,
 
+      // "Suggest Edit" handlers
+      onOpenSuggestEditModal: handleOpenSuggestEditModal,
+
       // Moderation
       reportedComments,
       onFetchReportedComments: fetchReportedComments,
@@ -1976,6 +2029,13 @@ const App = () => {
             <AddPubModal 
                 onClose={handleCancelPubPlacement}
                 onSubmit={handleStartPubPlacement}
+            />
+        )}
+        {isSuggestEditModalOpen && pubToEdit && (
+            <SuggestEditModal
+                pub={pubToEdit}
+                onClose={() => setIsSuggestEditModalOpen(false)}
+                onSubmit={handleSubmitEditSuggestion}
             />
         )}
         {alertInfo.isOpen && (

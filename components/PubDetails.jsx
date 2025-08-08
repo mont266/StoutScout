@@ -76,7 +76,7 @@ const ScoreGauge = ({ score }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId }) => {
+const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId }) => {
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
   const [isRatingFormExpanded, setIsRatingFormExpanded] = useState(!existingUserRating && !!session);
@@ -395,6 +395,18 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
             ) : (
                 <p className="text-gray-500 dark:text-gray-400 italic text-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">No Guinness ratings yet. Be the first!</p>
             )}
+
+            <Section>
+                <div className="p-2 bg-white dark:bg-gray-800 rounded-lg text-center shadow-md">
+                    <button
+                        onClick={() => onOpenSuggestEditModal(pub)}
+                        className="w-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2"
+                    >
+                        <i className="fas fa-pencil-alt"></i>
+                        <span>Suggest an edit</span>
+                    </button>
+                </div>
+            </Section>
 
             {renderYourRatingSection()}
             

@@ -25,6 +25,7 @@ import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
+import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 
 const DesktopLayout = (props) => {
     const {
@@ -57,6 +58,8 @@ const DesktopLayout = (props) => {
         // Stats props
         StatsPage,
         onOpenScoreExplanation,
+        // "Suggest Edit" handlers
+        onOpenSuggestEditModal,
         unreadNotificationsCount,
         // Comments and notifications
         notifications, onMarkNotificationsAsRead,
@@ -80,7 +83,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={handleBackFromFriendsList}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={handleFriendAction}
+                    onFriendAction={onFriendAction}
                 />
             );
         }
@@ -114,6 +117,7 @@ const DesktopLayout = (props) => {
                         onToggleLike={onToggleLike}
                         isSubmittingRating={isSubmittingRating}
                         onOpenScoreExplanation={onOpenScoreExplanation}
+                        onOpenSuggestEditModal={onOpenSuggestEditModal}
                         commentsByRating={commentsByRating}
                         isCommentsLoading={isCommentsLoading}
                         onFetchComments={onFetchComments}
@@ -264,6 +268,13 @@ const DesktopLayout = (props) => {
                         {renderContentPanel()}
                     </aside>
                     <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
+                        {locationPermissionStatus === 'denied' && 
+                            !(settings.developerMode && settings.simulatedLocation) && (
+                            <LocationPermissionPrompt 
+                                status={locationPermissionStatus} 
+                                onRequestPermission={requestLocationPermission}
+                            />
+                        )}
                         <MapComponent
                             pubs={sortedPubs} userLocation={userLocation}
                             center={mapCenter}
@@ -280,7 +291,7 @@ const DesktopLayout = (props) => {
                             onPlacementPinMove={handlePlacementPinMove}
                             isDesktop={isDesktop}
                         />
-                        {(locationError) && 
+                        {(locationError && locationPermissionStatus !== 'denied') && 
                             !(settings.developerMode && settings.simulatedLocation) && 
                             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
                         }

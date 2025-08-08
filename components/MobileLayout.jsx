@@ -5,7 +5,7 @@ import FilterControls from './FilterControls.jsx';
 import MapComponent from './Map.jsx';
 import PubList from './PubList.jsx';
 import PubDetails from './PubDetails.jsx';
-import SettingsPage from './SettingsModal.jsx';
+import SettingsPage from './SettingsPage.jsx';
 import AuthPage from './AuthPage.jsx';
 import UpdatePasswordPage from './UpdatePasswordPage.jsx';
 import XPPopup from './XPPopup.jsx';
@@ -25,6 +25,7 @@ import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
+import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 
 const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount }) => {
   const tabs = [
@@ -84,7 +85,7 @@ const MobileLayout = (props) => {
         isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove, isSubmittingRating,
         handleFindPlace,
         levelRequirements,
-        locationPermissionStatus, requestLocationPermission,
+        locationPermissionStatus, requestPermission,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
@@ -94,6 +95,8 @@ const MobileLayout = (props) => {
         StatsPage,
         settingsSubView, handleViewAdminPage,
         onOpenScoreExplanation,
+        // "Suggest Edit" handlers
+        onOpenSuggestEditModal,
         unreadNotificationsCount,
         // Comments and notifications
         notifications, onMarkNotificationsAsRead,
@@ -196,7 +199,7 @@ const MobileLayout = (props) => {
                 
                 {/* Map View Container - kept visible to preserve map state */}
                 <div className={`flex-grow flex flex-col overflow-hidden ${activeTab === 'map' ? '' : 'hidden'}`}>
-                    {locationError && 
+                    {locationError && locationPermissionStatus !== 'denied' && 
                         !(settings.developerMode && settings.simulatedLocation) && 
                         <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>
                     }
@@ -208,6 +211,13 @@ const MobileLayout = (props) => {
                         isRefreshing={isRefreshing}
                     />
                     <div className="flex-grow min-h-0 relative">
+                        {locationPermissionStatus === 'denied' && 
+                            !(settings.developerMode && settings.simulatedLocation) && (
+                            <LocationPermissionPrompt 
+                                status={locationPermissionStatus} 
+                                onRequestPermission={requestPermission}
+                            />
+                        )}
                         {isSearchExpanded ? (
                              <div className="absolute top-4 left-4 right-4 z-[1000] animate-fade-in-down">
                                 <MapSearchBar
@@ -222,10 +232,10 @@ const MobileLayout = (props) => {
                         ) : (
                             <button
                                 onClick={() => setIsSearchExpanded(true)}
-                                className="absolute top-4 right-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300"
+                                className="absolute top-4 right-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300"
                                 aria-label="Search for a location"
                             >
-                                <i className="fas fa-search text-2xl"></i>
+                                <i className="fas fa-search text-xl"></i>
                             </button>
                         )}
                         <MapComponent
@@ -247,19 +257,19 @@ const MobileLayout = (props) => {
                          <button
                             onClick={handleFindCurrentPub}
                             title="Recenter map on your location"
-                            className={`absolute bottom-4 left-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
+                            className={`absolute bottom-4 left-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
                             aria-label="Recenter map on your location"
                         >
-                            <i className="fas fa-location-arrow text-2xl"></i>
+                            <i className="fas fa-location-arrow text-xl"></i>
                         </button>
                         
                         <button
                             onClick={handleAddPubClick}
                             title="Add a missing pub"
-                            className={`absolute bottom-4 right-4 z-[1000] bg-amber-500 text-black rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
+                            className={`absolute bottom-4 right-4 z-[1000] bg-amber-500 text-black rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
                             aria-label="Add a missing pub"
                         >
-                            <i className="fas fa-plus text-2xl"></i>
+                            <i className="fas fa-plus text-xl"></i>
                         </button>
                     </div>
                     <div className={`flex-shrink-0 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out ${isListExpanded ? 'max-h-[45%]' : 'max-h-12'}`}>
@@ -295,6 +305,7 @@ const MobileLayout = (props) => {
                             onToggleLike={onToggleLike}
                             isSubmittingRating={isSubmittingRating}
                             onOpenScoreExplanation={onOpenScoreExplanation}
+                            onOpenSuggestEditModal={onOpenSuggestEditModal}
                             commentsByRating={commentsByRating}
                             isCommentsLoading={isCommentsLoading}
                             onFetchComments={onFetchComments}

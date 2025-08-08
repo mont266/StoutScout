@@ -1,5 +1,6 @@
 import React from 'react';
 import ProfileAvatar from './ProfileAvatar.jsx';
+import Icon from './Icon.jsx';
 
 const getTitle = (tab) => {
     switch(tab) {
@@ -25,8 +26,10 @@ const Header = ({ activeTab, userProfile, levelRequirements, onProfileClick, onL
 
   return (
     <header className="flex-shrink-0 px-2 h-16 bg-white dark:bg-gray-800 shadow-md z-20 flex justify-between items-center">
-        {/* Left Spacer to balance the right-side avatar */}
-        <div className="w-12"></div>
+        {/* Left side: App Icon */}
+        <div className="w-12 flex justify-center items-center">
+            <Icon className="w-10 h-10 p-1" />
+        </div>
         
         {/* Centered Title */}
         <h1 className="text-xl font-bold text-amber-500 dark:text-amber-400 tracking-tight">{title}</h1>
