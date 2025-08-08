@@ -743,10 +743,12 @@ const App = () => {
         return;
     }
 
+    // Attempt 1: Quick, low-accuracy fix.
     navigator.geolocation.getCurrentPosition(
         (position) => {
+            // Success on the first try!
             if (!locationPermissionTracked.current) {
-                trackEvent('location_permission_result', { status: 'granted' });
+                trackEvent('location_permission_result', { status: 'granted', accuracy: 'coarse' });
                 locationPermissionTracked.current = true;
             }
             setLocationPermissionStatus('granted');
@@ -762,21 +764,48 @@ const App = () => {
             }
         },
         (error) => {
-            if (!locationPermissionTracked.current) {
-                const status = error.code === error.PERMISSION_DENIED ? 'denied' : 'error';
-                trackEvent('location_permission_result', { status, error_code: error.code, error_message: error.message });
-                locationPermissionTracked.current = true;
-            }
+            // Low-accuracy failed, let's try high accuracy with a longer timeout as a fallback.
+            trackEvent('location_attempt_failed', { accuracy: 'coarse', error_code: error.code, error_message: error.message });
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    // High accuracy fallback succeeded.
+                    if (!locationPermissionTracked.current) {
+                        trackEvent('location_permission_result', { status: 'granted', accuracy: 'fine' });
+                        locationPermissionTracked.current = true;
+                    }
+                    setLocationPermissionStatus('granted');
+                    const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+                    setRealUserLocation(newLocation);
+                    setLocationError(null);
 
-            if (error.code === error.PERMISSION_DENIED) {
-                setLocationError("Location access denied.");
-                setLocationPermissionStatus('denied');
-            } else {
-                setLocationError("Could not get your location. Please check your device's location services and try again.");
-                setLocationPermissionStatus('checking'); // Hides prompt, allows error banner to show
-            }
+                    if (!initialLocationSet) {
+                        setSearchOrigin(newLocation);
+                        setMapCenter(newLocation);
+                        setInitialLocationSet(true);
+                        setSearchOnNextMoveEnd(true);
+                    }
+                },
+                (finalError) => {
+                    // Both attempts failed.
+                    if (!locationPermissionTracked.current) {
+                        const status = finalError.code === finalError.PERMISSION_DENIED ? 'denied' : 'error';
+                        trackEvent('location_permission_result', { status, accuracy: 'fine', error_code: finalError.code, error_message: finalError.message });
+                        locationPermissionTracked.current = true;
+                    }
+        
+                    if (finalError.code === finalError.PERMISSION_DENIED) {
+                        setLocationError("Location access denied.");
+                        setLocationPermissionStatus('denied');
+                    } else {
+                        setLocationError("Could not get location. Ensure GPS is on and try again, perhaps outdoors.");
+                        setLocationPermissionStatus('checking'); 
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 } // High accuracy options
+            );
         },
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 } // Low accuracy options
     );
   }, [initialLocationSet]);
 
@@ -921,25 +950,44 @@ const App = () => {
     let watcherId = null;
 
     if (locationPermissionStatus === 'granted') {
-        watcherId = navigator.geolocation.watchPosition(
-            (position) => {
-                if (!locationPermissionTracked.current) {
-                    trackEvent('location_permission_result', { status: 'granted' });
-                    locationPermissionTracked.current = true;
-                }
-                const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-                setRealUserLocation(newLocation);
-                setLocationError(null);
-            },
-            (error) => {
-                const message = error.code === error.PERMISSION_DENIED ? "Location access was revoked." : "Could not get your location.";
-                setLocationError(message);
-                if (error.code === error.PERMISSION_DENIED) {
-                    setLocationPermissionStatus('denied');
-                }
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
+      const handleSuccess = (position) => {
+        if (!locationPermissionTracked.current) {
+          trackEvent('location_permission_result', { status: 'granted' });
+          locationPermissionTracked.current = true;
+        }
+        const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setRealUserLocation(newLocation);
+        setLocationError(null);
+
+        // Center the map on the first successful location fix.
+        if (!initialLocationSet) {
+          setSearchOrigin(newLocation);
+          setMapCenter(newLocation);
+          setInitialLocationSet(true);
+          setSearchOnNextMoveEnd(true);
+        }
+      };
+
+      const handleError = (error) => {
+        let message = "Could not get your location. ";
+        switch(error.code) {
+            case error.PERMISSION_DENIED:
+                message = "Location access was revoked.";
+                setLocationPermissionStatus('denied');
+                break;
+            case error.POSITION_UNAVAILABLE:
+                message += "Ensure GPS is enabled and you have a clear view of the sky.";
+                break;
+            case error.TIMEOUT:
+                message += "Request timed out. Please try again in a moment.";
+                break;
+        }
+        setLocationError(message);
+      };
+      
+      const options = { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 };
+
+      watcherId = navigator.geolocation.watchPosition(handleSuccess, handleError, options);
     }
     
     return () => {
@@ -947,7 +995,7 @@ const App = () => {
             navigator.geolocation.clearWatch(watcherId);
         }
     };
-  }, [locationPermissionStatus]);
+  }, [locationPermissionStatus, initialLocationSet]);
 
   useEffect(() => {
     const effectiveLocation = (settings.developerMode && settings.simulatedLocation)
@@ -997,7 +1045,7 @@ const App = () => {
         case FilterType.PubScore:
           return (b.pub_score ?? -1) - (a.pub_score ?? -1);
         case FilterType.Price: return getComparablePrice(a) - getComparablePrice(b);
-        case FilterType.Quality: return getAverageRating(b.ratings, 'quality') - getAverageRating(a.ratings, 'quality');
+        case FilterType.Quality: return getAverageRating(b.ratings, 'quality') - getAverageRating(b.ratings, 'quality');
         default: return getDistance(a.location, searchOrigin) - getDistance(b.location, searchOrigin);
       }
     });
