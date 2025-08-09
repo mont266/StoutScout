@@ -83,7 +83,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={handleBackFromFriendsList}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={onFriendAction}
+                    onFriendAction={handleFriendAction}
                 />
             );
         }

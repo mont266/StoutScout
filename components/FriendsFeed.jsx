@@ -195,8 +195,11 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                 user: { id: r.uploader_id, username: r.uploader_username, avatar_id: r.uploader_avatar_id, level: r.uploader_level }
             }));
             
+            // Filter out the current user's own ratings from the feed.
+            const ratingsFromFriendsOnly = formattedData.filter(r => r.user.id !== userProfile.id);
+
             setRatings(prev => {
-                const combined = pageNum === 1 ? formattedData : [...prev, ...formattedData];
+                const combined = pageNum === 1 ? ratingsFromFriendsOnly : [...prev, ...ratingsFromFriendsOnly];
                 const uniqueRatingsMap = new Map(combined.map(item => [item.id, item]));
                 return Array.from(uniqueRatingsMap.values());
             });
@@ -208,7 +211,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         } finally {
             setLoading(false);
         }
-    }, [hasFriends, filter]);
+    }, [hasFriends, filter, userProfile]);
     
     // Optimistically update the feed's local state for likes
     const handleFeedToggleLike = (ratingToToggle) => {
