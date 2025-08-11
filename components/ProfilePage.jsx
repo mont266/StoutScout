@@ -101,8 +101,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     const [isBanModalOpen, setIsBanModalOpen] = useState(false);
     const [imageToView, setImageToView] = useState(null);
     const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
-    const [ratingToDelete, setRatingToDelete] = useState(null);
-    const [isDeleting, setIsDeleting] = useState(false);
+    const [deletingRatingId, setDeletingRatingId] = useState(null);
     const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [alertInfo, setAlertInfo] = useState({ isOpen: false });
     const { onlineUserIds } = useContext(OnlineStatusContext);
@@ -129,7 +128,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     // Determine if the logged-in user can see moderation tools for the viewed profile
     const isViewingOwnProfile = !loggedInUserProfile || profile.id === loggedInUserProfile.id;
     const canModerate = loggedInUserProfile?.is_developer && !isViewingOwnProfile;
-    const isActionLoading = isBanning || isUnbanning || isUpdatingRoles || isDeleting;
+    const isActionLoading = isBanning || isUnbanning || isUpdatingRoles || !!deletingRatingId;
     const isOnline = onlineUserIds.has(profile.id);
 
     const handleBanUser = async (reason) => {
@@ -252,24 +251,20 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     };
 
     const requestDeleteRating = (rating) => {
-        setRatingToDelete(rating);
         setConfirmation({
             isOpen: true,
             title: 'Delete Rating?',
             message: 'This rating and any associated photo will be permanently deleted.',
-            onConfirm: handleDeleteConfirm,
+            onConfirm: async () => {
+                if (!rating || !onDeleteRating) return;
+                setDeletingRatingId(rating.id);
+                await onDeleteRating(rating);
+                setDeletingRatingId(null);
+                setConfirmation({ isOpen: false });
+            },
             confirmText: 'Delete',
             theme: 'red'
         });
-    };
-
-    const handleDeleteConfirm = async () => {
-        if (!ratingToDelete || !onDeleteRating) return;
-        setIsDeleting(true);
-        await onDeleteRating(ratingToDelete);
-        setIsDeleting(false);
-        setRatingToDelete(null);
-        setConfirmation({ isOpen: false });
     };
 
     const getProfileBorderColor = () => {
@@ -567,10 +562,16 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                             {userRatings.length > 0 ? (
                                 <ul className="space-y-3">
                                     {userRatings.slice(0, 10).map((r) => { // Show latest 10
-                                        const currencyInfo = getCurrencyInfo(r.pubAddress);
+                                        const currencyInfo = getCurrencyInfo({ address: r.pubAddress, country_code: r.pubCountryCode, country_name: r.pubCountryName });
                                         const ratingForModal = { ...r, user: { id: profile.id, username: profile.username } };
+                                        const isCurrentlyDeleting = deletingRatingId === r.id;
                                         return (
-                                        <li key={r.id} className={`bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md`}>
+                                        <li key={r.id} className={`relative bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-md transition-opacity ${isCurrentlyDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+                                            {isCurrentlyDeleting && (
+                                                <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 flex items-center justify-center rounded-lg z-10">
+                                                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400"></div>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                                                 <div 
                                                     className={`flex-grow pr-4 min-w-0 ${r.pubLocation ? 'cursor-pointer' : ''}`}

@@ -26,6 +26,7 @@ import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
+import SystemMessageBanner from './SystemMessageBanner.jsx';
 
 const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount }) => {
   const tabs = [
@@ -106,6 +107,7 @@ const MobileLayout = (props) => {
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
+        showSystemMessage, handleDismissSystemMessage,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -134,6 +136,8 @@ const MobileLayout = (props) => {
                 onProfileClick={() => props.handleTabChange('profile')}
                 onLoginRequest={() => setIsAuthOpen(true)}
             />
+
+            {showSystemMessage && <SystemMessageBanner onDismiss={handleDismissSystemMessage} />}
 
             <main className="relative flex-grow flex flex-col overflow-hidden">
                 <div className={`flex-grow flex flex-col overflow-y-auto ${activeTab !== 'map' ? '' : 'hidden'}`}>

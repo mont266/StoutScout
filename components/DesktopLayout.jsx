@@ -26,6 +26,7 @@ import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
+import SystemMessageBanner from './SystemMessageBanner.jsx';
 
 const DesktopLayout = (props) => {
     const {
@@ -69,6 +70,7 @@ const DesktopLayout = (props) => {
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
+        showSystemMessage, handleDismissSystemMessage,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -260,73 +262,76 @@ const DesktopLayout = (props) => {
             />
 
             {/* Main Content Area */}
-            <div className="flex-grow h-full relative">
-                
-                {/* Map & Aside Layout */}
-                <div className={`w-full h-full flex ${!isFullScreenTab ? '' : 'hidden'}`}>
-                    <aside className="w-[480px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-10">
-                        {renderContentPanel()}
-                    </aside>
-                    <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
-                        {locationPermissionStatus === 'denied' && 
-                            !(settings.developerMode && settings.simulatedLocation) && (
-                            <LocationPermissionPrompt 
-                                status={locationPermissionStatus} 
-                                onRequestPermission={requestLocationPermission}
+            <div className="flex-grow h-full flex flex-col">
+                {showSystemMessage && <SystemMessageBanner onDismiss={handleDismissSystemMessage} />}
+
+                <div className="flex-grow min-h-0 relative">
+                    {/* Map & Aside Layout */}
+                    <div className={`absolute inset-0 flex ${!isFullScreenTab ? '' : 'hidden'}`}>
+                        <aside className="w-[480px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-10">
+                            {renderContentPanel()}
+                        </aside>
+                        <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
+                            {locationPermissionStatus === 'denied' && 
+                                !(settings.developerMode && settings.simulatedLocation) && (
+                                <LocationPermissionPrompt 
+                                    status={locationPermissionStatus} 
+                                    onRequestPermission={requestLocationPermission}
+                                />
+                            )}
+                            <MapComponent
+                                pubs={sortedPubs} userLocation={userLocation}
+                                center={mapCenter}
+                                onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
+                                onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
+                                onMapMove={handleMapMove}
+                                refreshTrigger={refreshTrigger}
+                                showSearchAreaButton={showSearchAreaButton}
+                                onSearchThisArea={handleSearchThisArea}
+                                searchOnNextMoveEnd={searchOnNextMoveEnd}
+                                onSearchAfterMove={handleSearchAfterMove}
+                                pubPlacementState={pubPlacementState}
+                                finalPlacementLocation={finalPlacementLocation}
+                                onPlacementPinMove={handlePlacementPinMove}
+                                isDesktop={isDesktop}
                             />
-                        )}
-                        <MapComponent
-                            pubs={sortedPubs} userLocation={userLocation}
-                            center={mapCenter}
-                            onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                            onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
-                            onMapMove={handleMapMove}
-                            refreshTrigger={refreshTrigger}
-                            showSearchAreaButton={showSearchAreaButton}
-                            onSearchThisArea={handleSearchThisArea}
-                            searchOnNextMoveEnd={searchOnNextMoveEnd}
-                            onSearchAfterMove={handleSearchAfterMove}
-                            pubPlacementState={pubPlacementState}
-                            finalPlacementLocation={finalPlacementLocation}
-                            onPlacementPinMove={handlePlacementPinMove}
-                            isDesktop={isDesktop}
+                            {(locationError && locationPermissionStatus !== 'denied') && 
+                                !(settings.developerMode && settings.simulatedLocation) && 
+                                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
+                            }
+                            <button
+                                onClick={handleFindCurrentPub}
+                                title="Recenter map on your location"
+                                className={`absolute bottom-4 left-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
+                                aria-label="Recenter map on your location"
+                            >
+                                <i className="fas fa-location-arrow text-2xl"></i>
+                            </button>
+                        </main>
+                    </div>
+
+                    {/* Stats Page */}
+                    <div className={`absolute inset-0 ${activeTab === 'stats' ? '' : 'hidden'}`}>
+                        <StatsPage 
+                            onBack={() => handleTabChange('settings')} 
+                            onViewProfile={handleViewProfile}
+                            onViewPub={handleSelectPub}
+                            userProfile={userProfile}
+                            onAdminDeleteComment={onAdminDeleteComment}
                         />
-                        {(locationError && locationPermissionStatus !== 'denied') && 
-                            !(settings.developerMode && settings.simulatedLocation) && 
-                            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
-                        }
-                        <button
-                            onClick={handleFindCurrentPub}
-                            title="Recenter map on your location"
-                            className={`absolute bottom-4 left-4 z-[1000] bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-amber-300 dark:focus:ring-amber-600 transition-all duration-300`}
-                            aria-label="Recenter map on your location"
-                        >
-                            <i className="fas fa-location-arrow text-2xl"></i>
-                        </button>
-                    </main>
-                </div>
+                    </div>
 
-                {/* Stats Page */}
-                <div className={`w-full h-full ${activeTab === 'stats' ? '' : 'hidden'}`}>
-                    <StatsPage 
-                        onBack={() => handleTabChange('settings')} 
-                        onViewProfile={handleViewProfile}
-                        onViewPub={handleSelectPub}
-                        userProfile={userProfile}
-                        onAdminDeleteComment={onAdminDeleteComment}
-                    />
-                </div>
-
-                {/* Moderation Page */}
-                <div className={`w-full h-full ${activeTab === 'moderation' ? '' : 'hidden'}`}>
-                    <ModerationPage
-                        onViewProfile={handleViewProfile}
-                        onBack={() => handleTabChange('settings')}
-                        onDataRefresh={handleDataRefresh}
-                        reportedComments={reportedComments}
-                        onFetchReportedComments={onFetchReportedComments}
-                        onResolveCommentReport={onResolveCommentReport}
-                    />
+                    {/* Moderation Page */}
+                    <div className={`absolute inset-0 ${activeTab === 'moderation' ? '' : 'hidden'}`}>
+                        <ModerationPage
+                            onViewProfile={handleViewProfile}
+                            onBack={() => handleTabChange('settings')}
+                            onDataRefresh={handleDataRefresh}
+                            reportedComments={reportedComments}
+                            onFetchReportedComments={onFetchReportedComments}
+                            onResolveCommentReport={onResolveCommentReport}
+                        />
+                    </div>
                 </div>
             </div>
             

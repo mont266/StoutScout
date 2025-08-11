@@ -131,6 +131,9 @@ const App = () => {
   // Online Presence State
   const [onlineUserIds, setOnlineUserIds] = useState(new Set());
 
+  // System Message State
+  const [showSystemMessage, setShowSystemMessage] = useState(false);
+
 
   // --- HOOKS ---
   const isDesktop = useIsDesktop();
@@ -207,6 +210,12 @@ const App = () => {
   // --- DATA FETCHING & AUTH ---
 
   useEffect(() => {
+    // Check for system message dismissal
+    const messageDismissed = localStorage.getItem('stoutly-system-message-2024-08-07-ratings-fix');
+    if (!messageDismissed) {
+        setShowSystemMessage(true);
+    }
+
     // Listen for the custom event fired from index.tsx
     const handleInstallPrompt = (e) => {
       setInstallPromptEvent(e.detail);
@@ -1120,9 +1129,8 @@ const App = () => {
             
             const { error: uploadError } = await supabase.storage.from('pint-images').upload(filePath, imageFile, { upsert: true });
             if (uploadError) {
-                console.error("Image upload failed:", uploadError);
-                alert(`Image upload failed: ${uploadError.message}. Please ensure the 'pint-images' storage bucket is created as per the instructions in security.md.`);
-                return;
+                // Throw an error that will be caught by the new catch block
+                throw new Error(`Image upload failed: ${uploadError.message}. Please ensure the 'pint-images' storage bucket is created as per the instructions in security.md.`);
             }
             const { data: urlData } = supabase.storage.from('pint-images').getPublicUrl(filePath);
             imageUrl = urlData.publicUrl;
@@ -1140,10 +1148,12 @@ const App = () => {
             message: newRating.message,
         };
 
-        isUpdating
+        const { error: dbError } = isUpdating
           ? await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
           : await supabase.from('ratings').insert(ratingPayload);
         
+        if (dbError) throw dbError; // Throw so it's caught by the catch block
+
         if (!isUpdating) {
             const oldProfile = userProfile;
             const { profile: newProfile } = await fetchUserData();
@@ -1165,6 +1175,14 @@ const App = () => {
             setUpdateConfirmationInfo({ key: Date.now() });
         }
         await handleDataRefresh();
+    } catch (error) {
+        console.error("Error submitting rating:", error);
+        setAlertInfo({
+            isOpen: true,
+            title: 'Submission Failed',
+            message: `There was a problem submitting your rating. It might be a temporary network issue. Please try again. Error: ${error.message}`,
+            theme: 'error',
+        });
     } finally {
         setIsSubmittingRating(false);
     }
@@ -1173,7 +1191,6 @@ const App = () => {
   const handleDeleteRating = useCallback(async (ratingToDelete) => {
     if (!session || !userProfile || !ratingToDelete) return;
 
-    // Check if the rating belongs to the logged-in user
     const ratingInUserRatings = userRatings.find(r => r.id === ratingToDelete.id);
     if (!ratingInUserRatings) {
         console.error("Attempted to delete a rating that does not belong to the current user.");
@@ -1182,7 +1199,31 @@ const App = () => {
 
     trackEvent('delete_rating', { rating_id: ratingToDelete.id, pub_id: ratingToDelete.pubId });
 
+    // Store original state for potential rollback on error
+    const originalUserRatings = userRatings;
+    const originalAllRatings = allRatings;
+    const originalUserProfile = userProfile;
+
+    // --- Start Optimistic Updates ---
+    // 1. Remove from user's ratings list
+    setUserRatings(prev => prev.filter(r => r.id !== ratingToDelete.id));
+
+    // 2. Remove from global ratings map
+    setAllRatings(prev => {
+        const newMap = new Map(prev);
+        const pubRatings = newMap.get(ratingToDelete.pubId);
+        if (pubRatings) {
+            newMap.set(ratingToDelete.pubId, pubRatings.filter(r => r.id !== ratingToDelete.id));
+        }
+        return newMap;
+    });
+
+    // 3. Decrement review count in profile
+    setUserProfile(prev => ({ ...prev, reviews: Math.max(0, (prev.reviews || 1) - 1) }));
+    // --- End Optimistic Updates ---
+
     try {
+        // Perform the actual deletions in the background.
         // 1. If there's an image, delete it from storage first.
         if (ratingToDelete.image_url) {
             try {
@@ -1197,21 +1238,32 @@ const App = () => {
         }
         
         // 2. Delete the rating record from the database.
-        // The `on_rating_deleted` trigger will handle decrementing the user's review count.
         const { error: deleteError } = await supabase.from('ratings').delete().eq('id', ratingToDelete.id);
         if (deleteError) throw deleteError;
 
         // 3. Show success popup
         setDeleteConfirmationInfo({ key: Date.now() });
 
-        // 4. Re-fetch all data to update the UI
-        await handleDataRefresh();
+        // 4. Silently re-fetch user data in the background to ensure consistency
+        // for level/rank after the DB trigger has run. This is quick and doesn't block UI.
+        fetchUserData();
 
     } catch (error) {
         console.error("Error deleting rating:", error);
-        alert(`Could not delete rating: ${error.message}`);
+        
+        // --- Rollback on Error ---
+        setUserRatings(originalUserRatings);
+        setAllRatings(originalAllRatings);
+        setUserProfile(originalUserProfile);
+        
+        setAlertInfo({
+            isOpen: true,
+            title: 'Deletion Failed',
+            message: `There was a problem deleting your rating. Please try again. Error: ${error.message}`,
+            theme: 'error',
+        });
     }
-}, [session, userProfile, userRatings, handleDataRefresh]);
+  }, [session, userProfile, userRatings, allRatings, fetchUserData]);
   
   const handleSelectPub = useCallback((pub, highlightOptions = {}) => {
     const { highlightRatingId: ratingId, highlightCommentId: commentId } = highlightOptions;
@@ -1946,6 +1998,10 @@ const App = () => {
     }
   }, [pubToEdit]);
 
+  const handleDismissSystemMessage = () => {
+      localStorage.setItem('stoutly-system-message-2024-08-07-ratings-fix', 'true');
+      setShowSystemMessage(false);
+  };
 
   const layoutProps = {
       isDesktop,
@@ -2026,6 +2082,10 @@ const App = () => {
       
       // New handler for marketing consent
       handleMarketingConsentChange,
+
+      // System Message
+      showSystemMessage,
+      handleDismissSystemMessage,
   };
 
   const renderModals = () => (

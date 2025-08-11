@@ -172,22 +172,44 @@ const EUROZONE_COUNTRIES = [
 ];
 
 /**
- * Infers currency information based on keywords in the address.
+ * Infers currency information based on a pub's location data.
  * Defaults to GBP (£) for UK/unidentified locations.
- * @param {string} address The pub's address string.
+ * @param {{address?: string, country_code?: string, country_name?: string}} pubLocationData The pub's location data.
  * @returns {{symbol: string, code: string}} The currency symbol and code.
  */
-export const getCurrencyInfo = (address = '') => {
-    const lowerCaseAddress = address.toLowerCase();
+export const getCurrencyInfo = (pubLocationData = {}) => {
+    const { address, country_code, country_name } = pubLocationData;
+    const lowerCaseAddress = (address || '').toLowerCase();
+    const lowerCaseCountryName = (country_name || '').toLowerCase();
 
+    // 1. Priority check using country code for high accuracy
+    if (country_code === 'us') return { symbol: '$', code: 'USD' };
+    if (country_code === 'au') return { symbol: '$', code: 'AUD' };
+    
+    // Check for Eurozone countries by country name
+    if (EUROZONE_COUNTRIES.some(country => lowerCaseCountryName.includes(country.toLowerCase()))) {
+        if (!lowerCaseAddress.includes('northern ireland')) {
+            return { symbol: '€', code: 'EUR' };
+        }
+    }
+
+    // 2. Fallback to string matching for addresses
     if (lowerCaseAddress.includes('australia')) {
         return { symbol: '$', code: 'AUD' };
     }
 
-    if (lowerCaseAddress.includes('usa') || lowerCaseAddress.includes('united states')) {
+    // More specific string matching for USA, with safeguards
+    if (
+        lowerCaseAddress.includes('usa') ||
+        lowerCaseAddress.includes('united states') ||
+        lowerCaseAddress.includes('nyc') ||
+        lowerCaseAddress.includes(', ny') ||
+        (lowerCaseAddress.includes('new york') && country_code !== 'gb' && lowerCaseCountryName !== 'united kingdom')
+    ) {
         return { symbol: '$', code: 'USD' };
     }
 
+    // 3. Last check for Eurozone countries by address string
     if (EUROZONE_COUNTRIES.some(country => lowerCaseAddress.includes(country.toLowerCase()))) {
         // Specifically exclude Northern Ireland from the Eurozone check as it uses GBP
         if (!lowerCaseAddress.includes('northern ireland')) {
@@ -195,6 +217,7 @@ export const getCurrencyInfo = (address = '') => {
         }
     }
 
+    // 4. Default to GBP
     return { symbol: '£', code: 'GBP' };
 };
 
