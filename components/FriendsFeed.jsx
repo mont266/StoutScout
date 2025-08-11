@@ -15,6 +15,8 @@ const filterOptions = [
     { label: 'Top All Time', sortBy: 'likes', timePeriod: 'all' },
 ];
 
+const PULL_THRESHOLD = 80;
+
 const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFriendAction }) => {
     const { friendship_status, friendship_id, action_user_id } = targetUser;
     
@@ -160,7 +162,14 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
     const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
     const loaderRef = useRef(null);
     const filterMenuRef = useRef(null);
+    
+    // State for pull-to-refresh
+    const [pullPosition, setPullPosition] = useState(0);
+    const [isPulling, setIsPulling] = useState(false);
+    const touchStartRef = useRef(0);
+    const containerRef = useRef(null);
 
+    const isRefreshing = loading && page === 1;
     const hasFriends = friendships.some(f => f.status === 'accepted');
 
     const fetchRatings = useCallback(async (pageNum) => {
@@ -256,9 +265,9 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         );
     };
 
-    const handleRefresh = useCallback(() => {
+    const handleRefresh = useCallback((method = 'button') => {
         if (loading) return;
-        trackEvent('refresh_feed', { feed_type: 'friends' });
+        trackEvent('refresh_feed', { feed_type: 'friends', method });
         setPage(1);
         setHasMore(true);
         fetchRatings(1);
@@ -312,6 +321,40 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         setIsFilterMenuOpen(false);
     };
 
+     // Pull-to-refresh handlers
+    const handleTouchStart = (e) => {
+        if (containerRef.current && containerRef.current.scrollTop === 0) {
+            setIsPulling(true);
+            touchStartRef.current = e.touches[0].clientY;
+        }
+    };
+
+    const handleTouchMove = (e) => {
+        if (!isPulling || isRefreshing) return;
+        const touchY = e.touches[0].clientY;
+        const pullDistance = touchY - touchStartRef.current;
+        if (pullDistance > 0) {
+            const dampenedPull = Math.pow(pullDistance, 0.85);
+            setPullPosition(dampenedPull);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (!isPulling || isRefreshing) return;
+        setIsPulling(false);
+        if (pullPosition > PULL_THRESHOLD) {
+            handleRefresh('pull');
+        } else {
+            setPullPosition(0);
+        }
+    };
+    
+    useEffect(() => {
+        if (!isRefreshing) {
+            setPullPosition(0);
+        }
+    }, [isRefreshing]);
+
     const activeFilterLabel = filterOptions.find(opt => opt.sortBy === filter.sortBy && opt.timePeriod === filter.timePeriod)?.label || 'Newest';
 
     if (view === 'search') {
@@ -320,7 +363,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
 
     if (!hasFriends && !loading) {
          return (
-            <div className="bg-gray-100 dark:bg-gray-900 min-h-full">
+            <div className="bg-gray-100 dark:bg-gray-900 h-full overflow-y-auto relative">
                 <div className="sticky top-0 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-3 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex justify-between items-center">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Friends Feed</h2>
@@ -346,7 +389,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
     }
     
     const renderContent = () => {
-        if (loading && page === 1) {
+        if (loading && page === 1 && !isPulling) {
             return (
                 <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 p-8 text-center min-h-[400px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400"></div>
@@ -406,59 +449,88 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
     };
 
     return (
-        <div className="bg-gray-100 dark:bg-gray-900 min-h-full">
-            <div className="sticky top-0 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-3 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">Friends Feed</h2>
-                    <div className="flex items-center gap-2">
-                        <div ref={filterMenuRef} className="relative">
-                            <button 
-                                onClick={() => setIsFilterMenuOpen(p => !p)}
-                                className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 px-3 py-1.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-700"
-                                aria-haspopup="true"
-                                aria-expanded={isFilterMenuOpen}
-                            >
-                                <i className="fas fa-filter text-xs"></i>
-                                <span>{activeFilterLabel}</span>
-                            </button>
-                            {isFilterMenuOpen && (
-                                <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fade-in-down z-20">
-                                    <ul>
-                                        {filterOptions.map(opt => (
-                                            <li key={opt.label}>
-                                                <button 
-                                                    onClick={() => handleFilterSelect({ sortBy: opt.sortBy, timePeriod: opt.timePeriod })}
-                                                    className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter.sortBy === opt.sortBy && filter.timePeriod === opt.timePeriod ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                                                >
-                                                    {opt.label}
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                        <button
-                            onClick={handleRefresh}
-                            disabled={loading && page === 1}
-                            className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
-                            aria-label="Refresh feed"
-                            title="Refresh feed"
-                        >
-                            <i className={`fas fa-sync-alt ${loading && page === 1 ? 'animate-spin' : ''}`}></i>
-                        </button>
-                        <button
-                            onClick={() => setView('search')}
-                            className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                            aria-label="Search for users"
-                            title="Search for users"
-                        >
-                            <i className="fas fa-search"></i>
-                        </button>
+        <div 
+            ref={containerRef}
+            className="bg-gray-100 dark:bg-gray-900 h-full overflow-y-auto relative"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+        >
+            <div 
+                className="absolute top-0 left-0 right-0 z-0"
+                style={{
+                    transform: `translateY(${isRefreshing ? PULL_THRESHOLD : (isPulling ? pullPosition : 0)}px)`,
+                    transition: isPulling ? 'none' : 'transform 0.3s ease-out'
+                }}
+            >
+                <div className="absolute top-0 left-0 right-0 h-20 flex items-center justify-center -translate-y-full">
+                    <div className="bg-white dark:bg-gray-800 rounded-full shadow-lg w-10 h-10 flex items-center justify-center">
+                        {isRefreshing ? (
+                            <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-amber-400"></div>
+                        ) : (
+                             <i
+                                className="fas fa-arrow-down text-amber-500 text-xl transition-transform"
+                                style={{
+                                    transform: `rotate(${pullPosition > PULL_THRESHOLD ? 180 : 0}deg)`,
+                                    opacity: Math.min(pullPosition / (PULL_THRESHOLD / 1.5), 1)
+                                }}
+                            ></i>
+                        )}
                     </div>
                 </div>
+                <div className="sticky top-0 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-3 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Friends Feed</h2>
+                        <div className="flex items-center gap-2">
+                            <div ref={filterMenuRef} className="relative">
+                                <button 
+                                    onClick={() => setIsFilterMenuOpen(p => !p)}
+                                    className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 px-3 py-1.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-700"
+                                    aria-haspopup="true"
+                                    aria-expanded={isFilterMenuOpen}
+                                >
+                                    <i className="fas fa-filter text-xs"></i>
+                                    <span>{activeFilterLabel}</span>
+                                </button>
+                                {isFilterMenuOpen && (
+                                    <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fade-in-down z-20">
+                                        <ul>
+                                            {filterOptions.map(opt => (
+                                                <li key={opt.label}>
+                                                    <button 
+                                                        onClick={() => handleFilterSelect({ sortBy: opt.sortBy, timePeriod: opt.timePeriod })}
+                                                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter.sortBy === opt.sortBy && filter.timePeriod === opt.timePeriod ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => handleRefresh('button')}
+                                disabled={loading && page === 1}
+                                className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
+                                aria-label="Refresh feed"
+                                title="Refresh feed"
+                            >
+                                <i className={`fas fa-sync-alt ${loading && page === 1 ? 'animate-spin' : ''}`}></i>
+                            </button>
+                            <button
+                                onClick={() => setView('search')}
+                                className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                aria-label="Search for users"
+                                title="Search for users"
+                            >
+                                <i className="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {renderContent()}
             </div>
-            {renderContent()}
         </div>
     );
 };

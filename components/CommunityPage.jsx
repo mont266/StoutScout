@@ -5,13 +5,10 @@ import CommunityFeed from './CommunityFeed.jsx';
 import FriendsFeed from './FriendsFeed.jsx';
 import NotificationsPage from './NotificationsPage.jsx';
 import ImageModal from './ImageModal.jsx';
-import ScrollToTopButton from './ScrollToTopButton.jsx';
 
 const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment }) => {
     const [imageToView, setImageToView] = useState(null);
-    const [showScrollButton, setShowScrollButton] = useState(false);
     const [feedFilter, setFeedFilter] = useState({ sortBy: 'created_at', timePeriod: 'all' });
-    const scrollContainerRef = useRef(null);
 
     const handleTabChange = (tab) => {
         // Reset filter when switching tabs to ensure a fresh start
@@ -21,28 +18,6 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
         onSubTabChange(tab);
         trackEvent('change_community_subtab', { sub_tab: tab });
     };
-
-    const handleScroll = () => {
-        if (scrollContainerRef.current) {
-            // Show button if scrolled more than half the viewport height
-            setShowScrollButton(scrollContainerRef.current.scrollTop > window.innerHeight / 2);
-        }
-    };
-
-    const scrollToTop = () => {
-        if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-            trackEvent('scroll_to_top', { feed_type: activeSubTab });
-        }
-    };
-
-    useEffect(() => {
-        const container = scrollContainerRef.current;
-        if (container) {
-            container.addEventListener('scroll', handleScroll);
-            return () => container.removeEventListener('scroll', handleScroll);
-        }
-    }, []);
     
     // Mark notifications as read when the tab is viewed
     useEffect(() => {
@@ -108,14 +83,13 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                 </div>
 
                 {/* Content Area */}
-                <main ref={scrollContainerRef} className="flex-grow overflow-y-auto">
+                <main className="flex-grow overflow-hidden">
                     {activeSubTab === 'community' && <CommunityFeed onViewProfile={(id) => onViewProfile(id, 'community')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} />}
                     {activeSubTab === 'friends' && <FriendsFeed onViewProfile={(id) => onViewProfile(id, 'friends')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} />}
                     {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} />}
                     {activeSubTab === 'notifications' && <NotificationsPage notifications={notifications} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'notifications')} onDataRefresh={onDataRefresh} onViewPub={onViewPub} friendships={friendships} />}
                 </main>
 
-                <ScrollToTopButton show={showScrollButton} onClick={scrollToTop} />
             </div>
         </>
     );

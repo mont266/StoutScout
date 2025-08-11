@@ -7,6 +7,8 @@
     @apply bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased;
     /* Prevent horizontal scrollbars which can cause unwanted white space */
     overflow-x: hidden;
+    /* Prevent the browser's native pull-to-refresh action */
+    overscroll-behavior-y: contain;
   }
 }
 
