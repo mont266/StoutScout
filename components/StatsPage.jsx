@@ -247,24 +247,24 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     };
     
     const renderDesktopDashboard = () => (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             {/* Row 1: KPIs */}
             <StatCard label="Users Online" value={onlineUsersCount} icon="fa-wifi" onClick={() => handleViewChange('online_users')} />
             <StatCard label={`New Users (${timePeriod})`} value={stats.new_users_in_period} icon="fa-user-plus" />
             <StatCard label={`Active Users (${timePeriod})`} value={stats.active_users_in_period} icon="fa-user-clock" />
             <StatCard label={`New Ratings (${timePeriod})`} value={stats.new_ratings_in_period} icon="fa-star" />
-            <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} />
+            <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} className="md:col-span-2 lg:col-span-1" />
     
             {/* Row 2: Charts */}
-            <div className="lg:col-span-3">
+            <div className="md:col-span-2 lg:col-span-3">
                 <TimeSeriesChart data={timeSeriesData} dataKey="new_users" title="New Users" loading={loading} error={error} timePeriod={timePeriod} lineColor="#F59E0B" tooltipLabel="users" />
             </div>
-            <div className="lg:col-span-2">
+            <div className="md:col-span-2 lg:col-span-2">
                 <TimeSeriesChart data={timeSeriesData} dataKey="new_ratings" title="New Ratings" loading={loading} error={error} timePeriod={timePeriod} lineColor="#10B981" tooltipLabel="ratings" />
             </div>
     
             {/* Row 3: Table and Secondary Stats */}
-            <div className="lg:col-span-2">
+            <div className="md:col-span-2 lg:col-span-2">
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md h-full flex flex-col max-h-[500px]">
                     <h5 className="text-md font-semibold text-gray-700 dark:text-gray-300 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">Pint Price by Country (All Time)</h5>
                     <div className="overflow-y-auto">
@@ -292,7 +292,7 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                 </div>
             </div>
             
-            <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
+            <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
                 <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
                 <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
                 <StatCard label="Total Comments" value={stats.total_comments} icon="fa-comments" onClick={() => handleViewChange('all_comments')} />

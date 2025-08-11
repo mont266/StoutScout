@@ -85,9 +85,20 @@
     <div id="root"></div>
     <div id="modal-root"></div>
     <div id="orientation-lock-overlay">
-      <i class="fas fa-mobile-alt fa-5x transform -rotate-90 mb-6"></i>
-      <h2 class="text-2xl font-bold">Please rotate your device</h2>
-      <p class="mt-2 text-gray-300">This app is best viewed in portrait mode.</p>
+      <div class="phone-graphic">
+        <svg class="phone-outline" viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg">
+          <rect x="5" y="5" width="90" height="190" rx="15" stroke-width="5" stroke="#FDEED4" fill="none"/>
+          <line x1="35" y1="15" x2="65" y2="15" stroke-width="4" stroke="#FDEED4" stroke-linecap="round"/>
+        </svg>
+        <svg class="stoutly-logo" viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'>
+          <g transform='translate(0 2)'>
+            <path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='#111827' stroke='#F59E0B' strokeWidth='4'/>
+            <path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='#FDEED4'/>
+          </g>
+        </svg>
+      </div>
+      <h2 class="text-3xl font-bold text-amber-400 mt-8">A Better View Awaits</h2>
+      <p class="mt-2 text-gray-300 max-w-xs">For the best experience, please rotate your phone to portrait mode.</p>
     </div>
 
     <!-- Netlify form for ban appeals. This is hidden and only for Netlify's build process. -->

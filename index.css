@@ -16,10 +16,33 @@
   #orientation-lock-overlay {
     @apply fixed inset-0 z-[100] bg-gray-900 text-white flex-col items-center justify-center text-center p-8 hidden; /* hidden by default */
   }
+
+  /* New styles for the improved overlay */
+  .phone-graphic {
+    @apply relative w-24 h-48;
+    animation: rotate-hint 3s ease-in-out infinite;
+  }
+  
+  .phone-outline, .stoutly-logo {
+    @apply absolute top-0 left-0 w-full h-full;
+  }
+
+  .stoutly-logo {
+    @apply p-6; /* Add padding to fit the logo nicely inside the phone */
+  }
+
+  @keyframes rotate-hint {
+    0% { transform: rotate(90deg); }
+    30% { transform: rotate(0deg); }
+    70% { transform: rotate(0deg); }
+    100% { transform: rotate(90deg); }
+  }
 }
 
-/* Show overlay and hide app only on mobile/tablet devices in landscape */
-@media (min-width: 320px) and (max-width: 1023px) and (orientation: landscape) {
+/* Show overlay and hide app only on mobile devices in landscape.
+   We use max-height as a proxy for a phone, as a phone's height in landscape
+   is much smaller than its width, and smaller than a tablet's height. */
+@media (orientation: landscape) and (max-height: 600px) {
   #root, #modal-root {
     display: none; /* Hide the app content */
   }

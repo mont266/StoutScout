@@ -85,7 +85,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={handleBackFromFriendsList}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={handleFriendAction}
+                    onFriendAction={onFriendAction}
                 />
             );
         }
@@ -268,7 +268,7 @@ const DesktopLayout = (props) => {
                 <div className="flex-grow min-h-0 relative">
                     {/* Map & Aside Layout */}
                     <div className={`absolute inset-0 flex ${!isFullScreenTab ? '' : 'hidden'}`}>
-                        <aside className="w-[480px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-10">
+                        <aside className="w-[380px] lg:w-[420px] xl:w-[480px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-10">
                             {renderContentPanel()}
                         </aside>
                         <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
