@@ -400,19 +400,30 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments
                     const isProcessing = processingActionId === s.id;
                     return (
                         <li key={s.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg shadow-md border-l-4 border-amber-500 p-3">
-                            <div className="flex items-center space-x-3 mb-2">
+                            <div className="flex items-center space-x-3 mb-3">
                                 <Avatar avatarId={s.user.avatar_id} className="w-8 h-8 flex-shrink-0" />
                                 <div>
                                     <button onClick={() => onViewProfile(s.user.id, 'moderation_edits')} className="font-semibold hover:underline text-amber-600 dark:text-amber-400">{s.user.username}</button>
                                     <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{formatTimeAgo(new Date(s.created_at).getTime())}</span>
                                 </div>
                             </div>
-                             <div className="space-y-2 text-sm p-2 bg-gray-100 dark:bg-gray-900/50 rounded-md">
-                                <p><strong>Pub ID:</strong> <span className="font-mono text-xs">{s.pub_id}</span></p>
-                                <p><strong>New Name:</strong> <span className="font-semibold">{s.suggested_data.name}</span></p>
-                                <p><strong>Mark as Closed:</strong> <span className={`font-semibold ${s.suggested_data.is_closed ? 'text-red-500' : 'text-gray-500'}`}>{s.suggested_data.is_closed ? 'Yes' : 'No'}</span></p>
-                                {s.notes && <p className="pt-2 border-t border-gray-200 dark:border-gray-700"><strong>Notes:</strong> <span className="italic">"{s.notes}"</span></p>}
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm p-2 bg-gray-100 dark:bg-gray-900/50 rounded-md">
+                                <div className="space-y-1">
+                                    <h4 className="font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-1 mb-2">Current</h4>
+                                    <p><strong>Name:</strong> <span className="italic">{s.current_name || '[Not Provided]'}</span></p>
+                                    <p><strong>Address:</strong> <span className="italic">{s.current_address || '[Not Provided]'}</span></p>
+                                </div>
+                                <div className="space-y-1 sm:border-l sm:border-gray-200 sm:dark:border-gray-700 sm:pl-4">
+                                    <h4 className="font-semibold text-amber-600 dark:text-amber-400 border-b border-gray-200 dark:border-gray-700 pb-1 mb-2">Suggestion</h4>
+                                    <p><strong>Name:</strong> <span className="font-semibold">{s.suggested_data.name}</span></p>
+                                    <p><strong>Closed:</strong> <span className={`font-semibold ${s.suggested_data.is_closed ? 'text-red-500' : 'text-gray-500'}`}>{s.suggested_data.is_closed ? 'Yes' : 'No'}</span></p>
+                                </div>
                             </div>
+                            {s.notes && (
+                                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-sm">
+                                    <strong>Notes:</strong> <span className="italic">"{s.notes}"</span>
+                                </div>
+                            )}
                             <div className="flex items-center justify-end gap-2 mt-3">
                                 <button onClick={() => handleRejectEdit(s.id)} disabled={isProcessing} className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold py-2 px-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-xs disabled:opacity-50">
                                     {isProcessing ? '...' : 'Reject'}

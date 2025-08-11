@@ -654,7 +654,7 @@ const App = () => {
     // If profile exists, fetch ratings.
     const { data: userRatingsData, error: ratingsError } = await supabase
         .from('ratings')
-        .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng)')
+        .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng, country_code, country_name)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -671,6 +671,8 @@ const App = () => {
           pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
           image_url: r.image_url,
           is_private: r.is_private || false,
+          pubCountryCode: r.pubs?.country_code,
+          pubCountryName: r.pubs?.country_name,
         }));
     }
     
@@ -1075,7 +1077,7 @@ const App = () => {
 
         const existingRating = userRatings.find(r => r.pubId === pubId);
         const isUpdating = !!existingRating;
-        const currencyInfo = getCurrencyInfo(selectedPub.address);
+        const currencyInfo = getCurrencyInfo(selectedPub);
 
         trackEvent('rate_pub', {
             pub_id: pubId,
@@ -1383,7 +1385,7 @@ const App = () => {
         // We only fetch non-private ratings for other users.
         const { data: ratings, error: ratingsError } = await supabase
             .from('ratings')
-            .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng)')
+            .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng, country_code, country_name)')
             .eq('user_id', userId)
             .eq('is_private', false) // Important: respect privacy
             .order('created_at', { ascending: false });
@@ -1399,6 +1401,8 @@ const App = () => {
             pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
             image_url: r.image_url,
             is_private: r.is_private,
+            pubCountryCode: r.pubs?.country_code,
+            pubCountryName: r.pubs?.country_name,
         }));
         setViewedRatings(mappedRatings);
         
@@ -1916,6 +1920,8 @@ const App = () => {
 
     const { error } = await supabase.rpc('submit_pub_edit', {
         p_pub_id: pubToEdit.id,
+        p_current_name: pubToEdit.name,
+        p_current_address: pubToEdit.address,
         p_suggested_data: suggestionData.suggested_data,
         p_notes: suggestionData.notes,
     });
