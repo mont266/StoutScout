@@ -39,7 +39,7 @@ const AllCommentsPage = ({ totalComments, onBack, onViewProfile, onViewPub, logg
                     created_at,
                     content,
                     user:profiles!comments_user_id_fkey(id, username, avatar_id),
-                    rating:ratings!inner(pub:pubs!inner(id, name, address, lat, lng))
+                    rating:ratings!inner(pub:pubs!inner(id, name, address, lat, lng, country_code, country_name))
                 `)
                 .order('created_at', { ascending: false })
                 .range(from, to);
@@ -58,6 +58,8 @@ const AllCommentsPage = ({ totalComments, onBack, onViewProfile, onViewPub, logg
                 pub_address: c.rating.pub.address,
                 pub_lat: c.rating.pub.lat,
                 pub_lng: c.rating.pub.lng,
+                pub_country_code: c.rating.pub.country_code,
+                pub_country_name: c.rating.pub.country_name,
             }));
 
             setComments(prev => pageNum === 1 ? formattedData : [...prev, ...formattedData]);
@@ -134,7 +136,9 @@ const AllCommentsPage = ({ totalComments, onBack, onViewProfile, onViewPub, logg
             id: comment.pub_id,
             name: comment.pub_name,
             address: comment.pub_address,
-            location: { lat: comment.pub_lat, lng: comment.pub_lng }
+            location: { lat: comment.pub_lat, lng: comment.pub_lng },
+            country_code: comment.pub_country_code,
+            country_name: comment.pub_country_name,
         };
         onViewPub(pubForSelection);
     };

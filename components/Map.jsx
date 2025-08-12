@@ -87,6 +87,7 @@ const MapComponent = ({
   // Props for pub placement flow
   pubPlacementState, finalPlacementLocation, onPlacementPinMove,
   isDesktop,
+  mapTileRefreshKey,
 }) => {
   const mapRef = useRef(null);
 
@@ -177,9 +178,9 @@ const MapComponent = ({
         zoomControl={false}
       >
         <MapController center={center} />
-        {/* Use a key on TileLayer to force re-render when theme changes */}
+        {/* Use a key on TileLayer to force re-render when theme or refresh key changes */}
         <TileLayer
-          key={theme}
+          key={`${theme}-${mapTileRefreshKey}`}
           url={mapTiles}
           attribution={mapAttribution}
           className={theme === 'dark' ? 'map-tiles-dark' : ''}

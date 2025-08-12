@@ -26,7 +26,6 @@ import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
-import SystemMessageBanner from './SystemMessageBanner.jsx';
 
 const DesktopLayout = (props) => {
     const {
@@ -37,7 +36,7 @@ const DesktopLayout = (props) => {
         handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
         refreshTrigger, handleFindCurrentPub, getDistance,
         getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
-        renderProfile, session, userProfile, handleViewProfile, handleBackFromProfileView,
+        profilePage, session, userProfile, handleViewProfile, handleBackFromProfileView,
         handleSettingsChange, handleSetSimulatedLocation, handleLogout,
         existingUserRatingForSelectedPub, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
@@ -51,10 +50,11 @@ const DesktopLayout = (props) => {
         handleFindPlace,
         levelRequirements,
         locationPermissionStatus, requestLocationPermission,
+        mapTileRefreshKey,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
-        viewingFriendsOf, friendsList, isFetchingFriendsList, handleBackFromFriendsList,
+        viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
         deleteConfirmationInfo,
         // Stats props
         StatsPage,
@@ -70,7 +70,6 @@ const DesktopLayout = (props) => {
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
-        showSystemMessage, handleDismissSystemMessage,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -85,7 +84,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={handleBackFromFriendsList}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={onFriendAction}
+                    onFriendAction={handleFriendAction}
                 />
             );
         }
@@ -174,9 +173,6 @@ const DesktopLayout = (props) => {
         }
 
         if (activeTab === 'community') {
-             if (viewedProfile) { // If we clicked a profile from the community tab
-                return renderProfile(handleBackFromProfileView);
-            }
             return (
                 <CommunityPage 
                     userProfile={userProfile}
@@ -203,14 +199,6 @@ const DesktopLayout = (props) => {
                     onReportComment={onReportComment}
                 />
             );
-        }
-
-        if (activeTab === 'profile') {
-             if (viewedProfile && userProfile?.id !== viewedProfile.id) {
-                // This case happens if a dev views a profile from settings, then switches to the profile tab
-                return renderProfile(handleBackFromProfileView);
-             }
-            return renderProfile(); // Renders the logged-in user's profile
         }
 
         if (activeTab === 'settings') {
@@ -247,7 +235,7 @@ const DesktopLayout = (props) => {
         return null;
     };
     
-    const isFullScreenTab = ['stats', 'moderation'].includes(activeTab);
+    const isFullScreenTab = ['stats', 'moderation', 'profile'].includes(activeTab);
 
     return (
         <div className="w-full h-dvh flex">
@@ -263,8 +251,6 @@ const DesktopLayout = (props) => {
 
             {/* Main Content Area */}
             <div className="flex-grow h-full flex flex-col">
-                {showSystemMessage && <SystemMessageBanner onDismiss={handleDismissSystemMessage} />}
-
                 <div className="flex-grow min-h-0 relative">
                     {/* Map & Aside Layout */}
                     <div className={`absolute inset-0 flex ${!isFullScreenTab ? '' : 'hidden'}`}>
@@ -294,6 +280,7 @@ const DesktopLayout = (props) => {
                                 finalPlacementLocation={finalPlacementLocation}
                                 onPlacementPinMove={handlePlacementPinMove}
                                 isDesktop={isDesktop}
+                                mapTileRefreshKey={mapTileRefreshKey}
                             />
                             {(locationError && locationPermissionStatus !== 'denied') && 
                                 !(settings.developerMode && settings.simulatedLocation) && 
@@ -331,6 +318,11 @@ const DesktopLayout = (props) => {
                             onFetchReportedComments={onFetchReportedComments}
                             onResolveCommentReport={onResolveCommentReport}
                         />
+                    </div>
+
+                    {/* Full Screen Profile Page */}
+                    <div className={`absolute inset-0 ${activeTab === 'profile' ? '' : 'hidden'}`}>
+                        {profilePage}
                     </div>
                 </div>
             </div>

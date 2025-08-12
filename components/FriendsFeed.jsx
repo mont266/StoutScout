@@ -199,6 +199,8 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                 message: r.message,
                 pub_id: r.pub_id,
                 pub_name: r.pub_name, pub_address: r.pub_address,
+                pub_country_code: r.pub_country_code,
+                pub_country_name: r.pub_country_name,
                 pub_lat: r.pub_lat,
                 pub_lng: r.pub_lng,
                 user: { id: r.uploader_id, username: r.uploader_username, avatar_id: r.uploader_avatar_id, level: r.uploader_level }

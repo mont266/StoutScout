@@ -57,6 +57,7 @@ const App = () => {
   // Refresh functionality
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [mapTileRefreshKey, setMapTileRefreshKey] = useState(Date.now());
   const [searchOnNextMoveEnd, setSearchOnNextMoveEnd] = useState(false);
 
   const [settings, setSettings] = useState(loadSettings);
@@ -130,9 +131,6 @@ const App = () => {
 
   // Online Presence State
   const [onlineUserIds, setOnlineUserIds] = useState(new Set());
-
-  // System Message State
-  const [showSystemMessage, setShowSystemMessage] = useState(false);
 
 
   // --- HOOKS ---
@@ -210,12 +208,6 @@ const App = () => {
   // --- DATA FETCHING & AUTH ---
 
   useEffect(() => {
-    // Check for system message dismissal
-    const messageDismissed = localStorage.getItem('stoutly-system-message-2024-08-07-ratings-fix');
-    if (!messageDismissed) {
-        setShowSystemMessage(true);
-    }
-
     // Listen for the custom event fired from index.tsx
     const handleInstallPrompt = (e) => {
       setInstallPromptEvent(e.detail);
@@ -305,7 +297,8 @@ const App = () => {
     if (error) {
         console.error("Error fetching closed OSM pubs:", error);
     } else {
-        setClosedOsmPubIds(new Set((data || []).map(p => p.osm_id)));
+        // Store with 'osm-' prefix for direct comparison with nominatim results
+        setClosedOsmPubIds(new Set((data || []).map(p => `osm-${p.osm_id}`)));
     }
   }, []);
 
@@ -319,7 +312,8 @@ const App = () => {
     } else {
         const overridesMap = new Map();
         for (const override of data || []) {
-            overridesMap.set(override.osm_id, { name: override.name });
+            // Store with 'osm-' prefix for direct comparison
+            overridesMap.set(`osm-${override.osm_id}`, { name: override.name });
         }
         setOsmPubOverrides(overridesMap);
     }
@@ -756,6 +750,7 @@ const App = () => {
     setIsRefreshing(true);
     setShowSearchAreaButton(false); // Hide the button when a search starts
     setRefreshTrigger(c => c + 1);
+    setMapTileRefreshKey(Date.now()); // Force remount of TileLayer
     trackEvent('refresh_pubs');
   }, [isRefreshing]);
 
@@ -870,67 +865,69 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    // A small distance in meters to consider two pubs the same location.
-    const PROXIMITY_THRESHOLD_METERS = 50;
-    
-    // 1. Start with our database pubs as the source of truth.
-    const combinedPubs = [...dbPubs];
-    
-    // 2. Iterate through Nominatim API results and add them only if they are not duplicates or blacklisted.
+    const pubMap = new Map();
+
+    // 1. Add all DB pubs to the map first. They are the source of truth.
+    dbPubs.forEach(pub => {
+        pubMap.set(pub.id, pub);
+    });
+
+    // 2. Iterate through Nominatim results.
     nominatimResults.forEach(nominatimPub => {
-        if (closedOsmPubIds.has(nominatimPub.id)) {
-            return; // Skip this pub if it's on the closed list
+        // If a pub with this ID is already in our map (from the DB), IGNORE the Nominatim version.
+        if (pubMap.has(nominatimPub.id)) {
+            return;
         }
 
-        // Apply name override if it exists
-        const override = osmPubOverrides.get(nominatimPub.id);
-        if (override) {
-            nominatimPub.name = override.name;
-        }
-
-        const isDuplicate = dbPubs.some(dbPub => {
+        // Also check for spatial duplicates of stoutly-ID pubs
+        const isSpatialDuplicate = dbPubs.some(dbPub => {
+            if (!dbPub.id.startsWith('stoutly-')) return false;
             if (!nominatimPub.location || !dbPub.location) return false;
             
             const distance = getDistance(nominatimPub.location, dbPub.location);
-            if (distance >= PROXIMITY_THRESHOLD_METERS) {
-                return false;
-            }
+            if (distance >= 50) return false; // Not close enough
 
-            const normalizedNominatimName = normalizePubNameForComparison(nominatimPub.name);
-            const normalizedDbName = normalizePubNameForComparison(dbPub.name);
-            const namesMatch = normalizedNominatimName.includes(normalizedDbName) || normalizedDbName.includes(normalizedNominatimName);
-
-            return namesMatch;
+            const normNominatimName = normalizePubNameForComparison(nominatimPub.name);
+            const normDbName = normalizePubNameForComparison(dbPub.name);
+            return normNominatimName.includes(normDbName) || normDbName.includes(normNominatimName);
         });
-
-        if (!isDuplicate) {
-            combinedPubs.push(nominatimPub);
+        if (isSpatialDuplicate) {
+            return;
         }
+        
+        // Exclude known closed OSM pubs
+        if (closedOsmPubIds.has(nominatimPub.id)) {
+            return;
+        }
+        
+        // Apply name overrides to the Nominatim pub before adding it
+        const override = osmPubOverrides.get(nominatimPub.id);
+        const finalNominatimPub = override ? { ...nominatimPub, name: override.name } : nominatimPub;
+        
+        // If it's a genuinely new pub, add it to the map.
+        pubMap.set(finalNominatimPub.id, finalNominatimPub);
     });
-    
-    // 3. Filter the combined list by the search radius and closed status.
+
+    // 3. Convert map back to an array.
+    const combinedPubs = Array.from(pubMap.values());
+
+    // 4. Filter by radius and closed status.
     const pubsInRadius = combinedPubs.filter(pub => {
-        if (!pub.location || pub.is_closed) return false; 
+        if (!pub.location || pub.is_closed) return false;
         const distance = getDistance(pub.location, searchOrigin);
         return distance <= settings.radius;
     });
 
-    // 4. Add ratings and scores to the filtered list.
-    const finalPubsList = pubsInRadius.map(pub => {
-      const dbVersion = dbPubs.find(p => p.id === pub.id);
-      
-      return {
-        ...pub,
-        is_dynamic_price_area: pub.is_dynamic_price_area ?? dbVersion?.is_dynamic_price_area ?? false,
-        area_identifier: pub.area_identifier || dbVersion?.area_identifier,
-        area_rating_count: pub.area_rating_count ?? dbVersion?.area_rating_count ?? 0,
-        ratings: allRatings.get(pub.id) || [],
-        pub_score: pubScores.get(pub.id) ?? null,
-      }
-    });
+    // 5. Enrich with ratings and scores.
+    const finalPubsList = pubsInRadius.map(pub => ({
+      ...pub,
+      ratings: allRatings.get(pub.id) || [],
+      pub_score: pubScores.get(pub.id) ?? null,
+    }));
 
     setPubs(finalPubsList);
-  }, [nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance, closedOsmPubIds, osmPubOverrides]);
+
+  }, [nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance, closedOsmPubIds, osmPubOverrides, normalizePubNameForComparison]);
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   
@@ -1566,6 +1563,11 @@ const App = () => {
   const handleViewFriends = async (targetUser) => {
     if (!targetUser) return;
     trackEvent('view_friends_list', { target_user_id: targetUser.id });
+
+    // On desktop, switch back to map view so the side panel is visible
+    if (isDesktop) {
+      setActiveTab('map');
+    }
     
     // Set state to show the friends list UI
     setViewingFriendsOf(targetUser);
@@ -1592,23 +1594,31 @@ const App = () => {
     }
   };
 
-  const renderProfile = (onBackHandler) => (
-      <ProfilePage
-          userProfile={viewedProfile || userProfile}
-          userRatings={viewedProfile ? viewedRatings : userRatings}
-          onBack={onBackHandler}
-          onViewPub={handleSelectPub}
-          loggedInUserProfile={userProfile}
-          levelRequirements={levelRequirements}
-          onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
-          onProfileUpdate={handleProfileUpdate}
-          friendships={friendships}
-          onFriendRequest={handleFriendRequest}
-          onFriendAction={handleFriendAction}
-          onViewFriends={handleViewFriends}
-          onDeleteRating={handleDeleteRating}
-      />
-  );
+  const profilePage = useMemo(() => {
+      const onBackHandler = viewedProfile ? handleBackFromProfileView : undefined;
+      return (
+          <ProfilePage
+              userProfile={viewedProfile || userProfile}
+              userRatings={viewedProfile ? viewedRatings : userRatings}
+              onBack={onBackHandler}
+              onViewPub={handleSelectPub}
+              loggedInUserProfile={userProfile}
+              levelRequirements={levelRequirements}
+              onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
+              onProfileUpdate={handleProfileUpdate}
+              friendships={friendships}
+              onFriendRequest={handleFriendRequest}
+              onFriendAction={handleFriendAction}
+              onViewFriends={handleViewFriends}
+              onDeleteRating={handleDeleteRating}
+          />
+      );
+  }, [
+      viewedProfile, userProfile, viewedRatings, userRatings, 
+      handleBackFromProfileView, handleSelectPub, levelRequirements, 
+      handleProfileUpdate, friendships, handleFriendRequest, 
+      handleFriendAction, handleViewFriends, handleDeleteRating
+  ]);
   
   const handleAddPubClick = () => {
     if (!session) {
@@ -1998,11 +2008,6 @@ const App = () => {
     }
   }, [pubToEdit]);
 
-  const handleDismissSystemMessage = () => {
-      localStorage.setItem('stoutly-system-message-2024-08-07-ratings-fix', 'true');
-      setShowSystemMessage(false);
-  };
-
   const layoutProps = {
       isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
@@ -2011,7 +2016,7 @@ const App = () => {
       handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
       refreshTrigger, getDistance, isListExpanded, setIsListExpanded,
       getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
-      renderProfile, session, userProfile, handleLogout: () => supabase.auth.signOut(),
+      profilePage, session, userProfile, handleLogout: () => supabase.auth.signOut(),
       selectedPub, existingUserRatingForSelectedPub, handleRatePub,
       reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
       isAvatarModalOpen, setIsAvatarModalOpen,
@@ -2033,6 +2038,7 @@ const App = () => {
       notifications,
       commentsByRating, isCommentsLoading,
       locationPermissionStatus,
+      mapTileRefreshKey,
       
       // Implemented handlers
       handleViewProfile,
@@ -2082,10 +2088,6 @@ const App = () => {
       
       // New handler for marketing consent
       handleMarketingConsentChange,
-
-      // System Message
-      showSystemMessage,
-      handleDismissSystemMessage,
   };
 
   const renderModals = () => (

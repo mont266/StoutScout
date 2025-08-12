@@ -209,7 +209,7 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                             {countryStats.length > 0 ? (
                                 <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                                     {countryStats.map((stat) => {
-                                        const currency = getCurrencyInfo(stat.country_display_name);
+                                        const currency = getCurrencyInfo({ country_name: stat.country_display_name });
                                         return (
                                             <li key={stat.country_display_name} className="flex items-center justify-between p-3">
                                                 <span className="font-semibold text-gray-900 dark:text-white">{stat.country_display_name}</span>
@@ -271,7 +271,7 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                         {countryStats.length > 0 ? (
                             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                                  {countryStats.map((stat) => {
-                                    const currency = getCurrencyInfo(stat.country_display_name);
+                                    const currency = getCurrencyInfo({ country_name: stat.country_display_name });
                                     return (
                                         <li key={stat.country_display_name} className="flex items-center justify-between p-4">
                                             <span className="font-semibold text-gray-900 dark:text-white">{stat.country_display_name}</span>

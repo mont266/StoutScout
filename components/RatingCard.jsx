@@ -6,11 +6,11 @@ import CommentsSection from './CommentsSection.jsx';
 
 const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment }) => {
 
-    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng, comment_count, message } = rating;
+    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng, comment_count, message, pub_country_code, pub_country_name } = rating;
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
 
     const isLiked = userLikes && userLikes.has(id);
-    const currencyInfo = getCurrencyInfo(pub_address);
+    const currencyInfo = getCurrencyInfo({ address: pub_address, country_code: pub_country_code, country_name: pub_country_name });
     const rankData = user.level ? getRankData(user.level) : null;
 
     useEffect(() => {
@@ -29,7 +29,9 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                 id: pub_id,
                 name: pub_name,
                 address: pub_address,
-                location: { lat: pub_lat, lng: pub_lng }
+                location: { lat: pub_lat, lng: pub_lng },
+                country_code: pub_country_code,
+                country_name: pub_country_name,
             };
             onViewPub(pubForSelection);
         } else {

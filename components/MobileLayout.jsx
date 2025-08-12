@@ -26,7 +26,6 @@ import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
-import SystemMessageBanner from './SystemMessageBanner.jsx';
 
 const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount }) => {
   const tabs = [
@@ -72,7 +71,7 @@ const MobileLayout = (props) => {
         handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
         refreshTrigger, handleFindCurrentPub, getDistance, isListExpanded,
         setIsListExpanded, getAverageRating, resultsAreCapped,
-        isDbPubsLoaded, initialSearchComplete, renderProfile, session, handleViewProfile,
+        isDbPubsLoaded, initialSearchComplete, profilePage, session, handleViewProfile,
         handleSettingsChange, handleSetSimulatedLocation, userProfile, handleLogout,
         existingUserRatingForSelectedPub, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
@@ -87,6 +86,7 @@ const MobileLayout = (props) => {
         handleFindPlace,
         levelRequirements,
         locationPermissionStatus, requestPermission,
+        mapTileRefreshKey,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
@@ -107,7 +107,6 @@ const MobileLayout = (props) => {
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
-        showSystemMessage, handleDismissSystemMessage,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -137,11 +136,9 @@ const MobileLayout = (props) => {
                 onLoginRequest={() => setIsAuthOpen(true)}
             />
 
-            {showSystemMessage && <SystemMessageBanner onDismiss={handleDismissSystemMessage} />}
-
             <main className="relative flex-grow flex flex-col overflow-hidden">
                 <div className={`flex-grow flex flex-col overflow-y-auto ${activeTab !== 'map' ? '' : 'hidden'}`}>
-                    {activeTab === 'profile' && renderProfile(viewedProfile ? handleBackFromProfileView : undefined)}
+                    {activeTab === 'profile' && profilePage}
                     {activeTab === 'community' && session && (
                         <CommunityPage 
                             userProfile={userProfile}
@@ -257,6 +254,7 @@ const MobileLayout = (props) => {
                             finalPlacementLocation={finalPlacementLocation}
                             onPlacementPinMove={handlePlacementPinMove}
                             isDesktop={isDesktop}
+                            mapTileRefreshKey={mapTileRefreshKey}
                         />
                          <button
                             onClick={handleFindCurrentPub}

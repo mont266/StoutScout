@@ -77,6 +77,7 @@ const ScoreGauge = ({ score }) => {
 
 
 const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId }) => {
+  const [localPub, setLocalPub] = useState(pub);
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
   const [isRatingFormExpanded, setIsRatingFormExpanded] = useState(!existingUserRating && !!session);
@@ -85,6 +86,40 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [visibleComments, setVisibleComments] = useState({});
   const ratingsListRef = useRef(null);
+
+  useEffect(() => {
+    // This effect ensures we always have the most complete pub data available,
+    // protecting against cases where an incomplete pub object might be passed from an external context.
+    const hasCountryInfo = pub.country_code || pub.country_name;
+    const isRated = pub.ratings?.length > 0 || pub.pub_score != null;
+
+    if (!hasCountryInfo && isRated && pub.id) {
+        // If we have a rated pub but no country info, it's likely an incomplete object.
+        // Fetch the full record from the DB as the source of truth.
+        const fetchFullPubData = async () => {
+            const { data, error } = await supabase
+                .from('pubs')
+                .select('id, name, address, lat, lng, country_code, country_name')
+                .eq('id', pub.id)
+                .single();
+
+            if (data && !error) {
+                const enrichedPub = {
+                    ...pub, // Keep live data like ratings from the prop
+                    ...data, // Overwrite with the full data from DB
+                    location: { lat: data.lat, lng: data.lng }
+                };
+                setLocalPub(enrichedPub);
+            } else {
+                setLocalPub(pub); // Fallback to original prop on error
+            }
+        };
+        fetchFullPubData();
+    } else {
+        // If the pub prop is fine, or if it changes to a new pub, update local state
+        setLocalPub(pub);
+    }
+  }, [pub]);
 
   useEffect(() => {
     if (highlightedRatingId && ratingsListRef.current) {
@@ -99,12 +134,12 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
         }
       }, 350); // Increased from 100 to wait for panel transition to complete
     }
-  }, [highlightedRatingId, pub.ratings]);
+  }, [highlightedRatingId, localPub.ratings]);
   
     useEffect(() => {
         if (highlightedCommentId) {
-            const commentRatingId = Object.keys(commentsByRating.get(pub.id) || {}).find(ratingId =>
-                commentsByRating.get(pub.id)[ratingId]?.some(c => c.id === highlightedCommentId)
+            const commentRatingId = Object.keys(commentsByRating.get(localPub.id) || {}).find(ratingId =>
+                commentsByRating.get(localPub.id)[ratingId]?.some(c => c.id === highlightedCommentId)
             );
 
             // Automatically open the comment section for the relevant rating
@@ -123,32 +158,32 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                 }
             }, 400); // Delay to allow for comment section to open
         }
-    }, [highlightedCommentId, commentsByRating, pub.id, visibleComments]);
+    }, [highlightedCommentId, commentsByRating, localPub.id, visibleComments]);
 
 
-  const avgPrice = getAverageRating(pub.ratings, 'price');
-  const avgQuality = getAverageRating(pub.ratings, 'quality');
+  const avgPrice = getAverageRating(localPub.ratings, 'price');
+  const avgQuality = getAverageRating(localPub.ratings, 'quality');
   
-  const currencyInfo = getCurrencyInfo(pub.address);
+  const currencyInfo = getCurrencyInfo(localPub);
   
-  const imageRatings = useMemo(() => pub.ratings.filter(r => !!r.image_url), [pub.ratings]);
+  const imageRatings = useMemo(() => localPub.ratings.filter(r => !!r.image_url), [localPub.ratings]);
   
   const priceInfo = useMemo(() => {
-    const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
+    const ratingsWithPrice = localPub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
     if (ratingsWithPrice.length === 0) return { text: `${avgPrice.toFixed(1)} / 5`, stars: avgPrice };
 
     const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
     const average = total / ratingsWithPrice.length;
 
     return { text: `${currencyInfo.symbol}${average.toFixed(2)}`, stars: avgPrice };
-  }, [pub.ratings, avgPrice, currencyInfo]);
+  }, [localPub.ratings, avgPrice, currencyInfo]);
 
-  const DYNAMIC_PRICING_THRESHOLD = 26; // Needs > 25 ratings
+  const DYNAMIC_PRICING_THRESHOLD = 15; // Needs 15 ratings
 
   const priceLabel = (
     <div className="flex items-center justify-center gap-1.5 uppercase tracking-wider">
         <span>Avg. Price</span>
-        {pub.is_dynamic_price_area && (
+        {localPub.is_dynamic_price_area && (
             <div className="group relative flex items-center normal-case">
                 <i className="fas fa-globe-europe text-gray-400 dark:text-gray-500 cursor-help"></i>
                 <div className="absolute bottom-full mb-2 w-max max-w-[200px] left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
@@ -157,18 +192,18 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                 </div>
             </div>
         )}
-        {!pub.is_dynamic_price_area && pub.area_identifier && (
+        {!localPub.is_dynamic_price_area && localPub.area_identifier && (
             <div className="group relative flex items-center normal-case">
                 <i className="fas fa-hourglass-half text-gray-400 dark:text-gray-500 cursor-help"></i>
                 <div className="absolute bottom-full mb-2 w-max max-w-xs left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
                     <span className="font-bold block">Dynamic Pricing Pending</span>
                     Area stats are updated periodically to ensure accuracy.
                     <br />
-                    This area has <span className="font-bold text-amber-400">{pub.area_rating_count}</span> of the <span className="font-bold">{DYNAMIC_PRICING_THRESHOLD}</span> exact price ratings needed to activate this feature.
+                    This area has <span className="font-bold text-amber-400">{localPub.area_rating_count}</span> of the <span className="font-bold">{DYNAMIC_PRICING_THRESHOLD}</span> exact price ratings needed to activate this feature.
                 </div>
             </div>
         )}
-        {!pub.is_dynamic_price_area && !pub.area_identifier && (
+        {!localPub.is_dynamic_price_area && !localPub.area_identifier && (
             <div className="group relative flex items-center normal-case">
                 <i className="fas fa-hourglass-half text-gray-400 dark:text-gray-500 cursor-help"></i>
                 <div className="absolute bottom-full mb-2 w-max max-w-xs left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
@@ -239,7 +274,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   };
 
   const handleRatingSubmit = (ratingData) => {
-    onRate(pub.id, pub.name, pub.address, ratingData);
+    onRate(localPub.id, localPub.name, localPub.address, ratingData);
     // Collapse the form after a new submission, but not after an update.
     if (!existingUserRating) {
         setIsRatingFormExpanded(false);
@@ -345,8 +380,8 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                 <i className="fas fa-arrow-left fa-lg"></i>
             </button>
             <div className="flex-1 text-center pr-12 min-w-0">
-                <h2 className="text-lg font-bold truncate text-gray-900 dark:text-white" title={pub.name}>{pub.name}</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={pub.address}>{pub.address}</p>
+                <h2 className="text-lg font-bold truncate text-gray-900 dark:text-white" title={localPub.name}>{localPub.name}</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={localPub.address}>{localPub.address}</p>
             </div>
         </header>
 
@@ -357,15 +392,15 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                         <h3 className="text-xl font-bold text-red-500 dark:text-red-400">Admin Info</h3>
                     </div>
                     <div className="p-3 bg-red-500/10 text-red-700 dark:text-red-300 rounded-lg text-xs font-mono space-y-1">
-                        <p><strong>Pub ID:</strong> {pub.id}</p>
-                        <p><strong>Area ID:</strong> {pub.area_identifier || 'N/A'}</p>
-                        <p><strong>Area Status:</strong> {pub.is_dynamic_price_area ? <span className="font-bold text-green-600 dark:text-green-400">Active</span> : 'Inactive'}</p>
-                        <p><strong>Area Ratings:</strong> {pub.area_rating_count || 0}</p>
+                        <p><strong>Pub ID:</strong> {localPub.id}</p>
+                        <p><strong>Area ID:</strong> {localPub.area_identifier || 'N/A'}</p>
+                        <p><strong>Area Status:</strong> {localPub.is_dynamic_price_area ? <span className="font-bold text-green-600 dark:text-green-400">Active</span> : 'Inactive'}</p>
+                        <p><strong>Area Ratings:</strong> {localPub.area_rating_count || 0}</p>
                     </div>
                 </Section>
             )}
 
-            {pub.pub_score !== null && (
+            {localPub.pub_score !== null && (
                 <Section>
                     <div className="flex justify-center items-center gap-2 mb-2">
                         <h3 id="pub-score-heading" className="text-xl font-bold text-gray-900 dark:text-white">Pub Score</h3>
@@ -379,17 +414,17 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                         </button>
                     </div>
                     <div className="flex justify-center">
-                         <ScoreGauge score={pub.pub_score} />
+                         <ScoreGauge score={localPub.pub_score} />
                     </div>
                 </Section>
             )}
 
-            {pub.ratings.length > 0 ? (
+            {localPub.ratings.length > 0 ? (
                 <Section>
                     <div className="flex space-x-3">
                         <StatCard label={<span className="uppercase tracking-wider">Quality</span>} value={`${avgQuality.toFixed(1)} / 5`} icon="fa-beer" color="text-amber-500" />
                         <StatCard label={priceLabel} value={priceInfo.text} icon="fa-tag" color="text-green-500" />
-                        <StatCard label={<span className="uppercase tracking-wider">Ratings</span>} value={pub.ratings.length} icon="fa-users" color="text-blue-500" />
+                        <StatCard label={<span className="uppercase tracking-wider">Ratings</span>} value={localPub.ratings.length} icon="fa-users" color="text-blue-500" />
                     </div>
                 </Section>
             ) : (
@@ -399,7 +434,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
             <Section>
                 <div className="p-2 bg-white dark:bg-gray-800 rounded-lg text-center shadow-md">
                     <button
-                        onClick={() => onOpenSuggestEditModal(pub)}
+                        onClick={() => onOpenSuggestEditModal(localPub)}
                         className="w-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2"
                     >
                         <i className="fas fa-pencil-alt"></i>
@@ -431,10 +466,10 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                 </Section>
             )}
             
-            {pub.ratings.length > 0 && (
+            {localPub.ratings.length > 0 && (
                  <Section title="Recent Ratings">
                     <ul ref={ratingsListRef} className="space-y-3">
-                        {pub.ratings.slice(0, 10).map((rating) => {
+                        {localPub.ratings.slice(0, 10).map((rating) => {
                             const isOwnRating = session?.user?.id === rating.user.id;
                             const canAdminRemove = loggedInUserProfile?.is_developer && !isOwnRating;
                             const isLiked = userLikes && userLikes.has(rating.id);
@@ -493,7 +528,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                 </div>
                                 <div className="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-around">
                                       <button
-                                          onClick={() => onToggleLike({ ...rating, pub_id: pub.id })}
+                                          onClick={() => onToggleLike({ ...rating, pub_id: localPub.id })}
                                           className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center ${
                                               isLiked
                                               ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'

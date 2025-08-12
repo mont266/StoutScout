@@ -59,7 +59,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
             );
         case FilterType.Price:
             const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
-            const currencyInfo = getCurrencyInfo(pub.address);
+            const currencyInfo = getCurrencyInfo(pub);
 
             if (ratingsWithPrice.length > 0) {
                 const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
