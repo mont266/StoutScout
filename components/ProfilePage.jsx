@@ -13,6 +13,51 @@ import AlertModal from './AlertModal.jsx';
 import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 
+// Helper component for badges
+const UserBadges = ({ profile, className = '', justification = 'justify-center' }) => {
+    const badges = [];
+
+    if (profile.is_developer) {
+        badges.push({
+            label: 'Developer',
+            icon: 'fa-code',
+            color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20',
+            title: 'This user is a Stoutly developer.'
+        });
+    }
+    if (profile.is_team_member) {
+        badges.push({
+            label: 'Team',
+            icon: 'fa-shield-alt',
+            color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20',
+            title: 'This user is part of the Stoutly team.'
+        });
+    }
+    if (profile.is_early_bird) {
+        badges.push({
+            label: 'Early Bird',
+            icon: 'fa-feather-alt',
+            color: 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20',
+            title: 'This user was one of the first to join Stoutly!'
+        });
+    }
+
+    if (badges.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className={`flex items-center flex-wrap gap-2 ${justification} ${className}`}>
+            {badges.map(badge => (
+                <div key={badge.label} title={badge.title} className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${badge.color}`}>
+                    <i className={`fas ${badge.icon}`}></i>
+                    <span>{badge.label}</span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
 // Helper component to render bio with links
 const BioRenderer = ({ text }) => {
     if (!text) return null;
@@ -476,6 +521,15 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                 <div className="text-left">
                                     <div className="flex items-center gap-3">
                                         <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{username}</h2>
+                                        {isOnline && (
+                                            <div className="relative flex items-center ml-1" title="Online">
+                                                <span className="sr-only">Online</span>
+                                                <div className="relative flex h-3.5 w-3.5">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-green-500 border-2 border-white dark:border-gray-800"></span>
+                                                </div>
+                                            </div>
+                                        )}
                                         {isViewingOwnProfile && (
                                             <button onClick={onEditUsernameClick} className="text-gray-400 hover:text-amber-500 transition-colors p-2 text-xl -mb-1" aria-label="Edit username" title="Edit username">
                                                 <i className="fas fa-pencil-alt"></i>
@@ -486,7 +540,8 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                         <i className={`fas ${rankData.icon} text-2xl text-amber-500 dark:text-amber-400`}></i>
                                         <p className="text-2xl font-semibold text-amber-500 dark:text-amber-400">{rankData.name}</p>
                                     </div>
-                                    <div className="mt-2">
+                                    <UserBadges profile={profile} className="mt-4" justification="justify-start" />
+                                    <div className="mt-4">
                                         {bio && <BioRenderer text={bio} />}
                                         {isViewingOwnProfile && (
                                             <button onClick={onEditBioClick} className="mt-2 text-sm text-amber-600 dark:text-amber-400 font-semibold hover:underline">
@@ -536,6 +591,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                         <div className="mb-6"> {/* Profile Card Section */}
                             <div className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 text-center border-t-4 ${getProfileBorderColor()}`}>
                                 {is_banned && <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white font-bold px-4 py-1 rounded-full text-sm uppercase tracking-wider shadow-lg">Banned</div>}
+                                {isOnline && <div className="absolute top-4 right-4 flex items-center gap-1.5 text-green-600 dark:text-green-300 text-xs font-semibold bg-green-100 dark:bg-green-800/50 px-2.5 py-1 rounded-full border border-green-200 dark:border-green-700/50"><div className="w-2 h-2 bg-current rounded-full animate-pulse"></div><span>Online</span></div>}
                                 <div className="relative inline-block">
                                     <ProfileAvatar userProfile={profile} levelRequirements={levelRequirements} size={112} onClick={isViewingOwnProfile ? onAvatarChangeClick : undefined}/>
                                     {isViewingOwnProfile && <button onClick={onAvatarChangeClick} className="absolute bottom-0 right-0 bg-amber-500 text-black rounded-full w-8 h-8 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:bg-amber-400 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800" aria-label="Change avatar"><i className="fas fa-pen text-sm"></i></button>}
@@ -548,9 +604,10 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                         </button>
                                     )}
                                 </div>
-                                {isOnline && <div className="mt-2 flex items-center justify-center gap-1.5 text-green-500 dark:text-green-400 text-sm font-semibold"><div className="w-2.5 h-2.5 bg-current rounded-full animate-pulse"></div><span>Online</span></div>}
                                 <div className="flex items-center justify-center space-x-3 mt-2"><i className={`fas ${rankData.icon} text-2xl text-amber-500 dark:text-amber-400`}></i><p className="text-2xl font-semibold text-amber-500 dark:text-amber-400">{rankData.name}</p></div>
                                 
+                                <UserBadges profile={profile} className="mt-4" />
+
                                 <div className="mt-4">
                                     {bio && <BioRenderer text={bio} />}
                                     {isViewingOwnProfile && (
