@@ -925,60 +925,73 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    const pubMap = new Map();
+    // 1. Create a map for de-duplicated pubs, keyed by pub ID.
+    const processedPubs = new Map();
 
-    // 1. Add all DB pubs to the map first. They are the source of truth.
-    dbPubs.forEach(pub => {
-        pubMap.set(pub.id, pub);
+    // 2. Add all database pubs first. They are the source of truth.
+    dbPubs.forEach(dbPub => {
+      processedPubs.set(dbPub.id, dbPub);
     });
 
-    // 2. Iterate through Nominatim results.
+    // 3. Process Nominatim results, checking for duplicates against our trusted DB list.
     nominatimResults.forEach(nominatimPub => {
-        // If a pub with this ID is already in our map (from the DB), IGNORE the Nominatim version.
-        if (pubMap.has(nominatimPub.id)) {
-            return;
-        }
+      // Apply any name overrides first.
+      const override = osmPubOverrides.get(nominatimPub.id);
+      const finalNominatimPub = override ? { ...nominatimPub, name: override.name } : nominatimPub;
 
-        // Also check for spatial duplicates of stoutly-ID pubs
-        const isSpatialDuplicate = dbPubs.some(dbPub => {
-            if (!dbPub.id.startsWith('stoutly-')) return false;
-            if (!nominatimPub.location || !dbPub.location) return false;
-            
-            const distance = getDistance(nominatimPub.location, dbPub.location);
-            if (distance >= 50) return false; // Not close enough
+      // Skip if a pub with the same ID is already in our map (the DB version is superior).
+      if (processedPubs.has(finalNominatimPub.id)) {
+        return;
+      }
+      
+      // Perform a spatial de-duplication check against ALL pubs already processed.
+      // This prevents adding an OSM result that is a spatial duplicate of ANY DB pub (stoutly- or osm-).
+      const isSpatialDuplicate = Array.from(processedPubs.values()).some(processedPub => {
+        if (!finalNominatimPub.location || !processedPub.location) return false;
+        
+        const dist = getDistance(finalNominatimPub.location, processedPub.location);
+        if (dist > 50) return false; // Not a duplicate if more than 50m away.
+        
+        // If close, check for similar names.
+        const normOsmName = normalizePubNameForComparison(finalNominatimPub.name);
+        const normDbName = normalizePubNameForComparison(processedPub.name);
+        
+        // Check if one name contains the other for fuzzy matching.
+        return normOsmName.includes(normDbName) || normDbName.includes(normOsmName);
+      });
 
-            const normNominatimName = normalizePubNameForComparison(nominatimPub.name);
-            const normDbName = normalizePubNameForComparison(dbPub.name);
-            return normNominatimName.includes(normDbName) || normDbName.includes(normNominatimName);
-        });
-        if (isSpatialDuplicate) {
-            return;
-        }
-        
-        // Exclude known closed OSM pubs
-        if (closedOsmPubIds.has(nominatimPub.id)) {
-            return;
-        }
-        
-        // Apply name overrides to the Nominatim pub before adding it
-        const override = osmPubOverrides.get(nominatimPub.id);
-        const finalNominatimPub = override ? { ...nominatimPub, name: override.name } : nominatimPub;
-        
-        // If it's a genuinely new pub, add it to the map.
-        pubMap.set(finalNominatimPub.id, finalNominatimPub);
+      if (!isSpatialDuplicate) {
+        processedPubs.set(finalNominatimPub.id, finalNominatimPub);
+      }
     });
 
-    // 3. Convert map back to an array.
-    const combinedPubs = Array.from(pubMap.values());
+    // 4. Convert the de-duplicated map back to an array.
+    const combinedPubs = Array.from(processedPubs.values());
 
-    // 4. Filter by radius and closed status.
+    // 5. Filter the combined list for closed status and radius.
     const pubsInRadius = combinedPubs.filter(pub => {
-        if (!pub.location || pub.is_closed) return false;
-        const distance = getDistance(pub.location, searchOrigin);
-        return distance <= settings.radius;
+      // Filter 1: Pub is marked as closed in our database.
+      if (pub.is_closed) {
+        return false;
+      }
+      
+      // Filter 2: Pub is an OSM pub that's on our explicit blacklist.
+      if (closedOsmPubIds.has(pub.id)) {
+        return false;
+      }
+
+      // Filter 3: Pub is outside the search radius.
+      if (!pub.location) return false; // Should not happen, but a good safeguard.
+      const distance = getDistance(pub.location, searchOrigin);
+      if (distance > settings.radius) {
+        return false;
+      }
+
+      // If all checks pass, keep the pub.
+      return true;
     });
 
-    // 5. Enrich with ratings and scores.
+    // 6. Enrich with ratings and scores, then update the state.
     const finalPubsList = pubsInRadius.map(pub => ({
       ...pub,
       ratings: allRatings.get(pub.id) || [],
