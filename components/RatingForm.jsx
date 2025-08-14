@@ -12,12 +12,13 @@ const getStarRatingFromPrice = (price) => {
     return 1; // Very Expensive
 };
 
-const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingImageUrl, isSubmitting, existingIsPrivate }) => {
+const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
   const [priceInput, setPriceInput] = useState('');
   const [message, setMessage] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [guinnessZeroStatus, setGuinnessZeroStatus] = useState('unknown'); // 'confirm', 'deny', 'unknown'
   
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -44,6 +45,7 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
     setPriceInput(existingRating?.exact_price?.toString() || '');
     setMessage(existingRating?.message || '');
     setIsPrivate(existingIsPrivate || false);
+    setGuinnessZeroStatus('unknown'); // Always reset this, as it's a one-time report per rating submission
     setImagePreview(existingImageUrl || null);
     setImageFile(null);
     setImageWasRemoved(false);
@@ -99,7 +101,7 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
   const handleSubmit = (e) => {
     e.preventDefault();
     if (price > 0 && quality > 0) {
-      onSubmit({ price, quality, exact_price: parseFloat(priceInput) || null, message, imageFile, imageWasRemoved, is_private: isPrivate });
+      onSubmit({ price, quality, exact_price: parseFloat(priceInput) || null, message, imageFile, imageWasRemoved, is_private: isPrivate, guinnessZeroStatus });
       // Don't reset form on update, but do on initial submit
       if (!existingRating) {
         setPrice(0);
@@ -107,6 +109,7 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
         setPriceInput('');
         setMessage('');
         setIsPrivate(false);
+        setGuinnessZeroStatus('unknown');
         handleRemoveImage();
       }
     } else {
@@ -176,6 +179,21 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
             className="w-full px-3 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
         <p className="text-right text-xs text-gray-500 dark:text-gray-400 mt-1">{message.length} / 280</p>
+      </div>
+      
+      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+          <label className="block text-gray-700 dark:text-gray-300 mb-2">Does this pub sell Guinness 0.0?</label>
+          <div className="flex rounded-lg bg-gray-200 dark:bg-gray-700/50 p-1 space-x-1">
+              <button type="button" onClick={() => setGuinnessZeroStatus('confirm')} className={`w-1/3 py-2 text-sm rounded-md font-bold transition-colors flex items-center justify-center space-x-2 ${guinnessZeroStatus === 'confirm' ? 'bg-green-500 text-white shadow' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
+                  <span>Yes</span>
+              </button>
+              <button type="button" onClick={() => setGuinnessZeroStatus('deny')} className={`w-1/3 py-2 text-sm rounded-md font-bold transition-colors flex items-center justify-center space-x-2 ${guinnessZeroStatus === 'deny' ? 'bg-red-500 text-white shadow' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
+                   <span>No</span>
+              </button>
+              <button type="button" onClick={() => setGuinnessZeroStatus('unknown')} className={`w-1/3 py-2 text-sm rounded-md font-bold transition-colors flex items-center justify-center space-x-2 ${guinnessZeroStatus === 'unknown' ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
+                   <span>Not Sure</span>
+              </button>
+          </div>
       </div>
 
       <div className="pt-2 border-t border-gray-200 dark:border-gray-700">

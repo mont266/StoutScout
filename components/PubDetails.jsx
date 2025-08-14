@@ -76,7 +76,7 @@ const ScoreGauge = ({ score }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId }) => {
+const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote }) => {
   const [localPub, setLocalPub] = useState(pub);
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
@@ -290,6 +290,93 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
         return { ...prev, [ratingId]: !isVisible };
     });
   };
+  
+  const GuinnessZeroStatus = () => {
+    const confirms = localPub.guinness_zero_confirmations || 0;
+    const denials = localPub.guinness_zero_denials || 0;
+    const totalVotes = confirms + denials;
+
+    let status = 'Unknown';
+    let statusIcon = 'fa-question-circle';
+    let statusColor = 'text-gray-500 dark:text-gray-400';
+    let message = "No one has reported on Guinness 0.0 availability here yet. Be the first!";
+
+    if (totalVotes > 0) {
+        if (confirms > denials) {
+            status = 'Confirmed';
+            statusIcon = 'fa-check-circle';
+            statusColor = 'text-green-500';
+            message = `${confirms} of ${totalVotes} people confirmed it's sold here.`;
+        } else if (denials > confirms) {
+            status = 'Unlikely';
+            statusIcon = 'fa-times-circle';
+            statusColor = 'text-red-500';
+            message = `${denials} of ${totalVotes} people reported it's not sold here.`;
+        } else { // Equal votes
+             status = 'Contested';
+             statusIcon = 'fa-balance-scale-right';
+             statusColor = 'text-yellow-500';
+             message = "There are conflicting reports about availability.";
+        }
+    }
+    
+    const currentUserVote = userZeroVotes ? userZeroVotes.get(localPub.id) : undefined;
+    
+    return (
+        <Section title="Guinness 0.0 Status">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                <div className="flex items-center space-x-3 mb-3">
+                    <i className={`fas ${statusIcon} text-2xl ${statusColor}`}></i>
+                    <div>
+                        <h4 className={`text-lg font-bold ${statusColor}`}>{status}</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
+                    </div>
+                </div>
+                <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Is this correct?</p>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => onGuinnessZeroVote(localPub.id, true)}
+                            disabled={currentUserVote === true}
+                            className={`w-1/3 py-2 text-sm rounded-lg font-bold transition-colors flex items-center justify-center space-x-2 disabled:cursor-not-allowed ${
+                                currentUserVote === true 
+                                ? 'bg-green-500 text-white shadow' 
+                                : 'bg-green-100 dark:bg-green-800/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800'
+                            }`}
+                        >
+                            <i className="fas fa-check"></i>
+                            <span>Yes</span>
+                        </button>
+                        <button
+                            onClick={() => onGuinnessZeroVote(localPub.id, false)}
+                            disabled={currentUserVote === false}
+                            className={`w-1/3 py-2 text-sm rounded-lg font-bold transition-colors flex items-center justify-center space-x-2 disabled:cursor-not-allowed ${
+                                currentUserVote === false 
+                                ? 'bg-red-500 text-white shadow' 
+                                : 'bg-red-100 dark:bg-red-800/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800'
+                            }`}
+                        >
+                             <i className="fas fa-times"></i>
+                            <span>No</span>
+                        </button>
+                        <button
+                            onClick={() => onClearGuinnessZeroVote(localPub.id)}
+                            disabled={currentUserVote === undefined}
+                            className={`w-1/3 py-2 text-sm rounded-lg font-bold transition-colors flex items-center justify-center space-x-2 disabled:cursor-not-allowed ${
+                                currentUserVote === undefined
+                                ? 'bg-gray-500 text-white shadow'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                             <i className="fas fa-question"></i>
+                            <span>Not Sure</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Section>
+    );
+  };
 
   const renderYourRatingSection = () => {
     if (!session) {
@@ -328,6 +415,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                         existingImageUrl={existingUserRating?.image_url}
                         existingIsPrivate={existingUserRating?.is_private}
                         isSubmitting={isSubmittingRating}
+                        userZeroVote={userZeroVotes.get(localPub.id)}
                     />
                 )}
             </div>
@@ -430,6 +518,8 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
             ) : (
                 <p className="text-gray-500 dark:text-gray-400 italic text-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">No Guinness ratings yet. Be the first!</p>
             )}
+            
+            <GuinnessZeroStatus />
 
             <Section>
                 <div className="p-2 bg-white dark:bg-gray-800 rounded-lg text-center shadow-md">

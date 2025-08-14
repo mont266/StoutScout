@@ -67,6 +67,7 @@ const MobileLayout = (props) => {
         isDesktop,
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
         activeTab, locationError, settings, filter, handleFilterChange,
+        filterGuinnessZero, onFilterGuinnessZeroChange,
         handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
         handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
         refreshTrigger, handleFindCurrentPub, getDistance, isListExpanded,
@@ -107,6 +108,7 @@ const MobileLayout = (props) => {
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
+        userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -210,6 +212,8 @@ const MobileLayout = (props) => {
                         onFilterChange={handleFilterChange}
                         onRefresh={handleRefresh}
                         isRefreshing={isRefreshing}
+                        filterGuinnessZero={filterGuinnessZero}
+                        onFilterGuinnessZeroChange={onFilterGuinnessZeroChange}
                     />
                     <div className="flex-grow min-h-0 relative">
                         {locationPermissionStatus === 'denied' && 
@@ -316,6 +320,9 @@ const MobileLayout = (props) => {
                             onReportComment={onReportComment}
                             highlightedRatingId={highlightedRatingId}
                             highlightedCommentId={highlightedCommentId}
+                            userZeroVotes={userZeroVotes}
+                            onGuinnessZeroVote={onGuinnessZeroVote}
+                            onClearGuinnessZeroVote={onClearGuinnessZeroVote}
                         />
                     )}
                 </div>

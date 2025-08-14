@@ -141,6 +141,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
             <ul ref={listRef} className="divide-y divide-gray-200 dark:divide-gray-700">
               {pubs.map((pub, index) => {
                 const isSelected = pub.id === selectedPubId;
+                const sellsGuinnessZero = (pub.guinness_zero_confirmations || 0) > (pub.guinness_zero_denials || 0);
                 return (
                   <li
                     key={pub.id}
@@ -152,7 +153,10 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
                         <div className="flex items-center space-x-4 min-w-0">
                             <span className={`text-lg font-bold w-6 text-center ${index < 3 ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'}`}>{index + 1}</span>
                             <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-gray-900 dark:text-white truncate">{pub.name}</p>
+                                <div className="flex items-center gap-2">
+                                  {sellsGuinnessZero && <span className="flex-shrink-0 text-xs font-bold bg-black text-white px-1.5 py-0.5 rounded-md border-2 border-amber-400" title="Sells Guinness 0.0">0.0</span>}
+                                  <p className="font-semibold text-gray-900 dark:text-white truncate">{pub.name}</p>
+                                </div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{pub.address}</p>
                             </div>
                         </div>

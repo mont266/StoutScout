@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { FilterType } from '../types.js';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 
@@ -10,7 +10,7 @@ const filters = [
 ];
 
 // Modal component for mobile filter selection
-const FilterModal = ({ isOpen, onClose, onSelectFilter, currentFilter }) => {
+const FilterModal = ({ isOpen, onClose, onSelectFilter, currentFilter, filterGuinnessZero, onFilterGuinnessZeroChange }) => {
     if (!isOpen) return null;
 
     return (
@@ -40,17 +40,47 @@ const FilterModal = ({ isOpen, onClose, onSelectFilter, currentFilter }) => {
                         </li>
                     ))}
                 </ul>
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                     <label htmlFor="guinness-zero-toggle-mobile" className="flex items-center justify-between cursor-pointer p-2">
+                        <span className="flex flex-col">
+                            <span className="font-medium text-lg text-gray-700 dark:text-gray-300">Show 0.0 Pubs Only</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Only display pubs that sell Guinness 0.0</span>
+                        </span>
+                        <div className="relative">
+                            <input
+                            id="guinness-zero-toggle-mobile"
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={filterGuinnessZero}
+                            onChange={(e) => onFilterGuinnessZeroChange(e.target.checked)}
+                            />
+                            <div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
+                            <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
+                        </div>
+                    </label>
+                </div>
                 <div className="pb-safe"></div>
             </div>
         </div>
     );
 };
 
-const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing }) => {
+const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing, filterGuinnessZero, onFilterGuinnessZeroChange }) => {
     const isDesktop = useIsDesktop();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const filterMenuRef = useRef(null);
 
     const currentFilterLabel = filters.find(f => f.key === currentFilter)?.label || 'Nearest';
+
+     useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
+                setIsModalOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     // Mobile View
     if (!isDesktop) {
@@ -78,26 +108,31 @@ const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing
                         </button>
                     </div>
                 </div>
-                <FilterModal
-                    isOpen={isModalOpen}
-                    onClose={() => setIsModalOpen(false)}
-                    onSelectFilter={onFilterChange}
-                    currentFilter={currentFilter}
-                />
+                <div ref={filterMenuRef}>
+                    <FilterModal
+                        isOpen={isModalOpen}
+                        onClose={() => setIsModalOpen(false)}
+                        onSelectFilter={onFilterChange}
+                        currentFilter={currentFilter}
+                        filterGuinnessZero={filterGuinnessZero}
+                        onFilterGuinnessZeroChange={onFilterGuinnessZeroChange}
+                    />
+                </div>
             </>
         );
     }
     
     // Desktop View
     return (
-        <div className="p-2 bg-gray-100 dark:bg-gray-900 flex justify-center flex-shrink-0">
-            <div className="flex justify-center items-center space-x-2">
-                <div className="flex items-center bg-gray-200 dark:bg-gray-700/50 rounded-full p-1 space-x-1">
+        <div className="p-2 bg-gray-100 dark:bg-gray-900 flex-shrink-0">
+            <div className="flex flex-col gap-2">
+                {/* First row: Main sort filters */}
+                <div className="flex items-center p-1 bg-gray-200 dark:bg-gray-700/50 rounded-full space-x-1">
                     {filters.map(({ key, label, icon }) => (
                         <button
                             key={key}
                             onClick={() => onFilterChange(key)}
-                            className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                            className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 whitespace-nowrap ${
                                 currentFilter === key
                                 ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
                                 : 'text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-600/50'
@@ -107,11 +142,27 @@ const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing
                             <span>{label}</span>
                         </button>
                     ))}
-                    <div className="border-l border-gray-300 dark:border-gray-600 mx-1 h-6 self-center"></div>
+                </div>
+
+                {/* Second row: Centered Guinness 0.0 filter and right-aligned refresh button */}
+                <div className="w-full relative flex justify-center items-center h-10">
+                    <button
+                        onClick={() => onFilterGuinnessZeroChange(!filterGuinnessZero)}
+                        title="Toggle: Show only pubs that sell Guinness 0.0"
+                        className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 ring-offset-2 dark:ring-offset-gray-900 ${
+                            filterGuinnessZero
+                            ? 'bg-blue-500 text-white shadow-sm ring-blue-500' // Active state
+                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 ring-transparent' // Inactive state
+                        }`}
+                    >
+                        <span className="font-bold bg-black text-white px-2 py-0.5 rounded-md text-xs leading-tight">0.0</span>
+                        <span>Filter</span>
+                    </button>
+                    
                     <button
                         onClick={onRefresh}
                         disabled={isRefreshing}
-                        className="w-9 h-9 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-600/50 disabled:opacity-50 disabled:cursor-wait"
+                        className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-wait"
                         aria-label="Refresh pub list"
                         title="Refresh pub list"
                     >

@@ -32,6 +32,7 @@ const DesktopLayout = (props) => {
         isDesktop,
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
         activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
+        filterGuinnessZero, onFilterGuinnessZeroChange,
         handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
         handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
         refreshTrigger, handleFindCurrentPub, getDistance,
@@ -70,6 +71,7 @@ const DesktopLayout = (props) => {
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
+        userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -127,6 +129,9 @@ const DesktopLayout = (props) => {
                         onReportComment={onReportComment}
                         highlightedRatingId={highlightedRatingId}
                         highlightedCommentId={highlightedCommentId}
+                        userZeroVotes={userZeroVotes}
+                        onGuinnessZeroVote={onGuinnessZeroVote}
+                        onClearGuinnessZeroVote={onClearGuinnessZeroVote}
                     />
                 );
             }
@@ -140,6 +145,8 @@ const DesktopLayout = (props) => {
                         onFilterChange={handleFilterChange}
                         onRefresh={handleRefresh}
                         isRefreshing={isRefreshing}
+                        filterGuinnessZero={filterGuinnessZero}
+                        onFilterGuinnessZeroChange={onFilterGuinnessZeroChange}
                     />
                      <div className="p-2 border-t border-gray-200 dark:border-gray-700">
                         <button

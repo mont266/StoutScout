@@ -16,14 +16,14 @@ const userLocationIcon = L.divIcon({
   iconAnchor: [8, 8],
 });
 
-const createPubIcon = (fillColor, strokeColor) => L.divIcon({
+const createPubIcon = (fillColor, strokeColor, sellsGuinnessZero) => L.divIcon({
   html: `
     <div class="w-10 h-10 relative flex items-center justify-center">
       <svg viewBox="0 0 24 24" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1" class="w-full h-full drop-shadow-lg">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
       </svg>
       <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-3">
-        <i class="fas fa-beer text-base" style="color: ${strokeColor}"></i>
+        ${sellsGuinnessZero ? '<div class="w-3 h-3 rounded-full bg-black border-2 border-amber-400"></div>' : `<i class="fas fa-beer text-base" style="color: ${strokeColor}"></i>`}
       </div>
     </div>
   `,
@@ -161,10 +161,16 @@ const MapComponent = ({
 
   const icons = useMemo(() => {
     const strokeColor = theme === 'dark' ? '#1A202C' : '#FFFFFF';
+    const sellsGuinnessZeroIcon = (fill) => createPubIcon(fill, strokeColor, true);
+    const regularIcon = (fill) => createPubIcon(fill, strokeColor, false);
+
     return {
-      unrated: createPubIcon('#6B7280', strokeColor),   // gray-500
-      rated: createPubIcon('#F59E0B', strokeColor),     // amber-600 (Gold)
-      selected: createPubIcon('#FBBF24', strokeColor),  // amber-400 (Brighter Gold)
+      unrated: regularIcon('#6B7280'),   // gray-500
+      rated: regularIcon('#F59E0B'),     // amber-600 (Gold)
+      selected: regularIcon('#FBBF24'),  // amber-400 (Brighter Gold)
+      unratedZero: sellsGuinnessZeroIcon('#6B7280'),
+      ratedZero: sellsGuinnessZeroIcon('#F59E0B'),
+      selectedZero: sellsGuinnessZeroIcon('#FBBF24'),
     }
   }, [theme]);
 
@@ -193,12 +199,14 @@ const MapComponent = ({
 
         {pubs.map(pub => {
           let icon;
+          const sellsGuinnessZero = (pub.guinness_zero_confirmations || 0) > (pub.guinness_zero_denials || 0);
+
           if (pub.id === selectedPubId) {
-            icon = icons.selected;
+            icon = sellsGuinnessZero ? icons.selectedZero : icons.selected;
           } else if (pub.ratings?.length > 0) {
-            icon = icons.rated;
+            icon = sellsGuinnessZero ? icons.ratedZero : icons.rated;
           } else {
-            icon = icons.unrated;
+            icon = sellsGuinnessZero ? icons.unratedZero : icons.unrated;
           }
 
           return (

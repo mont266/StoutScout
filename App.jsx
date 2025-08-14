@@ -40,6 +40,7 @@ const App = () => {
   const [highlightedRatingId, setHighlightedRatingId] = useState(null);
   const [highlightedCommentId, setHighlightedCommentId] = useState(null);
   const [filter, setFilter] = useState(FilterType.Distance);
+  const [filterGuinnessZero, setFilterGuinnessZero] = useState(false);
   const [isListExpanded, setIsListExpanded] = useState(true);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
@@ -116,6 +117,7 @@ const App = () => {
   // Social Features State
   const [friendships, setFriendships] = useState([]);
   const [userLikes, setUserLikes] = useState(new Set());
+  const [userZeroVotes, setUserZeroVotes] = useState(new Map());
   const [viewingFriendsOf, setViewingFriendsOf] = useState(null); // The user whose friends list is being viewed
   const [friendsList, setFriendsList] = useState([]); // The actual list of friends
   const [isFetchingFriendsList, setIsFetchingFriendsList] = useState(false);
@@ -268,24 +270,59 @@ const App = () => {
 
 
   const fetchDbPubs = useCallback(async () => {
-    const { data, error } = await supabase.from('pubs_with_dynamic_pricing_info').select('id, name, address, lat, lng, country_code, country_name, is_dynamic_price_area, area_identifier, area_rating_count, is_closed');
-    if (error) {
-      console.error("Error fetching rated pubs from DB:", error);
-    } else {
-      const formatted = (data || []).map(p => ({
-        id: p.id,
-        name: p.name,
-        address: p.address,
-        country_code: p.country_code,
-        country_name: p.country_name,
-        is_closed: p.is_closed,
-        location: { lat: p.lat, lng: p.lng },
-        is_dynamic_price_area: p.is_dynamic_price_area,
-        area_identifier: p.area_identifier,
-        area_rating_count: p.area_rating_count,
-      }));
-      setDbPubs(formatted);
+    // This is a two-query workaround because the `pubs_with_dynamic_pricing_info` view
+    // was not updated with the Guinness Zero columns, causing a crash. This is safer than
+    // requiring a user to run a database migration.
+    
+    // Query 1: Get data from the view, which includes dynamic pricing info.
+    const { data: viewData, error: viewError } = await supabase.from('pubs_with_dynamic_pricing_info')
+      .select('id, name, address, lat, lng, country_code, country_name, is_dynamic_price_area, area_identifier, area_rating_count, is_closed');
+
+    if (viewError) {
+      console.error("Error fetching rated pubs from DB:", viewError);
+      setIsDbPubsLoaded(true);
+      return;
     }
+
+    const pubsData = viewData || [];
+    let mergedData = pubsData;
+
+    // Query 2: If we have pubs, fetch their Guinness Zero data from the base `pubs` table.
+    if (pubsData.length > 0) {
+        const pubIds = pubsData.map(p => p.id);
+        const { data: zeroData, error: zeroError } = await supabase.from('pubs')
+            .select('id, guinness_zero_confirmations, guinness_zero_denials')
+            .in('id', pubIds);
+        
+        if (zeroError) {
+            console.error("Error fetching Guinness Zero data:", zeroError);
+            // Proceed with what we have, zero data will be missing but app won't crash.
+        } else {
+            // Merge the two datasets
+            const zeroDataMap = new Map((zeroData || []).map(p => [p.id, p]));
+            mergedData = pubsData.map(pub => ({
+                ...pub,
+                guinness_zero_confirmations: zeroDataMap.get(pub.id)?.guinness_zero_confirmations || 0,
+                guinness_zero_denials: zeroDataMap.get(pub.id)?.guinness_zero_denials || 0,
+            }));
+        }
+    }
+
+    const formatted = mergedData.map(p => ({
+      id: p.id,
+      name: p.name,
+      address: p.address,
+      country_code: p.country_code,
+      country_name: p.country_name,
+      is_closed: p.is_closed,
+      location: { lat: p.lat, lng: p.lng },
+      is_dynamic_price_area: p.is_dynamic_price_area,
+      area_identifier: p.area_identifier,
+      area_rating_count: p.area_rating_count,
+      guinness_zero_confirmations: p.guinness_zero_confirmations,
+      guinness_zero_denials: p.guinness_zero_denials,
+    }));
+    setDbPubs(formatted);
     setIsDbPubsLoaded(true);
   }, []);
 
@@ -380,6 +417,24 @@ const App = () => {
     }
     setPubScores(scoresMap);
   }, []);
+  
+  const fetchUserZeroVotes = useCallback(async (userId) => {
+    const { data, error } = await supabase
+      .from('pub_guinness_zero_reports')
+      .select('pub_id, is_confirmation')
+      .eq('user_id', userId);
+    
+    if (error) {
+        console.error("Error fetching user's Guinness 0.0 votes:", error);
+        return;
+    }
+
+    const votesMap = new Map();
+    (data || []).forEach(vote => {
+        votesMap.set(vote.pub_id, vote.is_confirmation);
+    });
+    setUserZeroVotes(votesMap);
+  }, []);
 
   const fetchSocialData = useCallback(async (userId) => {
     if (!userId) return;
@@ -408,9 +463,11 @@ const App = () => {
       .order('created_at', { ascending: false });
     if (notificationsError) console.error("Error fetching notifications:", notificationsError);
     else setNotifications(notificationsData || []);
+    
+    // Fetch user's 0.0 votes
+    await fetchUserZeroVotes(userId);
 
-
-  }, []);
+  }, [fetchUserZeroVotes]);
 
   const handleDataRefresh = useCallback(async () => {
       await Promise.all([
@@ -539,6 +596,7 @@ const App = () => {
             setViewedProfile(null);
             setFriendships([]);
             setUserLikes(new Set());
+            setUserZeroVotes(new Map());
         }
     });
 
@@ -692,6 +750,7 @@ const App = () => {
       setUserRatings([]);
       setFriendships([]);
       setUserLikes(new Set());
+      setUserZeroVotes(new Map());
     }
   }, [session, fetchSocialData]);
 
@@ -936,11 +995,11 @@ const App = () => {
     return userRatings.find(r => r.pubId === selectedPub.id);
   }, [selectedPub, userRatings]);
 
-  const getAverageRating = (ratings, key) => {
+  const getAverageRating = useCallback((ratings, key) => {
     if (!ratings || ratings.length === 0) return 0;
     const total = ratings.reduce((acc, r) => acc + r[key], 0);
     return total / ratings.length;
-  };
+  }, []);
 
   useEffect(() => {
     if (!navigator.geolocation || !navigator.permissions) {
@@ -1052,23 +1111,59 @@ const App = () => {
   }, [getAverageRating]);
 
   const sortedPubs = useMemo(() => {
-    return [...pubs].sort((a, b) => {
+    let pubsToProcess = [...pubs];
+
+    if (filterGuinnessZero) {
+        pubsToProcess = pubsToProcess.filter(pub => 
+            (pub.guinness_zero_confirmations || 0) > (pub.guinness_zero_denials || 0)
+        );
+    }
+
+    return pubsToProcess.sort((a, b) => {
       switch (filter) {
         case FilterType.PubScore:
           return (b.pub_score ?? -1) - (a.pub_score ?? -1);
         case FilterType.Price: return getComparablePrice(a) - getComparablePrice(b);
-        case FilterType.Quality: return getAverageRating(b.ratings, 'quality') - getAverageRating(a.ratings, 'quality');
+        case FilterType.Quality: return getAverageRating(b.ratings, 'quality') - getAverageRating(b.ratings, 'quality');
         default: return getDistance(a.location, searchOrigin) - getDistance(b.location, searchOrigin);
       }
     });
-  }, [pubs, filter, searchOrigin, getDistance, getComparablePrice]);
+  }, [pubs, filter, filterGuinnessZero, searchOrigin, getDistance, getComparablePrice, getAverageRating]);
+
+  const performGuinnessZeroOptimisticUpdate = useCallback((pubId, newVoteIsConfirmation) => {
+    const previousVote = userZeroVotes.get(pubId); // Can be true, false, or undefined
+
+    setPubs(prevPubs => prevPubs.map(p => {
+        if (p.id !== pubId) return p;
+
+        let confirms = p.guinness_zero_confirmations || 0;
+        let denials = p.guinness_zero_denials || 0;
+
+        // This logic correctly handles new votes and changed votes.
+        if (previousVote === true) {
+            confirms = Math.max(0, confirms - 1);
+        } else if (previousVote === false) {
+            denials = Math.max(0, denials - 1);
+        }
+
+        if (newVoteIsConfirmation) {
+            confirms += 1;
+        } else {
+            denials += 1;
+        }
+        
+        return { ...p, guinness_zero_confirmations: confirms, guinness_zero_denials: denials };
+    }));
+
+    setUserZeroVotes(prev => new Map(prev).set(pubId, newVoteIsConfirmation));
+  }, [userZeroVotes]);
 
   const handleRatePub = useCallback(async (pubId, pubName, pubAddress, ratingData) => {
     if (!session || !userProfile || !selectedPub) return;
     setIsSubmittingRating(true);
 
     try {
-        const { imageFile, imageWasRemoved, ...newRating } = ratingData;
+        const { imageFile, imageWasRemoved, guinnessZeroStatus, is_private, price, quality, exact_price, message } = ratingData;
         
         // Upsert the pub data first, including new country info if available
         await supabase.from('pubs').upsert({
@@ -1088,13 +1183,13 @@ const App = () => {
         trackEvent('rate_pub', {
             pub_id: pubId,
             is_update: isUpdating,
-            quality: newRating.quality,
-            price_rating: newRating.price,
-            has_exact_price: !!newRating.exact_price,
+            quality: quality,
+            price_rating: price,
+            has_exact_price: !!exact_price,
             has_image: !!imageFile,
-            has_message: !!newRating.message,
-            is_private: newRating.is_private,
-            value: newRating.exact_price || 0, // GA4 standard parameter for value
+            has_message: !!message,
+            is_private: is_private,
+            value: exact_price || 0, // GA4 standard parameter for value
             currency: currencyInfo.code, // GA4 standard parameter for currency
         });
         
@@ -1137,12 +1232,12 @@ const App = () => {
         const ratingPayload = { 
             pub_id: pubId, 
             user_id: session.user.id, 
-            price: newRating.price, 
-            quality: newRating.quality, 
-            exact_price: newRating.exact_price,
-            is_private: newRating.is_private,
+            price: price, 
+            quality: quality, 
+            exact_price: exact_price,
+            is_private: is_private,
             image_url: imageUrl,
-            message: newRating.message,
+            message: message,
         };
 
         const { error: dbError } = isUpdating
@@ -1150,6 +1245,23 @@ const App = () => {
           : await supabase.from('ratings').insert(ratingPayload);
         
         if (dbError) throw dbError; // Throw so it's caught by the catch block
+        
+        if (guinnessZeroStatus && guinnessZeroStatus !== 'unknown') {
+            const isConfirmation = guinnessZeroStatus === 'confirm';
+            // Optimistic update for instant filtering
+            if (userZeroVotes.get(pubId) !== isConfirmation) {
+              performGuinnessZeroOptimisticUpdate(pubId, isConfirmation);
+            }
+            // DB call
+            const { error: zeroError } = await supabase.rpc('report_guinness_zero_status', {
+                p_pub_id: pubId,
+                p_is_confirmation: isConfirmation,
+            });
+            if (zeroError) {
+                console.error("Non-critical error reporting Guinness 0.0 status:", zeroError);
+                // TODO: Consider reverting optimistic update on error
+            }
+        }
 
         if (!isUpdating) {
             const oldProfile = userProfile;
@@ -1183,8 +1295,92 @@ const App = () => {
     } finally {
         setIsSubmittingRating(false);
     }
-  }, [session, userRatings, selectedPub, userProfile, handleDataRefresh, fetchUserData]);
+  }, [session, userRatings, selectedPub, userProfile, handleDataRefresh, fetchUserData, userZeroVotes, performGuinnessZeroOptimisticUpdate]);
   
+  const handleGuinnessZeroVote = useCallback(async (pubId, isConfirmation) => {
+    if (!session) {
+        setIsAuthOpen(true);
+        return;
+    }
+    trackEvent('vote_guinness_zero', { pub_id: pubId, vote: isConfirmation ? 'confirm' : 'deny' });
+    
+    // Prevent redundant actions
+    if (userZeroVotes.get(pubId) === isConfirmation) return;
+
+    performGuinnessZeroOptimisticUpdate(pubId, isConfirmation);
+    
+    const { error } = await supabase.rpc('report_guinness_zero_status', {
+        p_pub_id: pubId,
+        p_is_confirmation: isConfirmation,
+    });
+    
+    if (error) {
+        console.error("Error voting on Guinness 0.0 status:", error);
+        // Revert optimistic updates if the RPC call fails
+        await handleDataRefresh();
+        setAlertInfo({
+            isOpen: true,
+            title: 'Vote Failed',
+            message: 'Your vote could not be saved. Please try again.',
+            theme: 'error',
+        });
+    } else {
+        // Silently refresh data in the background to ensure consistency
+        await handleDataRefresh();
+    }
+  }, [session, userZeroVotes, handleDataRefresh, performGuinnessZeroOptimisticUpdate]);
+
+  const handleClearGuinnessZeroVote = useCallback(async (pubId) => {
+    if (!session) {
+        setIsAuthOpen(true);
+        return;
+    }
+    trackEvent('clear_vote_guinness_zero', { pub_id: pubId });
+
+    const previousVote = userZeroVotes.get(pubId);
+    if (previousVote === undefined) return; // Nothing to clear
+
+    // Optimistic Update
+    setPubs(prevPubs => prevPubs.map(p => {
+        if (p.id !== pubId) return p;
+        
+        let confirms = p.guinness_zero_confirmations || 0;
+        let denials = p.guinness_zero_denials || 0;
+
+        if (previousVote === true) {
+            confirms = Math.max(0, confirms - 1);
+        } else if (previousVote === false) {
+            denials = Math.max(0, denials - 1);
+        }
+        
+        return { ...p, guinness_zero_confirmations: confirms, guinness_zero_denials: denials };
+    }));
+
+    setUserZeroVotes(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(pubId);
+        return newMap;
+    });
+
+    // DB call
+    const { error } = await supabase.rpc('clear_guinness_zero_status', { p_pub_id: pubId });
+
+    if (error) {
+        console.error("Error clearing Guinness 0.0 vote:", error);
+        // Revert optimistic updates if the RPC call fails
+        await handleDataRefresh();
+        setAlertInfo({
+            isOpen: true,
+            title: 'Action Failed',
+            message: 'Your vote could not be cleared. Please try again.',
+            theme: 'error',
+        });
+    } else {
+        // Silently refresh data in the background to ensure consistency
+        await handleDataRefresh();
+    }
+  }, [session, userZeroVotes, handleDataRefresh]);
+
   const handleDeleteRating = useCallback(async (ratingToDelete) => {
     if (!session || !userProfile || !ratingToDelete) return;
 
@@ -2012,6 +2208,7 @@ const App = () => {
       isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
       activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
+      filterGuinnessZero, onFilterGuinnessZeroChange: setFilterGuinnessZero,
       handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
       handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
       refreshTrigger, getDistance, isListExpanded, setIsListExpanded,
@@ -2053,6 +2250,11 @@ const App = () => {
       requestLocationPermission,
       handleUpdateAvatar,
       
+      // Guinness 0.0 handlers
+      userZeroVotes,
+      onGuinnessZeroVote: handleGuinnessZeroVote,
+      onClearGuinnessZeroVote: handleClearGuinnessZeroVote,
+
       // Comments & Notifications
       onFetchComments: fetchCommentsForRating,
       onAddComment: handleAddComment,
