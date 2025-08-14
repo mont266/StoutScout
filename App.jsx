@@ -13,6 +13,8 @@ import useIsDesktop from './hooks/useIsDesktop.js';
 import ProfilePage from './components/ProfilePage.jsx';
 import BannedPage from './components/BannedPage.jsx';
 import AddPubModal from './components/AddPubModal.jsx';
+import EditUsernameModal from './components/EditUsernameModal.jsx';
+import EditBioModal from './components/EditBioModal.jsx';
 import SuggestEditModal from './components/SuggestEditModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
 import StatsPage from './components/StatsPage.jsx';
@@ -82,6 +84,8 @@ const App = () => {
   const [rankUpInfo, setRankUpInfo] = useState(null);
   const [addPubSuccessInfo, setAddPubSuccessInfo] = useState(null);
   const [isPubScoreModalOpen, setIsPubScoreModalOpen] = useState(false);
+  const [isEditUsernameModalOpen, setIsEditUsernameModalOpen] = useState(false);
+  const [isEditBioModalOpen, setIsEditBioModalOpen] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '', theme: 'info' });
   
@@ -1413,7 +1417,7 @@ const App = () => {
     }
   }, [session, userProfile, userRatings, allRatings, fetchUserData]);
   
-  const handleSelectPub = useCallback((pub, highlightOptions = {}) => {
+  const handleSelectPub = useCallback(async (pub, highlightOptions = {}) => {
     const { highlightRatingId: ratingId, highlightCommentId: commentId } = highlightOptions;
     const pubId = pub ? pub.id : null;
     
@@ -1425,40 +1429,66 @@ const App = () => {
       return;
     }
 
+    let pubToSelect = pub;
     const isPubInCurrentList = pubs.some(p => p.id === pubId);
 
-    // This block handles both selecting a pub already on the map, AND navigating to a new one.
-    // The key is to always perform these actions when a pub is selected.
+    // If the pub isn't in our current list (e.g., from a feed), fetch its full details.
+    if (!isPubInCurrentList) {
+        // The pub object might be partial, so we fetch the full record.
+        const { data: fetchedPubData, error } = await supabase
+            .from('pubs')
+            .select('id, name, address, lat, lng, country_code, country_name, is_closed, guinness_zero_confirmations, guinness_zero_denials')
+            .eq('id', pubId)
+            .single();
+
+        if (error) {
+            console.error(`Error fetching details for pub ${pubId}:`, error);
+            setAlertInfo({
+                isOpen: true,
+                title: 'Error Loading Pub',
+                message: `Could not load the details for this pub. It may have been deleted.`,
+                theme: 'error',
+            });
+            return;
+        }
+
+        if (fetchedPubData) {
+            // Normalize the fetched data into the format the app expects.
+            const formattedPub = {
+                ...fetchedPubData,
+                location: { lat: fetchedPubData.lat, lng: fetchedPubData.lng },
+            };
+            
+            // Add the fetched pub to the source-of-truth list (`dbPubs`). This will trigger
+            // the useEffect that computes the main `pubs` list, making the pub available.
+            setDbPubs(currentDbPubs => {
+                if (currentDbPubs.some(p => p.id === pubId)) {
+                    return currentDbPubs; // Avoid duplicates
+                }
+                return [...currentDbPubs, formattedPub];
+            });
+
+            pubToSelect = formattedPub;
+        }
+    }
+
+    // This part of the logic remains the same and runs for all selections.
     setSelectedPubId(pubId);
     setActiveTab('map');
-    if (pub?.location) {
-        setMapCenter(pub.location);
+    if (pubToSelect?.location) {
+        setMapCenter(pubToSelect.location);
     }
     if (!isDesktop && !isListExpanded) {
         setIsListExpanded(true);
     }
 
-    // If the pub wasn't in the list, it means we're navigating from an external context.
-    // In this case, we need to trigger a new search around this pub.
-    if (!isPubInCurrentList) {
-        // Temporarily add the pub to ensure it can be found by `selectedPub` useMemo
-        // before the full list refreshes. This makes the UI feel instant.
-        const pubWithRatings = {
-          ...pub,
-          ratings: allRatings.get(pub.id) || [],
-          pub_score: pubScores.get(pub.id) || null
-        };
-        setPubs(currentPubs => {
-            if (currentPubs.some(p => p.id === pubId)) return currentPubs;
-            return [...currentPubs, pubWithRatings];
-        });
-
-        // Set the search origin to the new pub's location.
-        setSearchOrigin(pub.location);
-        // Trigger a search after the map has flown to the new location.
+    // If the pub wasn't in the list originally, also trigger a search around it
+    // to populate the map with nearby pubs for context.
+    if (!isPubInCurrentList && pubToSelect?.location) {
+        setSearchOrigin(pubToSelect.location);
         setSearchOnNextMoveEnd(true);
     }
-  }, [isDesktop, isListExpanded, pubs, allRatings, pubScores]);
+  }, [isDesktop, isListExpanded, pubs]);
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
@@ -1711,6 +1741,49 @@ const App = () => {
       }
   };
 
+  const handleUpdateUsername = async (newUsername) => {
+    if (!session || !userProfile || newUsername === userProfile.username) {
+        setIsEditUsernameModalOpen(false);
+        return null; // Return null for success with no action
+    }
+    trackEvent('update_username');
+    const { error } = await supabase.rpc('change_username', { new_username: newUsername });
+
+    if (error) {
+        console.error("Error updating username:", error);
+        return error.message; // Return the user-friendly error message from the DB
+    } else {
+        setIsEditUsernameModalOpen(false);
+        await fetchUserData(); // Re-fetch to get the new username and timestamp everywhere
+        setAlertInfo({
+            isOpen: true,
+            title: 'Success!',
+            message: 'Your username has been updated.',
+            theme: 'success',
+        });
+        return null; // No error
+    }
+  };
+
+  const handleUpdateBio = async (newBio) => {
+    if (!session || !userProfile) return "You must be logged in.";
+
+    trackEvent('update_bio');
+    const { error } = await supabase
+        .from('profiles')
+        .update({ bio: newBio })
+        .eq('id', userProfile.id);
+    
+    if (error) {
+        console.error("Error updating bio:", error);
+        return error.message;
+    }
+
+    setIsEditBioModalOpen(false);
+    await fetchUserData(); // Refresh profile data
+    return null; // Success
+  };
+
   const handleViewFriends = async (targetUser) => {
     if (!targetUser) return;
     trackEvent('view_friends_list', { target_user_id: targetUser.id });
@@ -1756,6 +1829,8 @@ const App = () => {
               loggedInUserProfile={userProfile}
               levelRequirements={levelRequirements}
               onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
+              onEditUsernameClick={() => setIsEditUsernameModalOpen(true)}
+              onEditBioClick={() => setIsEditBioModalOpen(true)}
               onProfileUpdate={handleProfileUpdate}
               friendships={friendships}
               onFriendRequest={handleFriendRequest}
@@ -2245,11 +2320,29 @@ const App = () => {
       
       // New handler for marketing consent
       handleMarketingConsentChange,
+      
+      // Username and Bio change
+      onEditUsernameClick: () => setIsEditUsernameModalOpen(true),
+      onEditBioClick: () => setIsEditBioModalOpen(true),
   };
 
   const renderModals = () => (
     <>
         {isPubScoreModalOpen && <PubScoreExplanationModal isOpen={isPubScoreModalOpen} onClose={() => setIsPubScoreModalOpen(false)} />}
+        {isEditUsernameModalOpen && userProfile && (
+          <EditUsernameModal
+            userProfile={userProfile}
+            onClose={() => setIsEditUsernameModalOpen(false)}
+            onSubmit={handleUpdateUsername}
+          />
+        )}
+        {isEditBioModalOpen && userProfile && (
+          <EditBioModal
+            currentBio={userProfile.bio}
+            onClose={() => setIsEditBioModalOpen(false)}
+            onSubmit={handleUpdateBio}
+          />
+        )}
         {isAddPubModalOpen && (
             <AddPubModal 
                 onClose={handleCancelPubPlacement}

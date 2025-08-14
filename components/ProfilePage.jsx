@@ -13,6 +13,33 @@ import AlertModal from './AlertModal.jsx';
 import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 
+// Helper component to render bio with links
+const BioRenderer = ({ text }) => {
+    if (!text) return null;
+
+    // Regex to find URLs
+    const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])|(\bwww\.[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+    
+    // Split the text by the regex, keeping the delimiters
+    const parts = text.split(urlRegex).filter(Boolean);
+
+    return (
+        <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words">
+            {parts.map((part, i) => {
+                if (part.match(urlRegex)) {
+                    const href = part.startsWith('www.') ? `http://${part}` : part;
+                    return (
+                        <a key={i} href={href} target="_blank" rel="noopener noreferrer nofollow" className="text-amber-600 dark:text-amber-400 hover:underline">
+                            {part}
+                        </a>
+                    );
+                }
+                return <span key={i}>{part}</span>;
+            })}
+        </p>
+    );
+};
+
 const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendRequest, onFriendAction }) => {
     const [status, setStatus] = useState('loading');
     const [friendshipId, setFriendshipId] = useState(null);
@@ -90,7 +117,7 @@ const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendReque
     }
 }
 
-const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating }) => {
+const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating }) => {
     const isDesktop = useIsDesktop();
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
@@ -119,7 +146,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
         );
     }
 
-    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, friends_count } = profile;
+    const { username, level, is_beta_tester, is_developer, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, friends_count, bio } = profile;
     const reviews = profile.reviews || 0;
     
     const rankData = getRankData(level);
@@ -447,10 +474,26 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                             <div className="flex items-center gap-6">
                                 <ProfileAvatar userProfile={profile} levelRequirements={levelRequirements} size={112} onClick={isViewingOwnProfile ? onAvatarChangeClick : undefined}/>
                                 <div className="text-left">
-                                    <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{username}</h2>
+                                    <div className="flex items-center gap-3">
+                                        <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{username}</h2>
+                                        {isViewingOwnProfile && (
+                                            <button onClick={onEditUsernameClick} className="text-gray-400 hover:text-amber-500 transition-colors p-2 text-xl -mb-1" aria-label="Edit username" title="Edit username">
+                                                <i className="fas fa-pencil-alt"></i>
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="flex items-center space-x-3 mt-1">
                                         <i className={`fas ${rankData.icon} text-2xl text-amber-500 dark:text-amber-400`}></i>
                                         <p className="text-2xl font-semibold text-amber-500 dark:text-amber-400">{rankData.name}</p>
+                                    </div>
+                                    <div className="mt-2">
+                                        {bio && <BioRenderer text={bio} />}
+                                        {isViewingOwnProfile && (
+                                            <button onClick={onEditBioClick} className="mt-2 text-sm text-amber-600 dark:text-amber-400 font-semibold hover:underline">
+                                                <i className={`fas ${bio ? 'fa-pencil-alt' : 'fa-plus'} mr-1`}></i>
+                                                {bio ? 'Edit Bio' : 'Add Bio'}
+                                            </button>
+                                        )}
                                     </div>
                                     <div className="mt-4 max-w-xs">
                                         <FriendshipButton loggedInUser={loggedInUserProfile} targetUser={profile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction}/>
@@ -497,9 +540,27 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                     <ProfileAvatar userProfile={profile} levelRequirements={levelRequirements} size={112} onClick={isViewingOwnProfile ? onAvatarChangeClick : undefined}/>
                                     {isViewingOwnProfile && <button onClick={onAvatarChangeClick} className="absolute bottom-0 right-0 bg-amber-500 text-black rounded-full w-8 h-8 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:bg-amber-400 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800" aria-label="Change avatar"><i className="fas fa-pen text-sm"></i></button>}
                                 </div>
-                                <h2 className="text-4xl font-bold text-gray-900 dark:text-white mt-4">{username}</h2>
+                                <div className="flex items-center justify-center gap-2 mt-4">
+                                    <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{username}</h2>
+                                    {isViewingOwnProfile && (
+                                        <button onClick={onEditUsernameClick} className="text-gray-400 hover:text-amber-500 transition-colors p-2 text-xl -mb-1" aria-label="Edit username">
+                                            <i className="fas fa-pencil-alt"></i>
+                                        </button>
+                                    )}
+                                </div>
                                 {isOnline && <div className="mt-2 flex items-center justify-center gap-1.5 text-green-500 dark:text-green-400 text-sm font-semibold"><div className="w-2.5 h-2.5 bg-current rounded-full animate-pulse"></div><span>Online</span></div>}
                                 <div className="flex items-center justify-center space-x-3 mt-2"><i className={`fas ${rankData.icon} text-2xl text-amber-500 dark:text-amber-400`}></i><p className="text-2xl font-semibold text-amber-500 dark:text-amber-400">{rankData.name}</p></div>
+                                
+                                <div className="mt-4">
+                                    {bio && <BioRenderer text={bio} />}
+                                    {isViewingOwnProfile && (
+                                        <button onClick={onEditBioClick} className="mt-2 text-sm text-amber-600 dark:text-amber-400 font-semibold hover:underline">
+                                            <i className={`fas ${bio ? 'fa-pencil-alt' : 'fa-plus'} mr-1`}></i>
+                                            {bio ? 'Edit Bio' : 'Add Bio'}
+                                        </button>
+                                    )}
+                                </div>
+
                                 <div className="mt-4 flex justify-center items-center space-x-6 text-lg">
                                     <div><p className="font-bold text-gray-900 dark:text-white">{level}</p><p className="text-sm text-gray-500 dark:text-gray-400">Level</p></div>
                                     <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>

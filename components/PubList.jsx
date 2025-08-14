@@ -154,7 +154,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
                             <span className={`text-lg font-bold w-6 text-center ${index < 3 ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'}`}>{index + 1}</span>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  {sellsGuinnessZero && <span className="flex-shrink-0 text-xs font-bold bg-black text-white px-1.5 py-0.5 rounded-md border-2 border-amber-400" title="Sells Guinness 0.0">0.0</span>}
+                                  {sellsGuinnessZero && <span className="flex-shrink-0 text-xs font-bold bg-black text-white px-1.5 py-0.5 rounded-md border-2 border-blue-500" title="Sells Guinness 0.0">0.0</span>}
                                   <p className="font-semibold text-gray-900 dark:text-white truncate">{pub.name}</p>
                                 </div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{pub.address}</p>

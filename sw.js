@@ -79,6 +79,7 @@ const urlsToCache = [
   '/components/NotificationToast.jsx',
   '/components/CommentContent.jsx',
   '/components/SuggestEditModal.jsx',
+  '/components/ForecastsPage.jsx',
 ];
 
 self.addEventListener('install', event => {

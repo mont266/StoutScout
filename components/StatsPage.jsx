@@ -10,8 +10,9 @@ import TimeSeriesChart from './TimeSeriesChart.jsx';
 import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
 import OnlineUsersPage from './OnlineUsersPage.jsx';
 import AllCommentsPage from './AllCommentsPage.jsx';
+import ForecastsPage from './ForecastsPage.jsx';
 
-const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString(), onClick, className = '', subValue = null }) => (
+const StatCard = ({ label, value, icon, customIcon, format = (v) => v.toLocaleString(), onClick, className = '', subValue = null }) => (
     <div
         onClick={onClick}
         className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center space-x-4 transition-all hover:shadow-lg hover:scale-[1.02] ${onClick ? 'cursor-pointer' : ''} ${className}`}
@@ -20,7 +21,7 @@ const StatCard = ({ label, value, icon, format = (v) => v.toLocaleString(), onCl
         onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); } : undefined}
     >
         <div className="bg-amber-100 dark:bg-amber-900/50 p-3 rounded-full">
-            <i className={`fas ${icon} text-xl text-amber-500 dark:text-amber-400 w-7 h-7 flex items-center justify-center`}></i>
+            {customIcon ? customIcon : <i className={`fas ${icon} text-xl text-amber-500 dark:text-amber-400 w-7 h-7 flex items-center justify-center`}></i>}
         </div>
         <div>
             <div className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">{label}</div>
@@ -112,7 +113,7 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     }, []);
 
     useEffect(() => {
-        if (currentView === 'main' || currentView === 'online_users') {
+        if (currentView === 'main') {
             fetchStats(timePeriod);
         }
     }, [currentView, timePeriod, fetchStats]);
@@ -130,6 +131,10 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     const handleBackFromSubView = useCallback(() => {
         setCurrentView('main');
     }, []);
+
+    if (currentView === 'forecasts') {
+        return <ForecastsPage onBack={handleBackFromSubView} />;
+    }
 
     if (currentView === 'online_users') {
         return <OnlineUsersPage onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
@@ -235,6 +240,7 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                     <div className="grid grid-cols-2 gap-4">
                         <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
                         <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
+                        <StatCard label="Guinness 0.0 Pubs" value={stats.total_guinness_zero_pubs} customIcon={<span className="text-base font-bold text-amber-500 dark:text-amber-400 w-7 h-7 flex items-center justify-center tracking-tighter">0.0</span>} />
                         <StatCard label="Total Comments" value={stats.total_comments} icon="fa-comments" onClick={() => handleViewChange('all_comments')} />
                         <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
                         <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
@@ -295,6 +301,7 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
             <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
                 <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
                 <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
+                <StatCard label="Guinness 0.0 Pubs" value={stats.total_guinness_zero_pubs} customIcon={<span className="text-base font-bold text-amber-500 dark:text-amber-400 w-7 h-7 flex items-center justify-center tracking-tighter">0.0</span>} />
                 <StatCard label="Total Comments" value={stats.total_comments} icon="fa-comments" onClick={() => handleViewChange('all_comments')} />
                 <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
                 <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
@@ -335,6 +342,23 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                 </div>
             </header>
             <main className="flex-grow overflow-y-auto p-4 md:p-6">
+                <div className="mb-6">
+                    <button
+                        onClick={() => handleViewChange('forecasts')}
+                        className="w-full bg-blue-500/10 text-blue-800 dark:text-blue-300 dark:bg-blue-900/50 p-4 rounded-xl shadow-md flex items-center justify-between transition-all hover:shadow-lg hover:scale-[1.02] hover:bg-blue-500/20"
+                    >
+                        <div className="flex items-center space-x-4">
+                             <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded-full">
+                                <i className="fas fa-chart-line text-xl text-blue-500 dark:text-blue-400 w-7 h-7 flex items-center justify-center"></i>
+                            </div>
+                            <div className="text-left">
+                                <div className="font-bold text-lg">Growth Forecasts</div>
+                                <div className="text-sm text-blue-700 dark:text-blue-400">View projected app milestones</div>
+                            </div>
+                        </div>
+                        <i className="fas fa-arrow-right text-xl text-blue-500 dark:text-blue-400 opacity-70"></i>
+                    </button>
+                </div>
                 {loading ? renderLoading() : error ? renderError() : (isDesktop ? renderDesktopDashboard() : renderMobileDashboard())}
             </main>
         </div>

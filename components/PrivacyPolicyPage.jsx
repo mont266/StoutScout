@@ -21,14 +21,14 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const PrivacyPolicyPage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Privacy Policy" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 6, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 14, 2025</p>
             <p>Your privacy is important to us. This Privacy Policy explains how Stoutly ("we," "us," or "our") collects, uses, and shares information about you when you use our Service.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Information We Collect</h2>
             <p className="font-bold">Information You Provide to Us:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li><strong>Account Information:</strong> When you create an account, we collect your email address and the username you choose. Your password is encrypted and managed by our backend provider, Supabase; we never see it in plain text.</li>
-                <li><strong>Profile Information:</strong> We collect information you add to your profile, such as your selected or uploaded avatar/profile picture.</li>
+                <li><strong>Profile Information:</strong> We collect information you add to your profile, such as your selected or uploaded avatar/profile picture, and your bio.</li>
                 <li><strong>Ratings and Reviews:</strong> We collect the ratings you submit, which include your scores for price and quality, and optionally, the exact price paid.</li>
                 <li><strong>Photographs:</strong> If you choose to add a photo to your rating, we collect and store the image file you upload. This image will be associated with your rating and profile.</li>
                 <li><strong>Comments:</strong> We collect any comments you post on ratings, which are linked to your account.</li>
@@ -90,7 +90,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
             <p>We may update this Privacy Policy from time to time. If we make changes, we will notify you by revising the date at the top of the policy.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Contact Us</h2>
-            <p>If you have any questions about this Privacy Policy, please contact us at admin@stoutly.co.uk or through the "Contact Us" form in the app's settings.</p>
+            <p>If you have any questions about this Privacy Policy, please contact us at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a> or through the "Contact Us" form in the app's settings.</p>
         </LegalPageWrapper>
     );
 };
