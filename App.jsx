@@ -419,6 +419,7 @@ const App = () => {
   }, []);
   
   const fetchUserZeroVotes = useCallback(async (userId) => {
+    if (!userId) return;
     const { data, error } = await supabase
       .from('pub_guinness_zero_reports')
       .select('pub_id, is_confirmation')
@@ -1130,33 +1131,46 @@ const App = () => {
     });
   }, [pubs, filter, filterGuinnessZero, searchOrigin, getDistance, getComparablePrice, getAverageRating]);
 
-  const performGuinnessZeroOptimisticUpdate = useCallback((pubId, newVoteIsConfirmation) => {
-    const previousVote = userZeroVotes.get(pubId); // Can be true, false, or undefined
+  const refreshSinglePubAndUserVotes = useCallback(async (pubId, userId) => {
+    await fetchUserZeroVotes(userId);
+    
+    const { data: updatedPubData, error: pubFetchError } = await supabase
+        .from('pubs')
+        .select('id, name, address, lat, lng, country_code, country_name, is_closed, guinness_zero_confirmations, guinness_zero_denials')
+        .eq('id', pubId)
+        .single();
 
-    setPubs(prevPubs => prevPubs.map(p => {
-        if (p.id !== pubId) return p;
+    if (pubFetchError) {
+        console.error(`Error fetching updated data for pub ${pubId}:`, pubFetchError);
+        await handleDataRefresh();
+        return;
+    }
 
-        let confirms = p.guinness_zero_confirmations || 0;
-        let denials = p.guinness_zero_denials || 0;
+    const formattedPub = {
+        ...updatedPubData,
+        location: { lat: updatedPubData.lat, lng: updatedPubData.lng },
+    };
 
-        // This logic correctly handles new votes and changed votes.
-        if (previousVote === true) {
-            confirms = Math.max(0, confirms - 1);
-        } else if (previousVote === false) {
-            denials = Math.max(0, denials - 1);
+    setPubs(currentPubs => {
+        const index = currentPubs.findIndex(p => p.id === pubId);
+        if (index > -1) {
+            const newPubs = [...currentPubs];
+            newPubs[index] = { ...currentPubs[index], ...formattedPub };
+            return newPubs;
         }
+        return [...currentPubs, { ...formattedPub, ratings: [], pub_score: null }];
+    });
 
-        if (newVoteIsConfirmation) {
-            confirms += 1;
-        } else {
-            denials += 1;
+    setDbPubs(currentDbPubs => {
+        const index = currentDbPubs.findIndex(p => p.id === pubId);
+        if (index > -1) {
+            const newDbPubs = [...currentDbPubs];
+            newDbPubs[index] = { ...currentDbPubs[index], ...formattedPub };
+            return newDbPubs;
         }
-        
-        return { ...p, guinness_zero_confirmations: confirms, guinness_zero_denials: denials };
-    }));
-
-    setUserZeroVotes(prev => new Map(prev).set(pubId, newVoteIsConfirmation));
-  }, [userZeroVotes]);
+        return [...currentDbPubs, formattedPub];
+    });
+  }, [fetchUserZeroVotes, handleDataRefresh]);
 
   const handleRatePub = useCallback(async (pubId, pubName, pubAddress, ratingData) => {
     if (!session || !userProfile || !selectedPub) return;
@@ -1165,15 +1179,10 @@ const App = () => {
     try {
         const { imageFile, imageWasRemoved, guinnessZeroStatus, is_private, price, quality, exact_price, message } = ratingData;
         
-        // Upsert the pub data first, including new country info if available
         await supabase.from('pubs').upsert({
-          id: pubId,
-          name: pubName,
-          address: pubAddress,
-          lat: selectedPub.location.lat,
-          lng: selectedPub.location.lng,
-          country_code: selectedPub.country_code,
-          country_name: selectedPub.country_name,
+          id: pubId, name: pubName, address: pubAddress,
+          lat: selectedPub.location.lat, lng: selectedPub.location.lng,
+          country_code: selectedPub.country_code, country_name: selectedPub.country_name,
         });
 
         const existingRating = userRatings.find(r => r.pubId === pubId);
@@ -1181,94 +1190,56 @@ const App = () => {
         const currencyInfo = getCurrencyInfo(selectedPub);
 
         trackEvent('rate_pub', {
-            pub_id: pubId,
-            is_update: isUpdating,
-            quality: quality,
-            price_rating: price,
-            has_exact_price: !!exact_price,
-            has_image: !!imageFile,
-            has_message: !!message,
-            is_private: is_private,
-            value: exact_price || 0, // GA4 standard parameter for value
-            currency: currencyInfo.code, // GA4 standard parameter for currency
+            pub_id: pubId, is_update: isUpdating, quality: quality, price_rating: price,
+            has_exact_price: !!exact_price, has_image: !!imageFile, has_message: !!message,
+            is_private: is_private, value: exact_price || 0, currency: currencyInfo.code,
         });
         
-        // --- START: Image management logic ---
-        const oldImageUrl = existingRating?.image_url;
-
-        // If we are updating a rating that has an image, and we're either removing it or replacing it, delete the old file.
-        if (isUpdating && oldImageUrl && (imageWasRemoved || imageFile)) {
-            try {
-                const imagePath = new URL(oldImageUrl).pathname.split('/pint-images/')[1];
-                if (imagePath) {
-                    await supabase.storage.from('pint-images').remove([imagePath]);
-                }
-            } catch (error) {
-                console.error("Failed to delete old image from storage. It may become orphaned. Error:", error);
-                // Do not block the user flow for this.
-            }
-        }
-        
-        let imageUrl = oldImageUrl || null;
+        let imageUrl = existingRating?.image_url || null;
         if (imageWasRemoved) {
             imageUrl = null;
+        }
+        if (isUpdating && imageUrl && (imageWasRemoved || imageFile)) {
+            try {
+                const imagePath = new URL(imageUrl).pathname.split('/pint-images/')[1];
+                if (imagePath) await supabase.storage.from('pint-images').remove([imagePath]);
+            } catch (error) { console.error("Failed to delete old image:", error); }
         }
         
         if (imageFile) {
             const fileExt = imageFile.name.split('.').pop();
             const fileName = `${userProfile.id}-${Date.now()}.${fileExt}`;
-            const filePath = `${fileName}`;
-            
-            const { error: uploadError } = await supabase.storage.from('pint-images').upload(filePath, imageFile, { upsert: true });
-            if (uploadError) {
-                // Throw an error that will be caught by the new catch block
-                throw new Error(`Image upload failed: ${uploadError.message}. Please ensure the 'pint-images' storage bucket is created as per the instructions in security.md.`);
-            }
-            const { data: urlData } = supabase.storage.from('pint-images').getPublicUrl(filePath);
-            imageUrl = urlData.publicUrl;
+            const { error: uploadError } = await supabase.storage.from('pint-images').upload(fileName, imageFile, { upsert: true });
+            if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}.`);
+            imageUrl = supabase.storage.from('pint-images').getPublicUrl(fileName).data.publicUrl;
         }
-        // --- END: Image management logic ---
 
         const ratingPayload = { 
-            pub_id: pubId, 
-            user_id: session.user.id, 
-            price: price, 
-            quality: quality, 
-            exact_price: exact_price,
-            is_private: is_private,
-            image_url: imageUrl,
-            message: message,
+            pub_id: pubId, user_id: session.user.id, price, quality, exact_price, is_private, image_url: imageUrl, message,
         };
-
         const { error: dbError } = isUpdating
           ? await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
           : await supabase.from('ratings').insert(ratingPayload);
         
-        if (dbError) throw dbError; // Throw so it's caught by the catch block
+        if (dbError) throw dbError;
         
         if (guinnessZeroStatus && guinnessZeroStatus !== 'unknown') {
-            const isConfirmation = guinnessZeroStatus === 'confirm';
-            // Optimistic update for instant filtering
-            if (userZeroVotes.get(pubId) !== isConfirmation) {
-              performGuinnessZeroOptimisticUpdate(pubId, isConfirmation);
-            }
-            // DB call
-            const { error: zeroError } = await supabase.rpc('report_guinness_zero_status', {
+            await supabase.rpc('report_guinness_zero_status', {
                 p_pub_id: pubId,
-                p_is_confirmation: isConfirmation,
+                p_is_confirmation: guinnessZeroStatus === 'confirm',
             });
-            if (zeroError) {
-                console.error("Non-critical error reporting Guinness 0.0 status:", zeroError);
-                // TODO: Consider reverting optimistic update on error
-            }
         }
+        
+        // More robust, sequential refresh to prevent race conditions
+        await Promise.all([ fetchAllRatings(), fetchPubScores() ]);
+        await refreshSinglePubAndUserVotes(pubId, session.user.id);
+        
+        const oldLevel = userProfile?.level;
+        const { profile: newProfile } = await fetchUserData();
 
         if (!isUpdating) {
-            const oldProfile = userProfile;
-            const { profile: newProfile } = await fetchUserData();
-            
-            if (newProfile && oldProfile && newProfile.level > oldProfile.level) {
-                const oldRank = getRankData(oldProfile.level);
+            if (newProfile?.level > oldLevel) {
+                const oldRank = getRankData(oldLevel);
                 const newRank = getRankData(newProfile.level);
                 if (newRank.name !== oldRank.name) {
                     setRankUpInfo({ key: Date.now(), newRank });
@@ -1280,22 +1251,20 @@ const App = () => {
             }
             setReviewPopupInfo({ key: Date.now() });
         } else {
-            await fetchUserData();
             setUpdateConfirmationInfo({ key: Date.now() });
         }
-        await handleDataRefresh();
+        
     } catch (error) {
         console.error("Error submitting rating:", error);
         setAlertInfo({
-            isOpen: true,
-            title: 'Submission Failed',
-            message: `There was a problem submitting your rating. It might be a temporary network issue. Please try again. Error: ${error.message}`,
+            isOpen: true, title: 'Submission Failed',
+            message: `There was a problem submitting your rating. Error: ${error.message}`,
             theme: 'error',
         });
     } finally {
         setIsSubmittingRating(false);
     }
-  }, [session, userRatings, selectedPub, userProfile, handleDataRefresh, fetchUserData, userZeroVotes, performGuinnessZeroOptimisticUpdate]);
+  }, [session, userRatings, selectedPub, userProfile, fetchUserData, fetchAllRatings, fetchPubScores, refreshSinglePubAndUserVotes]);
   
   const handleGuinnessZeroVote = useCallback(async (pubId, isConfirmation) => {
     if (!session) {
@@ -1304,31 +1273,36 @@ const App = () => {
     }
     trackEvent('vote_guinness_zero', { pub_id: pubId, vote: isConfirmation ? 'confirm' : 'deny' });
     
-    // Prevent redundant actions
     if (userZeroVotes.get(pubId) === isConfirmation) return;
 
-    performGuinnessZeroOptimisticUpdate(pubId, isConfirmation);
+    const pubToUpsert = pubs.find(p => p.id === pubId);
+    if (!pubToUpsert) {
+        console.error("Cannot vote on a pub that doesn't exist in the current view.");
+        return;
+    }
+    
+    const { error: upsertError } = await supabase.from('pubs').upsert({
+        id: pubToUpsert.id, name: pubToUpsert.name, address: pubToUpsert.address,
+        lat: pubToUpsert.location.lat, lng: pubToUpsert.location.lng,
+        country_code: pubToUpsert.country_code, country_name: pubToUpsert.country_name,
+    });
+    if (upsertError) {
+        console.error("Error upserting pub before vote:", upsertError);
+        setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Could not save pub info: ${upsertError.message}`, theme: 'error' });
+        return;
+    }
     
     const { error } = await supabase.rpc('report_guinness_zero_status', {
-        p_pub_id: pubId,
-        p_is_confirmation: isConfirmation,
+        p_pub_id: pubId, p_is_confirmation: isConfirmation,
     });
     
     if (error) {
         console.error("Error voting on Guinness 0.0 status:", error);
-        // Revert optimistic updates if the RPC call fails
-        await handleDataRefresh();
-        setAlertInfo({
-            isOpen: true,
-            title: 'Vote Failed',
-            message: 'Your vote could not be saved. Please try again.',
-            theme: 'error',
-        });
+        setAlertInfo({ isOpen: true, title: 'Vote Failed', message: `Your vote could not be saved: ${error.message}`, theme: 'error' });
     } else {
-        // Silently refresh data in the background to ensure consistency
-        await handleDataRefresh();
+        await refreshSinglePubAndUserVotes(pubId, session.user.id);
     }
-  }, [session, userZeroVotes, handleDataRefresh, performGuinnessZeroOptimisticUpdate]);
+  }, [session, userZeroVotes, pubs, refreshSinglePubAndUserVotes]);
 
   const handleClearGuinnessZeroVote = useCallback(async (pubId) => {
     if (!session) {
@@ -1337,49 +1311,17 @@ const App = () => {
     }
     trackEvent('clear_vote_guinness_zero', { pub_id: pubId });
 
-    const previousVote = userZeroVotes.get(pubId);
-    if (previousVote === undefined) return; // Nothing to clear
+    if (userZeroVotes.get(pubId) === undefined) return;
 
-    // Optimistic Update
-    setPubs(prevPubs => prevPubs.map(p => {
-        if (p.id !== pubId) return p;
-        
-        let confirms = p.guinness_zero_confirmations || 0;
-        let denials = p.guinness_zero_denials || 0;
-
-        if (previousVote === true) {
-            confirms = Math.max(0, confirms - 1);
-        } else if (previousVote === false) {
-            denials = Math.max(0, denials - 1);
-        }
-        
-        return { ...p, guinness_zero_confirmations: confirms, guinness_zero_denials: denials };
-    }));
-
-    setUserZeroVotes(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(pubId);
-        return newMap;
-    });
-
-    // DB call
     const { error } = await supabase.rpc('clear_guinness_zero_status', { p_pub_id: pubId });
 
     if (error) {
         console.error("Error clearing Guinness 0.0 vote:", error);
-        // Revert optimistic updates if the RPC call fails
-        await handleDataRefresh();
-        setAlertInfo({
-            isOpen: true,
-            title: 'Action Failed',
-            message: 'Your vote could not be cleared. Please try again.',
-            theme: 'error',
-        });
+        setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Your vote could not be cleared: ${error.message}`, theme: 'error' });
     } else {
-        // Silently refresh data in the background to ensure consistency
-        await handleDataRefresh();
+        await refreshSinglePubAndUserVotes(pubId, session.user.id);
     }
-  }, [session, userZeroVotes, handleDataRefresh]);
+  }, [session, userZeroVotes, refreshSinglePubAndUserVotes]);
 
   const handleDeleteRating = useCallback(async (ratingToDelete) => {
     if (!session || !userProfile || !ratingToDelete) return;
