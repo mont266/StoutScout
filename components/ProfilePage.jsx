@@ -13,6 +13,35 @@ import AlertModal from './AlertModal.jsx';
 import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 
+// Action sheet modal for profile editing options
+const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername, onEditBio }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div 
+            className="fixed inset-0 bg-black/60 z-[1300] flex items-end" 
+            onClick={onClose}
+            role="dialog"
+            aria-modal="true"
+        >
+            <div 
+                className="bg-white dark:bg-gray-800 w-full rounded-t-2xl p-4 animate-fade-in-up" 
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="w-10 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-4"></div>
+                <ul className="space-y-2 text-gray-800 dark:text-gray-200">
+                    <li><button onClick={onEditAvatar} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-user-circle w-6 text-center text-gray-500"></i><span>Change Avatar</span></button></li>
+                    <li><button onClick={onEditUsername} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-id-card w-6 text-center text-gray-500"></i><span>Edit Username</span></button></li>
+                    <li><button onClick={onEditBio} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-book-open w-6 text-center text-gray-500"></i><span>Edit Bio</span></button></li>
+                </ul>
+                <button onClick={onClose} className="w-full mt-4 bg-gray-200 dark:bg-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600">Cancel</button>
+                <div className="pb-safe"></div>
+            </div>
+        </div>
+    );
+};
+
+
 // Helper component for badges
 const UserBadges = ({ profile, className = '', justification = 'justify-center' }) => {
     const badges = [];
@@ -178,10 +207,16 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
     const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [alertInfo, setAlertInfo] = useState({ isOpen: false });
     const { onlineUserIds } = useContext(OnlineStatusContext);
+    const [isEditActionsModalOpen, setIsEditActionsModalOpen] = useState(false);
 
     useEffect(() => {
         setProfile(userProfile);
     }, [userProfile]);
+
+    const handleOpenModal = (modalOpener) => {
+        setIsEditActionsModalOpen(false);
+        modalOpener();
+    };
     
     if (!profile) {
         return (
@@ -501,6 +536,15 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
             {isBanModalOpen && ( <BanUserModal username={profile.username} onClose={() => setIsBanModalOpen(false)} onConfirm={handleBanUser} /> )}
             {imageToView && ( <ImageModal rating={imageToView} onClose={() => setImageToView(null)} onReport={() => handleInitiateReport(imageToView)} canReport={loggedInUserProfile && loggedInUserProfile.id !== imageToView.user.id} /> )}
             {reportModalInfo.isOpen && ( <ReportImageModal onClose={() => setReportModalInfo({isOpen: false, rating: null})} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} /> )}
+            {isViewingOwnProfile && (
+                <EditProfileActionsModal
+                    isOpen={isEditActionsModalOpen}
+                    onClose={() => setIsEditActionsModalOpen(false)}
+                    onEditAvatar={() => handleOpenModal(onAvatarChangeClick)}
+                    onEditUsername={() => handleOpenModal(onEditUsernameClick)}
+                    onEditBio={() => handleOpenModal(onEditBioClick)}
+                />
+            )}
             
             <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-white">
                  {onBack && (
@@ -515,9 +559,18 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                 {isDesktop ? (
                     <main className="flex-grow p-4 md:p-6 overflow-y-auto">
                         {/* HERO SECTION */}
-                        <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-6 mb-6">
+                        <section className="relative bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-6 mb-6">
+                            {isViewingOwnProfile && (
+                                <button
+                                    onClick={() => setIsEditActionsModalOpen(true)}
+                                    className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2 px-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 text-sm"
+                                >
+                                    <i className="fas fa-pencil-alt"></i>
+                                    <span>Edit Profile</span>
+                                </button>
+                            )}
                             <div className="flex items-center gap-6">
-                                <ProfileAvatar userProfile={profile} levelRequirements={levelRequirements} size={112} onClick={isViewingOwnProfile ? onAvatarChangeClick : undefined}/>
+                                <ProfileAvatar userProfile={profile} levelRequirements={levelRequirements} size={112} />
                                 <div className="text-left">
                                     <div className="flex items-center gap-3">
                                         <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{username}</h2>
@@ -530,11 +583,6 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                                 </div>
                                             </div>
                                         )}
-                                        {isViewingOwnProfile && (
-                                            <button onClick={onEditUsernameClick} className="text-gray-400 hover:text-amber-500 transition-colors p-2 text-xl -mb-1" aria-label="Edit username" title="Edit username">
-                                                <i className="fas fa-pencil-alt"></i>
-                                            </button>
-                                        )}
                                     </div>
                                     <div className="flex items-center space-x-3 mt-1">
                                         <i className={`fas ${rankData.icon} text-2xl text-amber-500 dark:text-amber-400`}></i>
@@ -543,16 +591,12 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                     <UserBadges profile={profile} className="mt-4" justification="justify-start" />
                                     <div className="mt-4">
                                         {bio && <BioRenderer text={bio} />}
-                                        {isViewingOwnProfile && (
-                                            <button onClick={onEditBioClick} className="mt-2 text-sm text-amber-600 dark:text-amber-400 font-semibold hover:underline">
-                                                <i className={`fas ${bio ? 'fa-pencil-alt' : 'fa-plus'} mr-1`}></i>
-                                                {bio ? 'Edit Bio' : 'Add Bio'}
-                                            </button>
-                                        )}
                                     </div>
-                                    <div className="mt-4 max-w-xs">
-                                        <FriendshipButton loggedInUser={loggedInUserProfile} targetUser={profile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction}/>
-                                    </div>
+                                    {!isViewingOwnProfile && (
+                                        <div className="mt-4 max-w-xs">
+                                            <FriendshipButton loggedInUser={loggedInUserProfile} targetUser={profile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction}/>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex-shrink-0 grid grid-cols-3 gap-4 text-center">
@@ -593,16 +637,10 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                 {is_banned && <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white font-bold px-4 py-1 rounded-full text-sm uppercase tracking-wider shadow-lg">Banned</div>}
                                 {isOnline && <div className="absolute top-4 right-4 flex items-center gap-1.5 text-green-600 dark:text-green-300 text-xs font-semibold bg-green-100 dark:bg-green-800/50 px-2.5 py-1 rounded-full border border-green-200 dark:border-green-700/50"><div className="w-2 h-2 bg-current rounded-full animate-pulse"></div><span>Online</span></div>}
                                 <div className="relative inline-block">
-                                    <ProfileAvatar userProfile={profile} levelRequirements={levelRequirements} size={112} onClick={isViewingOwnProfile ? onAvatarChangeClick : undefined}/>
-                                    {isViewingOwnProfile && <button onClick={onAvatarChangeClick} className="absolute bottom-0 right-0 bg-amber-500 text-black rounded-full w-8 h-8 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md hover:bg-amber-400 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800" aria-label="Change avatar"><i className="fas fa-pen text-sm"></i></button>}
+                                    <ProfileAvatar userProfile={profile} levelRequirements={levelRequirements} size={112} />
                                 </div>
-                                <div className="flex items-center justify-center gap-2 mt-4">
+                                <div className="mt-4">
                                     <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{username}</h2>
-                                    {isViewingOwnProfile && (
-                                        <button onClick={onEditUsernameClick} className="text-gray-400 hover:text-amber-500 transition-colors p-2 text-xl -mb-1" aria-label="Edit username">
-                                            <i className="fas fa-pencil-alt"></i>
-                                        </button>
-                                    )}
                                 </div>
                                 <div className="flex items-center justify-center space-x-3 mt-2"><i className={`fas ${rankData.icon} text-2xl text-amber-500 dark:text-amber-400`}></i><p className="text-2xl font-semibold text-amber-500 dark:text-amber-400">{rankData.name}</p></div>
                                 
@@ -610,12 +648,6 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
 
                                 <div className="mt-4">
                                     {bio && <BioRenderer text={bio} />}
-                                    {isViewingOwnProfile && (
-                                        <button onClick={onEditBioClick} className="mt-2 text-sm text-amber-600 dark:text-amber-400 font-semibold hover:underline">
-                                            <i className={`fas ${bio ? 'fa-pencil-alt' : 'fa-plus'} mr-1`}></i>
-                                            {bio ? 'Edit Bio' : 'Add Bio'}
-                                        </button>
-                                    )}
                                 </div>
 
                                 <div className="mt-4 flex justify-center items-center space-x-6 text-lg">
@@ -625,7 +657,16 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                                     <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>
                                     <button onClick={() => onViewFriends && onViewFriends(profile)} className="text-left hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-md p-1 -m-1" disabled={!onViewFriends}><p className="font-bold text-gray-900 dark:text-white">{friends_count || 0}</p><p className="text-sm text-gray-500 dark:text-gray-400">{friends_count === 1 ? 'Friend' : 'Friends'}</p></button>
                                 </div>
-                                <div className="mt-6"><FriendshipButton loggedInUser={loggedInUserProfile} targetUser={profile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction}/></div>
+                                <div className="mt-6">
+                                    {isViewingOwnProfile ? (
+                                        <button onClick={() => setIsEditActionsModalOpen(true)} className="w-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2">
+                                            <i className="fas fa-pencil-alt"></i>
+                                            <span>Edit Profile</span>
+                                        </button>
+                                    ) : (
+                                        <FriendshipButton loggedInUser={loggedInUserProfile} targetUser={profile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction}/>
+                                    )}
+                                </div>
                             </div>
                         </div>
                         <div className="mb-6"><ModerationTools /></div>
