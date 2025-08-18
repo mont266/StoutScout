@@ -5,7 +5,7 @@ import FilterControls from './FilterControls.jsx';
 import MapComponent from './Map.jsx';
 import PubList from './PubList.jsx';
 import PubDetails from './PubDetails.jsx';
-import SettingsPage from './SettingsModal.jsx';
+import SettingsPage from './SettingsPage.jsx';
 import AuthPage from './AuthPage.jsx';
 import UpdatePasswordPage from './UpdatePasswordPage.jsx';
 import XPPopup from './XPPopup.jsx';
@@ -26,6 +26,7 @@ import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
+import ShopPage from './ShopPage.jsx';
 
 const DesktopLayout = (props) => {
     const {
@@ -38,7 +39,7 @@ const DesktopLayout = (props) => {
         refreshTrigger, handleFindCurrentPub, getDistance,
         getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
         profilePage, session, userProfile, handleViewProfile, handleBackFromProfileView,
-        handleSettingsChange, handleSetSimulatedLocation, handleLogout,
+        handleSettingsChange, handleLogout,
         existingUserRatingForSelectedPub, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
@@ -64,7 +65,7 @@ const DesktopLayout = (props) => {
         onOpenSuggestEditModal,
         unreadNotificationsCount,
         // Comments and notifications
-        notifications, onMarkNotificationsAsRead,
+        notifications, onMarkNotificationsAsRead, onDeleteNotification,
         commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment,
         reportCommentInfo, onCloseReportCommentModal, onSubmitReportComment,
         // Moderation
@@ -138,7 +139,11 @@ const DesktopLayout = (props) => {
             return (
                 <div className="h-full flex flex-col">
                     <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                        <MapSearchBar onPlaceSelected={handleFindPlace} />
+                        <MapSearchBar
+                            onPlaceSelected={handleFindPlace}
+                            userProfile={userProfile}
+                            onPubSelected={handleSelectPub}
+                        />
                     </div>
                     <FilterControls
                         currentFilter={filter}
@@ -198,6 +203,7 @@ const DesktopLayout = (props) => {
                     unreadNotificationsCount={unreadNotificationsCount}
                     notifications={notifications}
                     onMarkNotificationsAsRead={onMarkNotificationsAsRead}
+                    onDeleteNotification={onDeleteNotification}
                     commentsByRating={commentsByRating}
                     isCommentsLoading={isCommentsLoading}
                     onFetchComments={onFetchComments}
@@ -220,7 +226,6 @@ const DesktopLayout = (props) => {
                     <div className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-800/50">
                         <SettingsPage
                             settings={settings} onSettingsChange={handleSettingsChange}
-                            onSetSimulatedLocation={handleSetSimulatedLocation}
                             userProfile={userProfile} 
                             session={session}
                             onViewProfile={handleViewProfile}
@@ -242,7 +247,7 @@ const DesktopLayout = (props) => {
         return null;
     };
     
-    const isFullScreenTab = ['stats', 'moderation', 'profile'].includes(activeTab);
+    const isFullScreenTab = ['stats', 'moderation', 'profile', 'shop'].includes(activeTab);
 
     return (
         <div className="w-full h-dvh flex">
@@ -254,6 +259,7 @@ const DesktopLayout = (props) => {
                 levelRequirements={levelRequirements}
                 onLoginRequest={() => setIsAuthOpen(true)}
                 unreadNotificationsCount={unreadNotificationsCount}
+                settings={settings}
             />
 
             {/* Main Content Area */}
@@ -265,8 +271,7 @@ const DesktopLayout = (props) => {
                             {renderContentPanel()}
                         </aside>
                         <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
-                            {locationPermissionStatus === 'denied' && 
-                                !(settings.developerMode && settings.simulatedLocation) && (
+                            {locationPermissionStatus === 'denied' && (
                                 <LocationPermissionPrompt 
                                     status={locationPermissionStatus} 
                                     onRequestPermission={requestLocationPermission}
@@ -290,7 +295,6 @@ const DesktopLayout = (props) => {
                                 mapTileRefreshKey={mapTileRefreshKey}
                             />
                             {(locationError && locationPermissionStatus !== 'denied') && 
-                                !(settings.developerMode && settings.simulatedLocation) && 
                                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
                             }
                             <button
@@ -302,6 +306,11 @@ const DesktopLayout = (props) => {
                                 <i className="fas fa-location-arrow text-2xl"></i>
                             </button>
                         </main>
+                    </div>
+
+                    {/* Shop Page */}
+                    <div className={`absolute inset-0 ${activeTab === 'shop' ? '' : 'hidden'}`}>
+                        <ShopPage userProfile={userProfile} />
                     </div>
 
                     {/* Stats Page */}

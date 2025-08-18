@@ -185,11 +185,11 @@ const ForecastsPage = ({ onBack }) => {
         return (
             <div className="space-y-10">
                 <section>
-                     <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-3">Current Growth Rate <span className="text-base font-normal text-gray-500">(Last 90 Days)</span></h2>
+                     <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-3">Current Growth Rate <span className="text-base font-normal text-gray-500">(Last 7 Days)</span></h2>
                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <StatCard label="Avg. Daily Signups" value={parseFloat(stats.avg_daily_signups_90d).toFixed(2)} change={stats.signups_change_7d} />
-                        <StatCard label="Avg. Daily Ratings" value={parseFloat(stats.avg_daily_ratings_90d).toFixed(2)} change={stats.ratings_change_7d} />
-                        <StatCard label="Avg. Daily Pubs Added" value={parseFloat(stats.avg_daily_pubs_90d).toFixed(2)} change={stats.pubs_change_7d} />
+                        <StatCard label="Avg. Daily Signups" value={parseFloat(stats.avg_daily_signups_7d).toFixed(2)} change={stats.signups_change_7d} />
+                        <StatCard label="Avg. Daily Ratings" value={parseFloat(stats.avg_daily_ratings_7d).toFixed(2)} change={stats.ratings_change_7d} />
+                        <StatCard label="Avg. Daily Pubs Added" value={parseFloat(stats.avg_daily_pubs_7d).toFixed(2)} change={stats.pubs_change_7d} />
                     </div>
                 </section>
                 

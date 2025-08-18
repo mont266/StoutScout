@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { trackEvent } from '../analytics.js';
+import { supabase } from '../supabase.js';
 
-const MapSearchBar = ({ onPlaceSelected, onClose, isExpanded }) => {
+const MapSearchBar = ({ onPlaceSelected, onClose, isExpanded, userProfile, onPubSelected }) => {
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -20,6 +21,44 @@ const MapSearchBar = ({ onPlaceSelected, onClose, isExpanded }) => {
 
         setIsLoading(true);
         setError(null);
+
+        // Developer feature: Search by Pub ID
+        const isDeveloper = userProfile?.is_developer;
+        const pubIdSearchTerm = inputValue.trim();
+        const isPubIdSearch = /^(osm-|stoutly-)/i.test(pubIdSearchTerm);
+
+        if (isDeveloper && isPubIdSearch) {
+            trackEvent('search', { search_term: pubIdSearchTerm, search_type: 'pub_id' });
+            try {
+                const { data: pub, error: dbError } = await supabase
+                    .from('pubs')
+                    .select('*')
+                    .eq('id', pubIdSearchTerm)
+                    .single();
+                
+                if (dbError || !pub) {
+                    throw new Error('Pub ID not found in database.');
+                }
+
+                // App expects a nested location object
+                const pubForSelection = {
+                    ...pub,
+                    location: { lat: pub.lat, lng: pub.lng },
+                };
+
+                onPubSelected(pubForSelection);
+                setInputValue(''); // Clear on success
+            } catch (err) {
+                setError(err.message);
+                trackEvent('search_failed', { reason: 'pub_id_not_found', search_term: pubIdSearchTerm });
+            } finally {
+                setIsLoading(false);
+            }
+            return; // Stop execution for pub ID search
+        }
+
+
+        // Default Nominatim search for places
         trackEvent('search', { search_term: inputValue });
 
         const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';

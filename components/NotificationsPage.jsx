@@ -5,8 +5,8 @@ import { supabase } from '../supabase.js';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import AlertModal from './AlertModal.jsx';
 
-const NotificationItem = ({ notification, onViewProfile, onFriendAction, onNavigate }) => {
-    const { actor, type, created_at, is_read, metadata, entity_id } = notification;
+const NotificationItem = ({ notification, onViewProfile, onFriendAction, onNavigate, onDeleteNotification }) => {
+    const { id, actor, type, created_at, is_read, metadata, entity_id } = notification;
 
     const handleAction = (e, status) => {
         e.stopPropagation(); // Prevent card click
@@ -70,37 +70,48 @@ const NotificationItem = ({ notification, onViewProfile, onFriendAction, onNavig
             );
             break;
         default:
-             content = (
-                <p className="text-sm text-gray-700 dark:text-gray-300">
-                    You have a new notification from <button onClick={(e) => { e.stopPropagation(); onViewProfile(actor.id, 'notifications'); }} className="font-semibold hover:underline">{actor.username}</button>.
-                </p>
-            );
+             // This type is not recognized or is a redundant generic notification. Do not render it.
+             return null;
     }
 
     return (
         <li
             onClick={handleNotificationClick}
-            className={`flex items-start space-x-3 p-3 rounded-lg transition-colors ${isClickable ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50' : ''} ${!is_read ? 'bg-amber-500/10' : ''}`}
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${isClickable ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50' : ''} ${!is_read ? 'bg-amber-500/10' : ''}`}
             >
-            {!is_read && <div className="w-2.5 h-2.5 bg-amber-500 rounded-full mt-2 flex-shrink-0" aria-label="Unread notification"></div>}
-            <div className={`relative flex-shrink-0 ${is_read ? 'ml-[1.375rem]' : ''}`}>
-                <button onClick={(e) => { e.stopPropagation(); onViewProfile(actor.id, 'notifications'); }} aria-label={`View profile of ${actor.username}`}>
-                    <Avatar avatarId={actor.avatar_id} className="w-10 h-10" />
-                </button>
-                <span className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center border-2 border-white dark:border-gray-900">
-                    <i className={`fas ${iconClass} text-xs`}></i>
-                </span>
+            <div className="flex-grow flex items-start space-x-3">
+                {!is_read && <div className="w-2.5 h-2.5 bg-amber-500 rounded-full mt-2 flex-shrink-0" aria-label="Unread notification"></div>}
+                <div className={`relative flex-shrink-0 ${is_read ? 'ml-[1.375rem]' : ''}`}>
+                    <button onClick={(e) => { e.stopPropagation(); onViewProfile(actor.id, 'notifications'); }} aria-label={`View profile of ${actor.username}`}>
+                        <Avatar avatarId={actor.avatar_id} className="w-10 h-10" />
+                    </button>
+                    <span className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center border-2 border-white dark:border-gray-900">
+                        <i className={`fas ${iconClass} text-xs`}></i>
+                    </span>
+                </div>
+                <div className="flex-grow">
+                    {content}
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatTimeAgo(new Date(created_at).getTime())}</p>
+                </div>
             </div>
-            <div className="flex-grow">
-                {content}
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatTimeAgo(new Date(created_at).getTime())}</p>
+            <div className="flex-shrink-0 ml-2">
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteNotification(id);
+                    }}
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    aria-label="Delete notification"
+                    title="Delete notification"
+                >
+                    <i className="fas fa-times"></i>
+                </button>
             </div>
         </li>
     );
 };
 
-const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDataRefresh, onViewPub, friendships }) => {
-    const [isDisclaimerVisible, setIsDisclaimerVisible] = useState(true);
+const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDataRefresh, onViewPub, friendships, onDeleteNotification }) => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
     const [isNavigating, setIsNavigating] = useState(false);
@@ -173,15 +184,7 @@ const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDat
             let highlightRatingId = null;
             let highlightCommentId = null;
 
-            if (notification.type === 'mention') {
-                const { data, error } = await supabase.rpc('get_context_for_comment', { p_comment_id: notification.entity_id }).single();
-                if (error) throw error;
-                contextData = data;
-                if (data) {
-                    highlightRatingId = data.rating_id;
-                    highlightCommentId = notification.entity_id;
-                }
-            } else if (notification.type === 'new_comment' || notification.type === 'like_milestone') {
+            if (notification.type === 'new_comment' || notification.type === 'like_milestone') {
                 const { data, error } = await supabase.rpc('get_context_for_rating', { p_rating_id: notification.entity_id }).single();
                 if (error) throw error;
                 contextData = data;
@@ -262,17 +265,6 @@ const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDat
                         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-400"></div>
                     </div>
                 )}
-                {isDisclaimerVisible && activeNotifications.length > 0 && (
-                    <div className="p-3 mx-2 mt-2 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 rounded-lg flex items-start space-x-3 text-sm">
-                        <i className="fas fa-info-circle mt-1 flex-shrink-0"></i>
-                        <p className="flex-grow">
-                            Heads up! There's a known glitch that may display comment notifications twice. We're on it, and a fix is coming soon!
-                        </p>
-                        <button onClick={() => setIsDisclaimerVisible(false)} className="text-amber-700/70 dark:text-amber-300/70 hover:text-amber-700 dark:hover:text-amber-300 flex-shrink-0" aria-label="Dismiss disclaimer">
-                            <i className="fas fa-times"></i>
-                        </button>
-                    </div>
-                )}
                 {activeNotifications.length === 0 ? (
                     <div className="p-4 h-full flex items-center justify-center text-center">
                         <div className="text-gray-500 dark:text-gray-400">
@@ -291,6 +283,7 @@ const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDat
                                     onViewProfile={onViewProfile}
                                     onFriendAction={onFriendAction}
                                     onNavigate={handleNavigate}
+                                    onDeleteNotification={onDeleteNotification}
                                 />
                             ))}
                         </ul>

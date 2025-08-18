@@ -22,6 +22,8 @@ import PubScoreExplanationModal from './components/PubScoreExplanationModal.jsx'
 import CookieConsentBanner from './components/CookieConsentBanner.jsx';
 import { OnlineStatusContext } from './contexts/OnlineStatusContext.jsx';
 import AlertModal from './components/AlertModal.jsx';
+import ShopPage from './components/ShopPage.jsx';
+import CoasterWelcomeModal from './components/CoasterWelcomeModal.jsx';
 
 
 const App = () => {
@@ -88,6 +90,7 @@ const App = () => {
   const [isEditBioModalOpen, setIsEditBioModalOpen] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '', theme: 'info' });
+  const [isCoasterWelcomeModalOpen, setIsCoasterWelcomeModalOpen] = useState(false);
   
   const [levelRequirements, setLevelRequirements] = useState([]);
   
@@ -146,6 +149,7 @@ const App = () => {
   const radiusUpdateTimeout = useRef(null);
   const didProcessUrlParams = useRef(false);
   
+  
   // --- ANALYTICS & CONSENT ---
   
   useEffect(() => {
@@ -188,6 +192,8 @@ const App = () => {
       screenName = `community_${communitySubTab}`;
     } else if (activeTab === 'stats') {
       screenName = `stats_main`;
+    } else if (activeTab === 'shop') {
+        screenName = 'shop';
     } else if (isAuthOpen) {
       screenName = 'auth';
     } else if (isPasswordRecovery) {
@@ -519,7 +525,7 @@ const App = () => {
     }
 
     // Tabs requiring auth
-    if ((tab === 'profile' || tab === 'community' || tab === 'moderation' || tab === 'stats') && !session) {
+    if ((tab === 'profile' || tab === 'community' || tab === 'moderation' || tab === 'stats' || tab === 'shop') && !session) {
       setIsAuthOpen(true);
       return;
     }
@@ -529,13 +535,30 @@ const App = () => {
         return;
     }
     // Tabs requiring ONLY developer role
-    if ((tab === 'moderation') && !userProfile?.is_developer) {
+    if ((tab === 'moderation' || tab === 'shop') && !userProfile?.is_developer) {
         setActiveTab('map'); // Fail silently to map
         return;
     }
 
     setActiveTab(tab);
   }, [isDesktop, pubPlacementState, session, userProfile, handleCancelPubPlacement]);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const utmSource = urlParams.get('utm_source');
+
+    // Store UTM source in session storage if it exists to be used on signup
+    if (utmSource) {
+        sessionStorage.setItem('stoutly-utm-source', utmSource);
+    }
+
+    // Check for coaster QR code for welcome modal, only show once
+    if (utmSource === 'coaster' && !sessionStorage.getItem('coasterWelcomeShown')) {
+        setIsCoasterWelcomeModalOpen(true);
+        trackEvent('view_coaster_welcome_modal');
+        sessionStorage.setItem('coasterWelcomeShown', 'true');
+    }
+  }, []);
 
   useEffect(() => {
     // This effect runs once when loading is complete to handle initial routing from URL params.
@@ -608,55 +631,47 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchClosedOsmPubs, fetchOsmPubOverrides]);
   
+  // Simplified, direct notification handler
+  const handleNewNotification = useCallback(async (payload) => {
+    const newNotification = payload.new;
 
-  // Real-time notifications listener
-  // Depends on the primitive `userId` to prevent re-subscribing on every render.
+    // The new backend trigger prevents duplicates, so we can process directly.
+    // We just need to enrich the notification with the actor's profile data.
+    let actorProfile = { id: newNotification.actor_id, username: 'A user', avatar_id: null };
+    if (newNotification.actor_id) {
+      const { data, error } = await supabase.from('profiles').select('id, username, avatar_id').eq('id', newNotification.actor_id).single();
+      if (!error && data) actorProfile = data;
+    }
+    const enrichedNotification = { ...newNotification, actor: actorProfile };
+    
+    setNotifications(prev => {
+      // Basic check to prevent re-adding if the websocket sends the same event twice.
+      if (prev.some(n => n.id === enrichedNotification.id)) {
+        return prev;
+      }
+      setToastNotification(enrichedNotification);
+      return [enrichedNotification, ...prev];
+    });
+  }, []);
+
   const userId = session?.user?.id;
   useEffect(() => {
-      if (!userId) return;
-  
-      const handleNewNotification = async (payload) => {
-        const newNotification = payload.new;
-        let actorProfile = null;
-        
-        if (newNotification.actor_id) {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('id, username, avatar_id')
-            .eq('id', newNotification.actor_id)
-            .single();
-          
-          if (error) {
-            console.error("Realtime listener failed to fetch actor profile:", error);
-            actorProfile = { id: newNotification.actor_id, username: 'A user', avatar_id: null };
-          } else {
-            actorProfile = data;
-          }
-        }
+    if (!userId) return;
 
-        const fullNotification = { ...newNotification, actor: actorProfile };
-        setNotifications(prev => [fullNotification, ...prev]);
-        setToastNotification(fullNotification);
-      };
+    const channel = supabase
+      .channel(`user-notifications:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${userId}` },
+        handleNewNotification
+      )
+      .subscribe();
 
-      const channel = supabase
-        .channel(`user-notifications:${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `recipient_id=eq.${userId}`,
-          },
-          handleNewNotification
-        )
-        .subscribe();
-  
-      return () => {
-        supabase.removeChannel(channel);
-      };
-  }, [userId]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, handleNewNotification]);
+
 
   const handleToastClick = () => {
     trackEvent('notification_toast_clicked');
@@ -929,39 +944,40 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    // 1. Create a map for de-duplicated pubs, keyed by pub ID.
     const processedPubs = new Map();
 
-    // 2. Add all database pubs first. They are the source of truth.
     dbPubs.forEach(dbPub => {
       processedPubs.set(dbPub.id, dbPub);
     });
 
-    // 3. Process Nominatim results, checking for duplicates against our trusted DB list.
     nominatimResults.forEach(nominatimPub => {
-      // Apply any name overrides first.
       const override = osmPubOverrides.get(nominatimPub.id);
       const finalNominatimPub = override ? { ...nominatimPub, name: override.name } : nominatimPub;
 
-      // Skip if a pub with the same ID is already in our map (the DB version is superior).
       if (processedPubs.has(finalNominatimPub.id)) {
+        const dbVersion = processedPubs.get(finalNominatimPub.id);
+        const mergedPub = {
+          ...finalNominatimPub,
+          ...dbVersion,
+        };
+        processedPubs.set(finalNominatimPub.id, mergedPub);
         return;
       }
       
-      // Perform a spatial de-duplication check against ALL pubs already processed.
-      // This prevents adding an OSM result that is a spatial duplicate of ANY DB pub (stoutly- or osm-).
       const isSpatialDuplicate = Array.from(processedPubs.values()).some(processedPub => {
         if (!finalNominatimPub.location || !processedPub.location) return false;
         
         const dist = getDistance(finalNominatimPub.location, processedPub.location);
-        if (dist > 50) return false; // Not a duplicate if more than 50m away.
+        if (dist > 50) return false;
         
-        // If close, check for similar names.
         const normOsmName = normalizePubNameForComparison(finalNominatimPub.name);
         const normDbName = normalizePubNameForComparison(processedPub.name);
+
+        if (!normOsmName || !normDbName) return false;
         
-        // Check if one name contains the other for fuzzy matching.
-        return normOsmName.includes(normDbName) || normDbName.includes(normOsmName);
+        // With improved normalization, we can use a stricter check.
+        // This solves issues with partial name matches causing false positives.
+        return normOsmName === normDbName;
       });
 
       if (!isSpatialDuplicate) {
@@ -969,33 +985,26 @@ const App = () => {
       }
     });
 
-    // 4. Convert the de-duplicated map back to an array.
     const combinedPubs = Array.from(processedPubs.values());
 
-    // 5. Filter the combined list for closed status and radius.
     const pubsInRadius = combinedPubs.filter(pub => {
-      // Filter 1: Pub is marked as closed in our database.
       if (pub.is_closed) {
         return false;
       }
       
-      // Filter 2: Pub is an OSM pub that's on our explicit blacklist.
       if (closedOsmPubIds.has(pub.id)) {
         return false;
       }
 
-      // Filter 3: Pub is outside the search radius.
-      if (!pub.location) return false; // Should not happen, but a good safeguard.
+      if (!pub.location) return false;
       const distance = getDistance(pub.location, searchOrigin);
       if (distance > settings.radius) {
         return false;
       }
 
-      // If all checks pass, keep the pub.
       return true;
     });
 
-    // 6. Enrich with ratings and scores, then update the state.
     const finalPubsList = pubsInRadius.map(pub => ({
       ...pub,
       ratings: allRatings.get(pub.id) || [],
@@ -1087,18 +1096,16 @@ const App = () => {
   }, [locationPermissionStatus, realUserLocation]);
 
   useEffect(() => {
-    const effectiveLocation = (settings.developerMode && settings.simulatedLocation)
-      ? settings.simulatedLocation.coords : realUserLocation;
-    
-    setUserLocation(effectiveLocation);
+    // The user's location is always their real location now.
+    setUserLocation(realUserLocation);
 
-    if (effectiveLocation !== DEFAULT_LOCATION && !initialLocationSet) {
-      setSearchOrigin(effectiveLocation);
-      setMapCenter(effectiveLocation);
+    if (realUserLocation !== DEFAULT_LOCATION && !initialLocationSet) {
+      setSearchOrigin(realUserLocation);
+      setMapCenter(realUserLocation);
       setInitialLocationSet(true);
       setSearchOnNextMoveEnd(true);
     }
-  }, [settings.developerMode, settings.simulatedLocation, realUserLocation, initialLocationSet]);
+  }, [realUserLocation, initialLocationSet]);
   
   const handleMapMove = useCallback((newCenter) => {
     setMapCenter(newCenter);
@@ -2104,6 +2111,32 @@ const App = () => {
     }
   }, [session, notifications, unreadNotificationsCount]);
   
+  const handleDeleteNotification = useCallback(async (notificationId) => {
+    if (!session) return;
+    trackEvent('delete_notification', { notification_id: notificationId });
+
+    // Optimistic update
+    const originalNotifications = notifications;
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+
+    const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId);
+    
+    if (error) {
+        console.error("Error deleting notification:", error);
+        // Revert on error
+        setNotifications(originalNotifications);
+        setAlertInfo({
+            isOpen: true,
+            title: 'Error',
+            message: 'Could not delete notification. Please try again.',
+            theme: 'error',
+        });
+    }
+  }, [session, notifications]);
+  
   // --- MODERATION HANDLERS (for reported comments) ---
 
   const fetchReportedComments = useCallback(async () => {
@@ -2210,6 +2243,8 @@ const App = () => {
         p_pub_id: pubToEdit.id,
         p_current_name: pubToEdit.name,
         p_current_address: pubToEdit.address,
+        p_lat: pubToEdit.location?.lat,
+        p_lng: pubToEdit.location?.lng,
         p_suggested_data: suggestionData.suggested_data,
         p_notes: suggestionData.notes,
     });
@@ -2258,6 +2293,7 @@ const App = () => {
       deleteConfirmationInfo,
       communitySubTab, setCommunitySubTab,
       StatsPage,
+      ShopPage,
       levelRequirements,
       settingsSubView, handleViewAdminPage,
       onOpenScoreExplanation: () => setIsPubScoreModalOpen(true),
@@ -2291,6 +2327,7 @@ const App = () => {
       onDeleteComment: handleDeleteComment,
       onReportComment: handleOpenReportCommentModal,
       onMarkNotificationsAsRead: handleMarkNotificationsAsRead,
+      onDeleteNotification: handleDeleteNotification,
       
       // Implemented "Add Pub" flow handlers
       handleAddPubClick: handleAddPubClick,
@@ -2311,7 +2348,6 @@ const App = () => {
       
       // Stubs
       handleSettingsChange: setSettings,
-      handleSetSimulatedLocation: () => {},
 
       // Toast Notification
       toastNotification,
@@ -2328,6 +2364,7 @@ const App = () => {
 
   const renderModals = () => (
     <>
+        {isCoasterWelcomeModalOpen && <CoasterWelcomeModal onClose={() => setIsCoasterWelcomeModalOpen(false)} />}
         {isPubScoreModalOpen && <PubScoreExplanationModal isOpen={isPubScoreModalOpen} onClose={() => setIsPubScoreModalOpen(false)} />}
         {isEditUsernameModalOpen && userProfile && (
           <EditUsernameModal

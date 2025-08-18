@@ -101,7 +101,7 @@ const MobileLayout = (props) => {
         onOpenSuggestEditModal,
         unreadNotificationsCount,
         // Comments and notifications
-        notifications, onMarkNotificationsAsRead,
+        notifications, onMarkNotificationsAsRead, onDeleteNotification,
         commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment,
         reportCommentInfo, onCloseReportCommentModal, onSubmitReportComment,
         // Moderation
@@ -159,6 +159,7 @@ const MobileLayout = (props) => {
                             unreadNotificationsCount={unreadNotificationsCount}
                             notifications={notifications}
                             onMarkNotificationsAsRead={onMarkNotificationsAsRead}
+                            onDeleteNotification={onDeleteNotification}
                             commentsByRating={commentsByRating}
                             isCommentsLoading={isCommentsLoading}
                             onFetchComments={onFetchComments}
@@ -337,7 +338,7 @@ const MobileLayout = (props) => {
                             isLoading={isFetchingFriendsList}
                             onBack={handleBackFromFriendsList}
                             onViewProfile={handleViewProfile}
-                            onFriendAction={handleFriendAction}
+                            onFriendAction={onFriendAction}
                         />
                     )}
                 </div>

@@ -13,6 +13,7 @@ const urlsToCache = [
   '/utils.js',
   '/analytics.js',
   '/hooks/useIsDesktop.js',
+  '/hooks/useRegion.js',
   '/imageUtils.js',
   '/contexts/OnlineStatusContext.jsx',
   '/components/Map.jsx',
@@ -80,6 +81,10 @@ const urlsToCache = [
   '/components/CommentContent.jsx',
   '/components/SuggestEditModal.jsx',
   '/components/ForecastsPage.jsx',
+  '/components/ShopPage.jsx',
+  '/components/ShopItemCard.jsx',
+  '/components/CoasterWelcomeModal.jsx',
+  '/components/UtmStatsPage.jsx',
 ];
 
 self.addEventListener('install', event => {

@@ -5,7 +5,7 @@ import React from 'react';
 const XPPopup = () => {
   return (
     <div
-      className="fixed bottom-24 left-1/2 w-auto pointer-events-none z-[1500] pb-safe"
+      className="fixed bottom-24 left-1/2 -translate-x-1/2 w-auto pointer-events-none z-[1500] pb-safe"
       aria-live="polite"
       role="alert"
     >

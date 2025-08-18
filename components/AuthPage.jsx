@@ -50,6 +50,8 @@ const AuthPage = ({ onClose }) => {
             throw new Error('Username must be 3-20 characters and contain only letters, numbers, or underscores.');
         }
         
+        const signupUtmSource = sessionStorage.getItem('stoutly-utm-source');
+
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -57,6 +59,7 @@ const AuthPage = ({ onClose }) => {
             data: {
               username,
               accepts_marketing: acceptsMarketing,
+              signup_utm_source: signupUtmSource,
             },
           },
         });

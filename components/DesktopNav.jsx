@@ -1,12 +1,13 @@
 import React from 'react';
 import Icon from './Icon.jsx';
 import ProfileAvatar from './ProfileAvatar.jsx';
+import useRegion from '../hooks/useRegion.js';
 
 const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, tooltipPosition = 'right', notificationCount = 0 }) => {
   const isActive = activeTab === tab.id;
 
   const handleClick = () => {
-    if ((tab.id === 'profile' || tab.id === 'community' || tab.id === 'moderation' || tab.id === 'stats') && !userProfile) {
+    if ((tab.id === 'profile' || tab.id === 'community' || tab.id === 'moderation' || tab.id === 'stats' || tab.id === 'shop') && !userProfile) {
       onLoginRequest();
     } else {
       onTabChange(tab.id);
@@ -43,12 +44,16 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
   );
 };
 
-const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements, unreadNotificationsCount }) => {
+const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements, unreadNotificationsCount, settings }) => {
+  const region = useRegion();
+
   const mainTabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
   ];
   
+  const shopTab = { id: 'shop', icon: 'fa-shopping-bag', label: 'Shop' };
+
   const bottomTabs = [
       { id: 'settings', icon: 'fa-cog', label: 'Settings' },
   ];
@@ -70,6 +75,15 @@ const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequ
             notificationCount={tab.id === 'community' ? unreadNotificationsCount : 0}
         />
       ))}
+
+      {(userProfile?.is_developer && settings?.developerMode && region === 'gb') && (
+          <NavButton
+            key={shopTab.id}
+            tab={shopTab}
+            {...{ activeTab, onTabChange, onLoginRequest, userProfile }}
+            tooltipPosition="right"
+          />
+      )}
       
       <div className="!mt-auto flex flex-col items-center space-y-4">
         <div className="w-full border-t border-gray-200 dark:border-gray-700 my-2"></div>

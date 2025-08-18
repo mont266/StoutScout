@@ -6,7 +6,7 @@ import FriendsFeed from './FriendsFeed.jsx';
 import NotificationsPage from './NotificationsPage.jsx';
 import ImageModal from './ImageModal.jsx';
 
-const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment }) => {
+const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onDeleteNotification }) => {
     const [imageToView, setImageToView] = useState(null);
     const [feedFilter, setFeedFilter] = useState({ sortBy: 'created_at', timePeriod: 'all' });
 
@@ -87,7 +87,7 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                     {activeSubTab === 'community' && <CommunityFeed onViewProfile={(id) => onViewProfile(id, 'community')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} />}
                     {activeSubTab === 'friends' && <FriendsFeed onViewProfile={(id) => onViewProfile(id, 'friends')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} />}
                     {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} />}
-                    {activeSubTab === 'notifications' && <NotificationsPage notifications={notifications} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'notifications')} onDataRefresh={onDataRefresh} onViewPub={onViewPub} friendships={friendships} />}
+                    {activeSubTab === 'notifications' && <NotificationsPage notifications={notifications} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'notifications')} onDataRefresh={onDataRefresh} onViewPub={onViewPub} friendships={friendships} onDeleteNotification={onDeleteNotification} />}
                 </main>
 
             </div>

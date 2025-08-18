@@ -33,14 +33,21 @@ export const extractPostcode = (address) => {
 
 /**
  * Normalizes a pub name for easier comparison.
- * Converts to lowercase, trims whitespace, and removes a leading "the " if present.
+ * This is an aggressive normalization function.
+ * It removes possessives, all punctuation, common pub-related words, and all whitespace.
  * @param {string} name The original pub name.
  * @returns {string} The normalized name.
  */
 export const normalizePubNameForComparison = (name) => {
   if (!name) return '';
-  // Convert to lowercase, trim whitespace, and remove a leading "the " if present.
-  return name.toLowerCase().trim().replace(/^the\s+/, '');
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/'s\b/g, '') // e.g., "kavanagh's" -> "kavanagh"
+    .replace(/[^a-z0-9\s]/g, '') // Remove all non-alphanumeric characters except spaces
+    // Remove a comprehensive list of common pub suffixes and articles
+    .replace(/\b(the|inn|tavern|pub|bar|arms|house|hotel|lounge)\b/g, '') 
+    .replace(/\s+/g, '');      // Remove all remaining whitespace
 };
 
 
@@ -260,4 +267,19 @@ export const getMobileOS = () => {
       return 'iOS';
     }
     return 'unknown';
+};
+
+/**
+ * Formats a numeric price and ISO currency code into a display string.
+ * @param {number | null} price The numeric price.
+ * @param {string} currencyCode The ISO 4217 currency code (e.g., 'GBP').
+ * @returns {string} A formatted currency string, e.g., "£19.99".
+ */
+export const formatCurrency = (price, currencyCode) => {
+    if (price === null || price === undefined) return 'Price not available';
+    // Use en-GB as a base for formatting, but the currency code determines the symbol.
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: currencyCode,
+    }).format(price);
 };
