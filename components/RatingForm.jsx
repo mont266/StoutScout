@@ -1,18 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import StarRating from './StarRating.jsx';
 import ImageCropper from './ImageCropper.jsx';
+import { getStarRatingFromPrice } from '../utils.js';
 
-const getStarRatingFromPrice = (price) => {
-    if (price === '' || isNaN(price)) return 0;
-    const numericPrice = parseFloat(price);
-    if (numericPrice < 4.50) return 5; // Very Cheap
-    if (numericPrice <= 5.49) return 4; // Cheap
-    if (numericPrice <= 5.99) return 3; // Average
-    if (numericPrice <= 6.99) return 2; // Expensive
-    return 1; // Very Expensive
-};
-
-const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote }) => {
+const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote, isLondon = false }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
   const [priceInput, setPriceInput] = useState('');
@@ -30,13 +21,24 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
 
 
   // Dynamically create price labels based on the currency symbol
-  const priceLabels = useMemo(() => [
-    `Very Expensive\n(e.g., ${currencySymbol}7.00+)`,      // 1 star
-    `Expensive\n(e.g., ${currencySymbol}6.00 - ${currencySymbol}6.99)`,   // 2 stars
-    `Average\n(e.g., ${currencySymbol}5.50 - ${currencySymbol}5.99)`,     // 3 stars
-    `Cheap\n(e.g., ${currencySymbol}4.50 - ${currencySymbol}5.49)`,       // 4 stars
-    `Very Cheap\n(e.g., < ${currencySymbol}4.50)`          // 5 stars
-  ], [currencySymbol]);
+  const priceLabels = useMemo(() => {
+    if (isLondon) {
+        return [
+            `Very Expensive\n(e.g., > ${currencySymbol}8.49)`,
+            `Expensive\n(e.g., ${currencySymbol}7.50 - ${currencySymbol}8.49)`,
+            `Average\n(e.g., ${currencySymbol}6.75 - ${currencySymbol}7.49)`,
+            `Cheap\n(e.g., ${currencySymbol}6.00 - ${currencySymbol}6.74)`,
+            `Very Cheap\n(e.g., < ${currencySymbol}6.00)`
+        ];
+    }
+    return [
+        `Very Expensive\n(e.g., > ${currencySymbol}7.00)`,
+        `Expensive\n(e.g., ${currencySymbol}6.00 - ${currencySymbol}6.99)`,
+        `Average\n(e.g., ${currencySymbol}5.50 - ${currencySymbol}5.99)`,
+        `Cheap\n(e.g., ${currencySymbol}4.50 - ${currencySymbol}5.49)`,
+        `Very Cheap\n(e.g., < ${currencySymbol}4.50)`
+    ];
+  }, [currencySymbol, isLondon]);
 
   useEffect(() => {
     // Pre-fill the form if an existing rating is provided
@@ -56,7 +58,7 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
   const handlePriceInputChange = (e) => {
     const newPrice = e.target.value;
     setPriceInput(newPrice);
-    setPrice(getStarRatingFromPrice(newPrice));
+    setPrice(getStarRatingFromPrice(newPrice, isLondon));
   };
   
   const handlePriceStarChange = (newStarRating) => {

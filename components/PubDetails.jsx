@@ -5,7 +5,7 @@ import ImageModal from './ImageModal.jsx';
 import ReportImageModal from './ReportImageModal.jsx';
 import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
-import { formatTimeAgo, getCurrencyInfo } from '../utils.js';
+import { formatTimeAgo, getCurrencyInfo, isLondonPub } from '../utils.js';
 import Avatar from './Avatar.jsx';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import AlertModal from './AlertModal.jsx';
@@ -86,6 +86,8 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [visibleComments, setVisibleComments] = useState({});
   const ratingsListRef = useRef(null);
+
+  const isLondonNonDynamic = useMemo(() => isLondonPub(localPub) && !localPub.is_dynamic_price_area, [localPub]);
 
   useEffect(() => {
     // This effect ensures we always have the most complete pub data available,
@@ -183,7 +185,15 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   const priceLabel = (
     <div className="flex items-center justify-center gap-1.5 uppercase tracking-wider">
         <span>Avg. Price</span>
-        {localPub.is_dynamic_price_area && (
+        {isLondonNonDynamic ? (
+            <div className="group relative flex items-center normal-case">
+                <i className="fas fa-city text-gray-400 dark:text-gray-500 cursor-help"></i>
+                <div className="absolute bottom-full mb-2 w-max max-w-[220px] left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+                    <span className="font-bold block">London Pricing</span>
+                    This pub uses a London-specific price scale (e.g., Average ~£7.00) as it has not yet met the criteria for dynamic local pricing.
+                </div>
+            </div>
+        ) : localPub.is_dynamic_price_area ? (
             <div className="group relative flex items-center normal-case">
                 <i className="fas fa-globe-europe text-gray-400 dark:text-gray-500 cursor-help"></i>
                 <div className="absolute bottom-full mb-2 w-max max-w-[200px] left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
@@ -191,8 +201,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                     This rating compares prices to the local average, not a global standard.
                 </div>
             </div>
-        )}
-        {!localPub.is_dynamic_price_area && localPub.area_identifier && (
+        ) : localPub.area_identifier ? (
             <div className="group relative flex items-center normal-case">
                 <i className="fas fa-hourglass-half text-gray-400 dark:text-gray-500 cursor-help"></i>
                 <div className="absolute bottom-full mb-2 w-max max-w-xs left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
@@ -202,8 +211,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                     This area has <span className="font-bold text-amber-400">{localPub.area_rating_count}</span> of the <span className="font-bold">{DYNAMIC_PRICING_THRESHOLD}</span> exact price ratings needed to activate this feature.
                 </div>
             </div>
-        )}
-        {!localPub.is_dynamic_price_area && !localPub.area_identifier && (
+        ) : (
             <div className="group relative flex items-center normal-case">
                 <i className="fas fa-hourglass-half text-gray-400 dark:text-gray-500 cursor-help"></i>
                 <div className="absolute bottom-full mb-2 w-max max-w-xs left-1/2 -translate-x-1/2 p-2 text-xs text-white bg-gray-900/90 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
@@ -416,6 +424,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                         existingIsPrivate={existingUserRating?.is_private}
                         isSubmitting={isSubmittingRating}
                         userZeroVote={userZeroVotes.get(localPub.id)}
+                        isLondon={isLondonNonDynamic}
                     />
                 )}
             </div>

@@ -3,7 +3,7 @@ import { FilterType } from './types.js';
 import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
-import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, extractPostcode, normalizePubNameForComparison } from './utils.js';
+import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, extractPostcode, normalizePubNameForComparison, isLondonPub } from './utils.js';
 import { initializeAnalytics, trackEvent } from './analytics.js';
 
 import MobileLayout from './components/MobileLayout.jsx';
@@ -1173,8 +1173,21 @@ const App = () => {
       if (ratingsWithExactPrice.length > 0) {
           return ratingsWithExactPrice.reduce((acc, r) => acc + r.exact_price, 0) / ratingsWithExactPrice.length;
       }
+      
       const avgStarRating = getAverageRating(pub.ratings, 'price');
+      const isLondonNonDynamic = isLondonPub(pub) && !pub.is_dynamic_price_area;
+
       if (avgStarRating === 0) return 999;
+
+      if (isLondonNonDynamic) {
+          if (avgStarRating > 4.5) return 5.50;  // < 6.00
+          if (avgStarRating > 3.5) return 6.37;  // 6.00 - 6.74
+          if (avgStarRating > 2.5) return 7.12;  // 6.75 - 7.49
+          if (avgStarRating > 1.5) return 8.00;  // 7.50 - 8.49
+          return 9.00;  // > 8.49
+      }
+
+      // Original logic
       if (avgStarRating > 4.5) return 4.25; if (avgStarRating > 3.5) return 5.00;
       if (avgStarRating > 2.5) return 5.75; if (avgStarRating > 1.5) return 6.50;
       return 7.50;

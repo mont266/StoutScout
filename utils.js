@@ -138,6 +138,18 @@ export const normalizeReverseGeocodeResult = (reverseGeocodeResult) => {
     return 'Could not determine address';
 };
 
+/**
+ * Determines if a pub is in London based on its address.
+ * @param {object} pub The pub object.
+ * @returns {boolean} True if the pub is likely in London.
+ */
+export const isLondonPub = (pub) => {
+    if (!pub || !pub.address) return false;
+    // Simple check for "London" in the address, but not "Londonderry".
+    const lowerAddress = pub.address.toLowerCase();
+    return lowerAddress.includes('london') && !lowerAddress.includes('londonderry');
+};
+
 
 export const formatTimeAgo = (timestamp) => {
     const now = new Date();
@@ -240,12 +252,22 @@ export const getCurrencyInfo = (pubLocationData = {}) => {
 
 /**
  * Converts a price star rating into a human-readable price range string.
- * This logic should mirror the star calculation in RatingForm.jsx and sorting in App.jsx.
  * @param {number} avgStarRating The average star rating for price (1-5).
  * @param {string} currencySymbol The currency symbol to use (e.g., '£', '€', '$').
+ * @param {boolean} isLondon Whether to use the London-specific price scale.
  * @returns {string} A formatted price range string, e.g., "£5.50 - £5.99".
  */
-export const getPriceRangeFromStars = (avgStarRating, currencySymbol) => {
+export const getPriceRangeFromStars = (avgStarRating, currencySymbol, isLondon = false) => {
+    if (isLondon) {
+        if (avgStarRating > 4.5) return `< ${currencySymbol}6.00`;
+        if (avgStarRating > 3.5) return `${currencySymbol}6.00 - ${currencySymbol}6.74`;
+        if (avgStarRating > 2.5) return `${currencySymbol}6.75 - ${currencySymbol}7.49`;
+        if (avgStarRating > 1.5) return `${currencySymbol}7.50 - ${currencySymbol}8.49`;
+        if (avgStarRating > 0) return `> ${currencySymbol}8.49`;
+        return '';
+    }
+
+    // Original logic
     if (avgStarRating > 4.5) return `< ${currencySymbol}4.50`;
     if (avgStarRating > 3.5) return `${currencySymbol}4.50 - ${currencySymbol}5.49`;
     if (avgStarRating > 2.5) return `${currencySymbol}5.50 - ${currencySymbol}5.99`;
@@ -253,6 +275,33 @@ export const getPriceRangeFromStars = (avgStarRating, currencySymbol) => {
     if (avgStarRating > 0) return `> ${currencySymbol}7.00`;
     return ''; // Return empty string if no rating
 };
+
+/**
+ * Converts an exact price into a star rating (1-5).
+ * @param {number | string | null} price The exact price.
+ * @param {boolean} isLondon Whether to use the London-specific price scale.
+ * @returns {number} The star rating (0-5).
+ */
+export const getStarRatingFromPrice = (price, isLondon = false) => {
+    if (price === '' || price === null || isNaN(price)) return 0;
+    const numericPrice = parseFloat(price);
+
+    if (isLondon) {
+        if (numericPrice < 6.00) return 5;
+        if (numericPrice <= 6.74) return 4;
+        if (numericPrice <= 7.49) return 3;
+        if (numericPrice <= 8.49) return 2;
+        return 1;
+    }
+
+    // Original logic
+    if (numericPrice < 4.50) return 5;
+    if (numericPrice <= 5.49) return 4;
+    if (numericPrice <= 5.99) return 3;
+    if (numericPrice <= 6.99) return 2;
+    return 1;
+};
+
 
 /**
  * Detects the user's mobile operating system.

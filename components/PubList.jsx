@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FilterType } from '../types.js';
 import StarRating from './StarRating.jsx';
-import { getCurrencyInfo, getPriceRangeFromStars } from '../utils.js';
+import { getCurrencyInfo, getPriceRangeFromStars, isLondonPub } from '../utils.js';
 import CoachMark from './CoachMark.jsx';
 
 const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading, showToggleHeader = true, onOpenScoreExplanation }) => {
@@ -60,6 +60,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
         case FilterType.Price:
             const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
             const currencyInfo = getCurrencyInfo(pub);
+            const isLondonNonDynamic = isLondonPub(pub) && !pub.is_dynamic_price_area;
 
             if (ratingsWithPrice.length > 0) {
                 const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
@@ -70,7 +71,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
             const avgPrice = getAverageRating(pub.ratings, 'price');
 
             if (avgPrice > 0) {
-                const priceRange = getPriceRangeFromStars(avgPrice, currencyInfo.symbol);
+                const priceRange = getPriceRangeFromStars(avgPrice, currencyInfo.symbol, isLondonNonDynamic);
                 return (
                     <div className="flex flex-col items-end">
                         <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-0.5">{priceRange}</span>
