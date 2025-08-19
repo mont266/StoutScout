@@ -132,16 +132,17 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
         />
     )}
     <form onSubmit={handleSubmit} className="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg space-y-4">
-      <div>
-        <label className="block text-gray-700 dark:text-gray-300 mb-2">Price Rating: (Higher is cheaper)</label>
+      <fieldset>
+        <legend className="block text-gray-700 dark:text-gray-300 mb-2">Price Rating: (Higher is cheaper)</legend>
         <StarRating
+          name="price-rating"
           rating={price}
           onRatingChange={handlePriceStarChange}
           interactive
           color="text-green-400"
           labels={priceLabels}
         />
-      </div>
+      </fieldset>
 
       <div className="text-center text-sm text-gray-500 dark:text-gray-400">OR</div>
 
@@ -162,10 +163,10 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
         </div>
       </div>
 
-      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-        <label className="block text-gray-700 dark:text-gray-300 mb-2">Quality Rating:</label>
-        <StarRating rating={quality} onRatingChange={setQuality} interactive color="text-amber-400" />
-      </div>
+      <fieldset className="pt-2 border-t border-gray-200 dark:border-gray-700">
+        <legend className="block text-gray-700 dark:text-gray-300 mb-2">Quality Rating:</legend>
+        <StarRating name="quality-rating" rating={quality} onRatingChange={setQuality} interactive color="text-amber-400" />
+      </fieldset>
 
        <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
         <label htmlFor="message-input" className="block text-gray-700 dark:text-gray-300 mb-2">Add a message (Optional)</label>

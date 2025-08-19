@@ -7,6 +7,7 @@ const StarRating = ({
   interactive = false,
   color = 'text-yellow-400',
   labels,
+  name,
 }) => {
   const [hover, setHover] = useState(0);
 
@@ -25,7 +26,7 @@ const StarRating = ({
             <label key={i}>
               <input
                 type="radio"
-                name="rating"
+                name={name}
                 value={ratingValue}
                 onClick={() => onRatingChange?.(ratingValue)}
                 className="hidden"

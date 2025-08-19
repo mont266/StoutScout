@@ -24,6 +24,7 @@ import { OnlineStatusContext } from './contexts/OnlineStatusContext.jsx';
 import AlertModal from './components/AlertModal.jsx';
 import ShopPage from './components/ShopPage.jsx';
 import CoasterWelcomeModal from './components/CoasterWelcomeModal.jsx';
+import Confetti from 'react-confetti';
 
 
 const App = () => {
@@ -140,6 +141,24 @@ const App = () => {
 
   // Online Presence State
   const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+
+  // Confetti State
+  const [confettiState, setConfettiState] = useState({ active: false, recycle: false, opacity: 0, key: null, numberOfPieces: 200 });
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
 
   // --- HOOKS ---
@@ -277,6 +296,32 @@ const App = () => {
       supabase.removeChannel(channel);
     };
   }, [session]);
+
+  // Confetti lifecycle management
+  useEffect(() => {
+    if (confettiState.active) {
+        // After 3 seconds, stop recycling so particles start to fall away.
+        const recycleTimer = setTimeout(() => {
+            setConfettiState(prev => ({ ...prev, recycle: false }));
+        }, 3000);
+
+        // After 4 seconds, start fading out the canvas.
+        const fadeTimer = setTimeout(() => {
+            setConfettiState(prev => ({ ...prev, opacity: 0 }));
+        }, 4000);
+
+        // After 6 seconds (fade duration is 2s), deactivate confetti completely.
+        const cleanupTimer = setTimeout(() => {
+            setConfettiState(prev => ({ ...prev, active: false, key: null }));
+        }, 6000);
+
+        return () => {
+            clearTimeout(recycleTimer);
+            clearTimeout(fadeTimer);
+            clearTimeout(cleanupTimer);
+        };
+    }
+  }, [confettiState.key]);
 
 
   const fetchDbPubs = useCallback(async () => {
@@ -1261,21 +1306,33 @@ const App = () => {
         const oldLevel = userProfile?.level;
         const { profile: newProfile } = await fetchUserData();
 
+        const triggerConfetti = (pieces) => {
+            setConfettiState({
+                active: true,
+                recycle: true,
+                opacity: 1,
+                key: crypto.randomUUID(),
+                numberOfPieces: pieces,
+            });
+        };
+
         if (!isUpdating) {
             if (newProfile?.level > oldLevel) {
                 const oldRank = getRankData(oldLevel);
                 const newRank = getRankData(newProfile.level);
                 if (newRank.name !== oldRank.name) {
-                    setRankUpInfo({ key: Date.now(), newRank });
+                    setRankUpInfo({ key: crypto.randomUUID(), newRank });
+                    triggerConfetti(400); // More confetti for rank up
                     trackEvent('rank_up', { new_rank: newRank.name, level: newProfile.level });
                 } else {
-                    setLeveledUpInfo({ key: Date.now(), newLevel: newProfile.level });
+                    setLeveledUpInfo({ key: crypto.randomUUID(), newLevel: newProfile.level });
+                    triggerConfetti(200); // Standard confetti for level up
                     trackEvent('level_up', { level: newProfile.level });
                 }
             }
-            setReviewPopupInfo({ key: Date.now() });
+            setReviewPopupInfo({ key: crypto.randomUUID() });
         } else {
-            setUpdateConfirmationInfo({ key: Date.now() });
+            setUpdateConfirmationInfo({ key: crypto.randomUUID() });
         }
         
     } catch (error) {
@@ -1401,7 +1458,7 @@ const App = () => {
         if (deleteError) throw deleteError;
 
         // 3. Show success popup
-        setDeleteConfirmationInfo({ key: Date.now() });
+        setDeleteConfirmationInfo({ key: crypto.randomUUID() });
 
         // 4. Silently re-fetch user data in the background to ensure consistency
         // for level/rank after the DB trigger has run. This is quick and doesn't block UI.
@@ -1934,7 +1991,7 @@ const App = () => {
       handleCancelPubPlacement(); 
   
       // Show success popup
-      setAddPubSuccessInfo({ key: Date.now() });
+      setAddPubSuccessInfo({ key: crypto.randomUUID() });
 
       // Refresh data to include the new pub
       await handleDataRefresh();
@@ -2360,6 +2417,7 @@ const App = () => {
       // Username and Bio change
       onEditUsernameClick: () => setIsEditUsernameModalOpen(true),
       onEditBioClick: () => setIsEditBioModalOpen(true),
+      setAlertInfo,
   };
 
   const renderModals = () => (
@@ -2412,6 +2470,21 @@ const App = () => {
 
   return (
     <OnlineStatusContext.Provider value={{ onlineUserIds }}>
+      {confettiState.active && (
+        <Confetti
+          key={confettiState.key}
+          width={windowSize.width}
+          height={windowSize.height}
+          recycle={confettiState.recycle}
+          numberOfPieces={confettiState.numberOfPieces}
+          style={{
+            zIndex: 3000,
+            pointerEvents: 'none',
+            opacity: confettiState.opacity,
+            transition: 'opacity 2s ease-out',
+          }}
+        />
+      )}
       {renderModals()}
       {AppContent}
       {cookieConsent === null && (

@@ -14,7 +14,7 @@ import KofiModal from './KofiModal.jsx';
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, userProfile, session, onLogout, onViewProfile, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall }) => {
+const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, userProfile, session, onLogout, onViewProfile, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, onMarketingConsentChange }) => {
   const [locationInput, setLocationInput] = useState(settings.simulatedLocation?.name || '');
   const [isLocating, setIsLocating] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -245,6 +245,33 @@ const SettingsPage = ({ settings, onSettingsChange, onSetSimulatedLocation, user
               </div>
             </div>
           </div>
+          
+          {userProfile && (
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2" id="marketing-label">
+                      Marketing Preferences
+                  </h3>
+                  <div className="bg-gray-100 dark:bg-gray-900 p-3 rounded-lg">
+                      <label htmlFor="marketing-consent-toggle" className="flex items-center justify-between cursor-pointer">
+                          <span className="flex flex-col">
+                              <span className="font-medium text-gray-700 dark:text-gray-300">Receive marketing emails</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Get news about new features, events, and offers.</span>
+                          </span>
+                          <div className="relative">
+                              <input
+                                  id="marketing-consent-toggle"
+                                  type="checkbox"
+                                  className="sr-only peer"
+                                  checked={userProfile.accepts_marketing || false}
+                                  onChange={(e) => onMarketingConsentChange(e.target.checked)}
+                              />
+                              <div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
+                              <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
+                          </div>
+                      </label>
+                  </div>
+              </div>
+          )}
 
           {/* Admin Tools Section */}
           {(userProfile?.is_developer || userProfile?.is_team_member) && (

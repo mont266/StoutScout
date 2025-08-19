@@ -1,17 +1,5 @@
 import React from 'react';
 
-// Re-using a confetti component for celebration
-const Confetti = () => {
-  const confetti = Array.from({ length: 70 }).map((_, i) => {
-    const style = {
-      left: `${Math.random() * 100}vw`,
-      animationDelay: `${Math.random() * 4}s`,
-    };
-    return <div key={i} className="confetti-piece" style={style}></div>;
-  });
-  return <div className="absolute inset-0 pointer-events-none overflow-hidden">{confetti}</div>;
-};
-
 const RankUpPopup = ({ newRank }) => {
   if (!newRank) return null;
 
@@ -21,7 +9,6 @@ const RankUpPopup = ({ newRank }) => {
       aria-live="polite"
       role="alert"
     >
-      <Confetti />
       <div className="relative text-center bg-gradient-to-br from-gray-900 to-black border-4 border-amber-500 rounded-2xl shadow-2xl p-8 max-w-sm w-full">
          <h2 className="text-4xl font-extrabold tracking-tight text-white uppercase drop-shadow-lg mb-4">
             <span className="text-amber-400">Rank</span> Up!

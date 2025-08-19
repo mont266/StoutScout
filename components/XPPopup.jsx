@@ -10,7 +10,7 @@ const XPPopup = () => {
       role="alert"
     >
       <div className="animate-toast-in-out flex items-center space-x-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white font-bold text-base py-3 px-6 rounded-full shadow-2xl border border-amber-400/50">
-        <i className="fas fa-plus-circle text-green-400"></i>
+        <i className="fas fa-plus-circle text-green-400" aria-hidden="true"></i>
         <span>+1 Rating Submitted</span>
       </div>
     </div>

@@ -14,7 +14,7 @@ import KofiModal from './KofiModal.jsx';
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewProfile, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, onMarketingConsentChange }) => {
+const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewProfile, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isKofiModalOpen, setIsKofiModalOpen] = useState(false);
@@ -22,6 +22,8 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   const [refreshStatsSuccess, setRefreshStatsSuccess] = useState(false);
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [rebuildSuccess, setRebuildSuccess] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillSuccess, setBackfillSuccess] = useState(false);
   
   const handleUnitChange = (unit) => onSettingsChange({ ...settings, unit });
   const handleThemeChange = (theme) => onSettingsChange({ ...settings, theme });
@@ -99,6 +101,43 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
         alert(`Could not rebuild dynamic pricing: ${error.message}`);
     } finally {
         setIsRebuilding(false);
+    }
+  };
+
+  const handleBackfillPubData = async () => {
+    if (!window.confirm("This will process up to 50 uncategorized pubs to add their country data. This may take a minute. Continue?")) {
+      return;
+    }
+    setIsBackfilling(true);
+    setBackfillSuccess(false);
+    trackEvent('manual_backfill_pub_data');
+    try {
+        const { data, error } = await supabase.functions.invoke('backfill-country-data');
+        if (error) throw new Error(error.message);
+        
+        setBackfillSuccess(true);
+        setTimeout(() => setBackfillSuccess(false), 3000);
+        
+        setAlertInfo({
+            isOpen: true,
+            title: 'Backfill Complete',
+            message: data.message,
+            theme: 'success',
+        });
+        
+        // Refresh app data to see changes
+        await onDataRefresh();
+
+    } catch (error) {
+        console.error("Error backfilling pub data:", error);
+        setAlertInfo({
+            isOpen: true,
+            title: 'Backfill Failed',
+            message: error.details || error.message,
+            theme: 'error',
+        });
+    } finally {
+        setIsBackfilling(false);
     }
   };
 
@@ -226,96 +265,56 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
               </div>
             </div>
           </div>
-
-          {/* Notification Preferences */}
+          
           {userProfile && (
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-2">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white px-2">Notification Preferences</h3>
-                 <label htmlFor="marketing-toggle" className="flex items-center justify-between cursor-pointer p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-                    <span className="flex flex-col pr-4">
-                        <span className="font-medium text-gray-700 dark:text-gray-300">Marketing Emails</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Receive news, offers, and updates from Stoutly.</span>
-                    </span>
-                    <div className="relative flex-shrink-0">
-                        <input
-                            id="marketing-toggle"
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={userProfile.accepts_marketing || false}
-                            onChange={(e) => onMarketingConsentChange(e.target.checked)}
-                        />
-                        <div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
-                        <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
-                    </div>
-                </label>
-            </div>
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2" id="marketing-label">
+                      Marketing Preferences
+                  </h3>
+                  <div className="bg-gray-100 dark:bg-gray-900 p-3 rounded-lg">
+                      <label htmlFor="marketing-consent-toggle" className="flex items-center justify-between cursor-pointer">
+                          <span className="flex flex-col">
+                              <span className="font-medium text-gray-700 dark:text-gray-300">Receive marketing emails</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Get news about new features, events, and offers.</span>
+                          </span>
+                          <div className="relative">
+                              <input
+                                  id="marketing-consent-toggle"
+                                  type="checkbox"
+                                  className="sr-only peer"
+                                  checked={userProfile.accepts_marketing || false}
+                                  onChange={(e) => onMarketingConsentChange(e.target.checked)}
+                              />
+                              <div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
+                              <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
+                          </div>
+                      </label>
+                  </div>
+              </div>
           )}
 
           {/* Admin Tools Section */}
           {(userProfile?.is_developer || userProfile?.is_team_member) && (
               <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
                    <h3 className="text-xl font-bold text-red-500 dark:text-red-400 text-center">Admin Tools</h3>
-                   <div className="space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {userProfile?.is_developer && (
-                            <button
-                                onClick={() => { onViewModeration(); trackEvent('view_moderation_center'); }}
-                                className="flex-1 flex items-center justify-center space-x-2 bg-red-500/10 text-red-500 dark:text-red-400 font-bold py-3 px-4 rounded-lg hover:bg-red-500/20 transition-colors"
-                            >
-                                <i className="fas fa-shield-alt"></i>
-                                <span>Moderation</span>
-                            </button>
-                          )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {userProfile?.is_developer && (
                           <button
-                              onClick={() => { onViewStats(); trackEvent('view_stats_page'); }}
-                              className="flex-1 flex items-center justify-center space-x-2 bg-blue-500/10 text-blue-500 dark:text-blue-400 font-bold py-3 px-4 rounded-lg hover:bg-blue-500/20 transition-colors"
+                              onClick={() => { onViewModeration(); trackEvent('view_moderation_center'); }}
+                              className="flex-1 flex items-center justify-center space-x-2 bg-red-500/10 text-red-500 dark:text-red-400 font-bold py-3 px-4 rounded-lg hover:bg-red-500/20 transition-colors"
                           >
-                              <i className="fas fa-chart-bar"></i>
-                              <span>Stats</span>
+                              <i className="fas fa-shield-alt"></i>
+                              <span>Moderation</span>
                           </button>
-                      </div>
-                      <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg space-y-3">
-                          <p className="text-xs text-center text-gray-500 dark:text-gray-400">Use these tools to fix data inconsistencies for the dynamic pricing feature.</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <button
-                                onClick={handleRebuildDynamicPricing}
-                                disabled={isRebuilding}
-                                className="flex-1 flex items-center justify-center space-x-2 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-bold py-3 px-4 rounded-lg hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
-                              >
-                                  {isRebuilding 
-                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
-                                      : rebuildSuccess 
-                                          ? <i className="fas fa-check"></i> 
-                                          : <i className="fas fa-cogs"></i>}
-                                  <span>
-                                      {isRebuilding 
-                                          ? 'Rebuilding...' 
-                                          : rebuildSuccess 
-                                              ? 'Rebuilt!' 
-                                              : 'Rebuild Dynamic Pricing'}
-                                  </span>
-                              </button>
-                              <button
-                                onClick={handleManualPriceStatRefresh}
-                                disabled={isRefreshingStats}
-                                className="flex-1 flex items-center justify-center space-x-2 bg-green-500/10 text-green-600 dark:text-green-400 font-bold py-3 px-4 rounded-lg hover:bg-green-500/20 transition-colors disabled:opacity-50"
-                              >
-                                  {isRefreshingStats 
-                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
-                                      : refreshStatsSuccess 
-                                          ? <i className="fas fa-check"></i> 
-                                          : <i className="fas fa-calculator"></i>}
-                                  <span>
-                                      {isRefreshingStats 
-                                          ? 'Refreshing...' 
-                                          : refreshStatsSuccess 
-                                              ? 'Refreshed!' 
-                                              : 'Refresh Area Prices'}
-                                  </span>
-                              </button>
-                          </div>
-                      </div>
-                   </div>
+                        )}
+                        <button
+                            onClick={() => { onViewStats(); trackEvent('view_stats_page'); }}
+                            className="flex-1 flex items-center justify-center space-x-2 bg-blue-500/10 text-blue-500 dark:text-blue-400 font-bold py-3 px-4 rounded-lg hover:bg-blue-500/20 transition-colors"
+                        >
+                            <i className="fas fa-chart-bar"></i>
+                            <span>Stats</span>
+                        </button>
+                    </div>
               </div>
           )}
 
@@ -338,6 +337,70 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                   ><i className="fas fa-toggle-off"></i><span>Off</span></button>
                 </div>
               </div>
+              {settings.developerMode && (
+                  <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg space-y-3 animate-fade-in-down">
+                      <p className="text-xs text-center text-gray-500 dark:text-gray-400">Use these tools to fix data inconsistencies.</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <button
+                            onClick={handleRebuildDynamicPricing}
+                            disabled={isRebuilding}
+                            className="flex-1 flex items-center justify-center space-x-2 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-bold py-3 px-4 rounded-lg hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
+                          >
+                              {isRebuilding 
+                                  ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
+                                  : rebuildSuccess 
+                                      ? <i className="fas fa-check"></i> 
+                                      : <i className="fas fa-cogs"></i>}
+                              <span>
+                                  {isRebuilding 
+                                      ? 'Rebuilding...' 
+                                      : rebuildSuccess 
+                                          ? 'Rebuilt!' 
+                                          : 'Rebuild Dynamic Pricing'}
+                              </span>
+                          </button>
+                          <button
+                            onClick={handleManualPriceStatRefresh}
+                            disabled={isRefreshingStats}
+                            className="flex-1 flex items-center justify-center space-x-2 bg-green-500/10 text-green-600 dark:text-green-400 font-bold py-3 px-4 rounded-lg hover:bg-green-500/20 transition-colors disabled:opacity-50"
+                          >
+                              {isRefreshingStats 
+                                  ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
+                                  : refreshStatsSuccess 
+                                      ? <i className="fas fa-check"></i> 
+                                      : <i className="fas fa-calculator"></i>}
+                              <span>
+                                  {isRefreshingStats 
+                                      ? 'Refreshing...' 
+                                      : refreshStatsSuccess 
+                                          ? 'Refreshed!' 
+                                          : 'Refresh Area Prices'}
+                              </span>
+                          </button>
+                      </div>
+                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                          <button
+                              onClick={handleBackfillPubData}
+                              disabled={isBackfilling}
+                              className="w-full flex items-center justify-center space-x-2 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold py-3 px-4 rounded-lg hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                          >
+                              {isBackfilling 
+                                  ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
+                                  : backfillSuccess 
+                                      ? <i className="fas fa-check"></i> 
+                                      : <i className="fas fa-globe-europe"></i>}
+                              <span>
+                                  {isBackfilling 
+                                      ? 'Processing Batch...' 
+                                      : backfillSuccess 
+                                          ? 'Batch Done!' 
+                                          : 'Backfill Pub Country Data'}
+                              </span>
+                          </button>
+                          <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">Processes a batch of up to 50 pubs missing country data. This may take up to a minute.</p>
+                      </div>
+                  </div>
+              )}
             </div>
           )}
 

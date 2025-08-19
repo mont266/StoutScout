@@ -126,18 +126,17 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                   >
                       <i className={`${isLiked ? 'fas' : 'far'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
                       <span>{like_count || 0}</span>
-                  </button>
-                   <button
+                </button>
+                 <button
                     onClick={() => setIsCommentsVisible(prev => !prev)}
                     className="flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                     aria-expanded={isCommentsVisible}
-                  >
-                      <i className="far fa-comment"></i>
-                      <span>{comment_count || 0}</span>
-                  </button>
+                >
+                    <i className="far fa-comment"></i>
+                    <span>{comment_count || 0}</span>
+                </button>
             </div>
 
-            {/* Comments Section */}
             {isCommentsVisible && (
                 <CommentsSection 
                     ratingId={id}

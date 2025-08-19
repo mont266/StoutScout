@@ -20,7 +20,8 @@
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "types": ["vitest/globals"]
   },
   "include": ["**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"],
 }

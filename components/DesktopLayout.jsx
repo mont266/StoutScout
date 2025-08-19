@@ -72,7 +72,8 @@ const DesktopLayout = (props) => {
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
-        userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote
+        userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote,
+        setAlertInfo,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -86,7 +87,7 @@ const DesktopLayout = (props) => {
                     friendsList={friendsList}
                     isLoading={isFetchingFriendsList}
                     onBack={handleBackFromFriendsList}
-                    onViewProfile={handleViewProfile}
+                    onViewProfile={onViewProfile}
                     onFriendAction={handleFriendAction}
                 />
             );
@@ -238,6 +239,7 @@ const DesktopLayout = (props) => {
                             setInstallPromptEvent={setInstallPromptEvent}
                             onShowIosInstall={() => setIsIosInstallModalOpen(true)}
                             onMarketingConsentChange={handleMarketingConsentChange}
+                            setAlertInfo={setAlertInfo}
                         />
                     </div>
                 </div>

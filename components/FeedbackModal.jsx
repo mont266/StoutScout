@@ -79,15 +79,10 @@ const FeedbackModal = ({ userProfile, onClose }) => {
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label htmlFor="feedback-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Feedback Type</label>
-                            <div className="relative">
-                                <select id="feedback-type" name="type" value={type} onChange={(e) => setType(e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none pr-8">
-                                    <option value="bug">Bug Report</option>
-                                    <option value="feature">Feature Request</option>
-                                </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-300">
-                                    <i className="fas fa-chevron-down text-xs"></i>
-                                </div>
-                            </div>
+                            <select id="feedback-type" name="type" value={type} onChange={(e) => setType(e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none bg-no-repeat bg-right pr-8" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`}}>
+                                <option value="bug">Bug Report</option>
+                                <option value="feature">Feature Request</option>
+                            </select>
                         </div>
                         <div>
                             <label htmlFor="feedback-subject" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>

@@ -108,7 +108,8 @@ const MobileLayout = (props) => {
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
-        userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote
+        userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote,
+        setAlertInfo,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -196,6 +197,7 @@ const MobileLayout = (props) => {
                                 setInstallPromptEvent={setInstallPromptEvent}
                                 onShowIosInstall={() => setIsIosInstallModalOpen(true)}
                                 onMarketingConsentChange={handleMarketingConsentChange}
+                                setAlertInfo={setAlertInfo}
                             />
                         );
                     })()}
@@ -338,7 +340,7 @@ const MobileLayout = (props) => {
                             isLoading={isFetchingFriendsList}
                             onBack={handleBackFromFriendsList}
                             onViewProfile={handleViewProfile}
-                            onFriendAction={onFriendAction}
+                            onFriendAction={handleFriendAction}
                         />
                     )}
                 </div>
