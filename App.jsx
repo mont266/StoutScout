@@ -3,7 +3,7 @@ import { FilterType } from './types.js';
 import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
-import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, extractPostcode, normalizePubNameForComparison, isLondonPub } from './utils.js';
+import { getDistance, getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, extractPostcode, normalizePubNameForComparison, isLondonPub } from './utils.js';
 import { initializeAnalytics, trackEvent } from './analytics.js';
 
 import MobileLayout from './components/MobileLayout.jsx';
@@ -15,6 +15,7 @@ import BannedPage from './components/BannedPage.jsx';
 import AddPubModal from './components/AddPubModal.jsx';
 import EditUsernameModal from './components/EditUsernameModal.jsx';
 import EditBioModal from './components/EditBioModal.jsx';
+import UpdateDetailsModal from './components/UpdateDetailsModal.jsx';
 import SuggestEditModal from './components/SuggestEditModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
 import StatsPage from './components/StatsPage.jsx';
@@ -89,6 +90,7 @@ const App = () => {
   const [isPubScoreModalOpen, setIsPubScoreModalOpen] = useState(false);
   const [isEditUsernameModalOpen, setIsEditUsernameModalOpen] = useState(false);
   const [isEditBioModalOpen, setIsEditBioModalOpen] = useState(false);
+  const [isUpdateDetailsModalOpen, setIsUpdateDetailsModalOpen] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '', theme: 'info' });
   const [isCoasterWelcomeModalOpen, setIsCoasterWelcomeModalOpen] = useState(false);
@@ -100,6 +102,8 @@ const App = () => {
   const [osmPubOverrides, setOsmPubOverrides] = useState(new Map());
   
   const [isDbPubsLoaded, setIsDbPubsLoaded] = useState(false);
+  const [isClosedOsmPubsLoaded, setIsClosedOsmPubsLoaded] = useState(false);
+  const [isOsmOverridesLoaded, setIsOsmOverridesLoaded] = useState(false);
   const [initialSearchComplete, setInitialSearchComplete] = useState(false);
 
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
@@ -148,6 +152,10 @@ const App = () => {
     width: window.innerWidth,
     height: window.innerHeight,
   });
+
+  // Developer state
+  const [showAllDbPubs, setShowAllDbPubs] = useState(false);
+
 
   useEffect(() => {
     const handleResize = () => {
@@ -369,7 +377,7 @@ const App = () => {
       address: p.address,
       country_code: p.country_code,
       country_name: p.country_name,
-      is_closed: p.is_closed,
+      is_closed: !!p.is_closed, // Ensure this is always a boolean
       location: { lat: p.lat, lng: p.lng },
       is_dynamic_price_area: p.is_dynamic_price_area,
       area_identifier: p.area_identifier,
@@ -392,6 +400,7 @@ const App = () => {
         // Store with 'osm-' prefix for direct comparison with nominatim results
         setClosedOsmPubIds(new Set((data || []).map(p => `osm-${p.osm_id}`)));
     }
+    setIsClosedOsmPubsLoaded(true);
   }, []);
 
   const fetchOsmPubOverrides = useCallback(async () => {
@@ -409,6 +418,7 @@ const App = () => {
         }
         setOsmPubOverrides(overridesMap);
     }
+    setIsOsmOverridesLoaded(true);
   }, []);
 
   const fetchAllRatings = useCallback(async () => {
@@ -543,6 +553,61 @@ const App = () => {
     setFinalPlacementLocation(null);
     setIsConfirmingLocation(false);
   }, [pubPlacementState]);
+  
+  const handleBackFromProfileView = useCallback(() => {
+    setViewedProfile(null);
+    const origin = profileViewOrigin;
+    setProfileViewOrigin(null);
+
+    // This logic handles returning to the correct sub-tab in the community section
+    if (origin === 'leaderboard' || origin === 'friends' || origin === 'notifications' || origin === 'community') {
+        setCommunitySubTab(origin);
+        setActiveTab('community');
+    } else if (origin && origin.startsWith('community')) {
+        // Fallback for any other community-related origin
+        setActiveTab('community');
+    }
+    // Other origins like 'pubDetails' do not trigger a tab change, which is correct.
+  }, [profileViewOrigin]);
+
+  const handleBackFromFriendsList = useCallback(() => {
+    setViewingFriendsOf(null);
+    if (isDesktop) {
+        setActiveTab('profile');
+    }
+  }, [isDesktop]);
+
+  // --- HISTORY MANAGEMENT ---
+  useEffect(() => {
+    const handlePopState = (event) => {
+      // If the stats page is handling this event, App should ignore it.
+      if (event.state?.isStatsInternal) {
+          return;
+      }
+      // This is a "back" action. We close the topmost view based on precedence.
+      if (viewingFriendsOf) {
+        handleBackFromFriendsList();
+      } else if (viewedProfile) {
+        handleBackFromProfileView();
+      } else if (selectedPubId) {
+        setSelectedPubId(null);
+      } else if (legalPageView) {
+        setLegalPageView(null);
+      } else if (settingsSubView) {
+        setSettingsSubView(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    
+    // Set an initial state so there's an entry to pop.
+    history.replaceState({ base: true }, '');
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [selectedPubId, viewedProfile, viewingFriendsOf, legalPageView, settingsSubView, handleBackFromProfileView, handleBackFromFriendsList]);
+
 
   const handleTabChange = useCallback((tab) => {
     // On mobile, close the details panel when switching main tabs.
@@ -976,81 +1041,80 @@ const App = () => {
   useEffect(() => { if (rankUpInfo) { const timer = setTimeout(() => setRankUpInfo(null), 5000); return () => clearTimeout(timer); } }, [rankUpInfo]);
   useEffect(() => { if (addPubSuccessInfo) { const timer = setTimeout(() => setAddPubSuccessInfo(null), 3000); return () => clearTimeout(timer); } }, [addPubSuccessInfo]);
 
-  const getDistance = useCallback((location1, location2) => {
-    if (!location1 || !location2) return Infinity;
-    const R = 6371e3;
-    const φ1 = location1.lat * Math.PI/180;
-    const φ2 = location2.lat * Math.PI/180;
-    const Δφ = (location2.lat-location1.lat) * Math.PI/180;
-    const Δλ = (location2.lng-location1.lng) * Math.PI/180;
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c; // in meters
-  }, []);
-
   useEffect(() => {
-    const processedPubs = new Map();
+    // Wait until all foundational data from our DB is loaded before attempting to merge.
+    if (!isDbPubsLoaded || !isClosedOsmPubsLoaded || !isOsmOverridesLoaded) {
+      return; // Exit early if data isn't ready
+    }
 
-    dbPubs.forEach(dbPub => {
-      processedPubs.set(dbPub.id, dbPub);
-    });
+    let pubsToFilter;
 
-    nominatimResults.forEach(nominatimPub => {
-      const override = osmPubOverrides.get(nominatimPub.id);
-      const finalNominatimPub = override ? { ...nominatimPub, name: override.name } : nominatimPub;
+    if (showAllDbPubs) {
+      // DEV MODE: Unfiltered list of all pubs from our DB for debugging.
+      pubsToFilter = dbPubs.map(pub => ({
+        ...pub,
+        is_closed: !!pub.is_closed || closedOsmPubIds.has(pub.id),
+      }));
+    } else {
+      // NORMAL MODE: Combine sources for a comprehensive list, prioritizing our DB.
+      const processedPubs = new Map();
 
-      if (processedPubs.has(finalNominatimPub.id)) {
-        const dbVersion = processedPubs.get(finalNominatimPub.id);
-        const mergedPub = {
-          ...finalNominatimPub,
-          ...dbVersion,
-        };
-        processedPubs.set(finalNominatimPub.id, mergedPub);
-        return;
-      }
-      
-      const isSpatialDuplicate = Array.from(processedPubs.values()).some(processedPub => {
-        if (!finalNominatimPub.location || !processedPub.location) return false;
-        
-        const dist = getDistance(finalNominatimPub.location, processedPub.location);
-        if (dist > 50) return false;
-        
-        const normOsmName = normalizePubNameForComparison(finalNominatimPub.name);
-        const normDbName = normalizePubNameForComparison(processedPub.name);
-
-        if (!normOsmName || !normDbName) return false;
-        
-        // With improved normalization, we can use a stricter check.
-        // This solves issues with partial name matches causing false positives.
-        return normOsmName === normDbName;
+      // 1. Add all pubs from our DB first. This is the source of truth for existence, name, address, and closed status.
+      dbPubs.forEach(dbPub => {
+        const override = osmPubOverrides.get(dbPub.id);
+        processedPubs.set(dbPub.id, {
+          ...dbPub,
+          name: override?.name || dbPub.name,
+          is_closed: !!dbPub.is_closed || closedOsmPubIds.has(dbPub.id),
+        });
       });
 
-      if (!isSpatialDuplicate) {
-        processedPubs.set(finalNominatimPub.id, finalNominatimPub);
-      }
-    });
+      // 2. Merge with Nominatim results. This adds new pubs and updates locations for existing ones.
+      nominatimResults.forEach(nominatimPub => {
+        const override = osmPubOverrides.get(nominatimPub.id);
+        const finalNominatimName = override?.name || nominatimPub.name;
+        
+        if (processedPubs.has(nominatimPub.id)) {
+          // If pub exists in our DB, update its location from the live map data, but keep our data as primary.
+          const dbVersion = processedPubs.get(nominatimPub.id);
+          processedPubs.set(nominatimPub.id, {
+            ...dbVersion, // Keep DB name, address, closed status etc.
+            location: nominatimPub.location, // But use the more current location from Nominatim.
+          });
+        } else {
+          // This is a new pub from OSM not in our DB. Check for spatial duplicates before adding.
+          const isSpatialDuplicate = Array.from(processedPubs.values()).some(processedPub => {
+            if (!nominatimPub.location || !processedPub.location) return false;
+            const dist = getDistance(nominatimPub.location, processedPub.location);
+            if (dist > 50) return false; // 50 meters
+            
+            const normOsmName = normalizePubNameForComparison(finalNominatimName);
+            const normDbName = normalizePubNameForComparison(processedPub.name);
+            return normOsmName && normDbName && normOsmName === normDbName;
+          });
 
-    const combinedPubs = Array.from(processedPubs.values());
-
-    const pubsInRadius = combinedPubs.filter(pub => {
-      if (pub.is_closed) {
-        return false;
-      }
+          if (!isSpatialDuplicate) {
+            processedPubs.set(nominatimPub.id, {
+              ...nominatimPub,
+              name: finalNominatimName,
+              is_closed: closedOsmPubIds.has(nominatimPub.id),
+            });
+          }
+        }
+      });
       
-      if (closedOsmPubIds.has(pub.id)) {
-        return false;
-      }
+      const allKnownPubs = Array.from(processedPubs.values());
 
-      if (!pub.location) return false;
-      const distance = getDistance(pub.location, searchOrigin);
-      if (distance > settings.radius) {
-        return false;
-      }
+      // 3. Filter the combined list by the user's search radius.
+      pubsToFilter = allKnownPubs.filter(pub => {
+        if (!pub.location) return false;
+        const distance = getDistance(pub.location, searchOrigin);
+        return distance <= settings.radius;
+      });
+    }
 
-      return true;
-    });
-
-    const finalPubsList = pubsInRadius.map(pub => ({
+    // 4. Attach ratings and scores to the final list of pubs to be displayed.
+    const finalPubsList = pubsToFilter.map(pub => ({
       ...pub,
       ratings: allRatings.get(pub.id) || [],
       pub_score: pubScores.get(pub.id) ?? null,
@@ -1058,7 +1122,7 @@ const App = () => {
 
     setPubs(finalPubsList);
 
-  }, [nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance, closedOsmPubIds, osmPubOverrides, normalizePubNameForComparison]);
+  }, [showAllDbPubs, nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded, closedOsmPubIds, osmPubOverrides]);
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   
@@ -1203,6 +1267,8 @@ const App = () => {
     }
 
     return pubsToProcess.sort((a, b) => {
+      if (a.is_closed && !b.is_closed) return 1;
+      if (!a.is_closed && b.is_closed) return -1;
       switch (filter) {
         case FilterType.PubScore:
           return (b.pub_score ?? -1) - (a.pub_score ?? -1);
@@ -1501,6 +1567,10 @@ const App = () => {
     setHighlightedRatingId(ratingId || null);
     setHighlightedCommentId(commentId || null);
 
+    if (pubId && pubId !== selectedPubId) {
+        history.pushState({ view: 'pub', pubId }, '');
+    }
+
     if (!pubId) {
       setSelectedPubId(null);
       return;
@@ -1565,11 +1635,16 @@ const App = () => {
         setSearchOrigin(pubToSelect.location);
         setSearchOnNextMoveEnd(true);
     }
-  }, [isDesktop, isListExpanded, pubs]);
+  }, [isDesktop, isListExpanded, pubs, selectedPubId]);
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
     trackEvent('change_filter', { filter_type: newFilter });
+  };
+  
+  const handleToggleShowAllDbPubs = () => {
+      trackEvent('dev_toggle_all_pubs', { enabled: !showAllDbPubs });
+      setShowAllDbPubs(prev => !prev);
   };
 
   const handleToggleLike = useCallback(async (rating) => {
@@ -1638,13 +1713,14 @@ const App = () => {
   const handleViewLegal = (page) => {
     trackEvent('view_legal_page', { page_name: page });
     setLegalPageView(page);
-    // Ensure other full-screen views are closed
     setSelectedPubId(null);
+    history.pushState({ view: 'legal' }, '');
   };
   
   const handleViewAdminPage = (page) => {
     trackEvent('view_admin_page', { page_name: page });
     setSettingsSubView(page);
+    history.pushState({ view: 'admin' }, '');
   };
 
   const handlePlacementPinMove = useCallback((newLocation) => {
@@ -1653,50 +1729,39 @@ const App = () => {
 
   const handleViewProfile = useCallback(async (userId, origin) => {
     if (!userId) return;
-    // Special case: If user clicks their own profile, use handleTabChange to ensure a clean reset to their own view.
     if (userProfile && userId === userProfile.id) {
         handleTabChange('profile');
         return;
     }
     
     trackEvent('view_profile', { viewed_user_id: userId, origin: origin || 'unknown' });
+    history.pushState({ view: 'profile', userId }, '');
     
-    // We must hide the Friends List page before we can show the Profile page.
     setViewingFriendsOf(null);
     setFriendsList([]);
     
     setIsFetchingViewedProfile(true);
-    // Clear the old viewed profile to show a loading state
     setViewedProfile(null); 
     setViewedRatings([]);
-    setProfileViewOrigin(origin); // store where the view was initiated from
+    setProfileViewOrigin(origin);
 
     try {
         const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single();
-
+            .from('profiles').select('*').eq('id', userId).single();
         if (profileError) throw profileError;
         
-        // Correctly fetch the friend count
         const { data: friendCount, error: friendCountError } = await supabase.rpc('get_friends_count', { user_id_param: userId }).single();
         if (friendCountError) console.error("Error fetching friend count for viewed profile:", friendCountError);
-        // Correctly assign the direct result of the RPC call.
         profile.friends_count = friendCount || 0;
 
         setViewedProfile(profile);
 
-        // Fetch ratings for the viewed user
-        // We only fetch non-private ratings for other users.
         const { data: ratings, error: ratingsError } = await supabase
             .from('ratings')
             .select('id, pub_id, price, quality, created_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng, country_code, country_name)')
             .eq('user_id', userId)
-            .eq('is_private', false) // Important: respect privacy
+            .eq('is_private', false)
             .order('created_at', { ascending: false });
-
         if (ratingsError) throw ratingsError;
 
         const mappedRatings = (ratings || []).map(r => ({
@@ -1713,34 +1778,16 @@ const App = () => {
         }));
         setViewedRatings(mappedRatings);
         
-        // This is the key. The profile page is shown when the 'profile' tab is active.
-        // We set this directly to avoid `handleTabChange` which would clear `viewedProfile`.
         setActiveTab('profile');
 
     } catch (error) {
         console.error("Error fetching viewed profile:", error);
         alert(`Could not load profile: ${error.message}`);
-        setViewedProfile(null); // Clear on error
+        setViewedProfile(null);
     } finally {
         setIsFetchingViewedProfile(false);
     }
   }, [userProfile, handleTabChange]);
-
-  const handleBackFromProfileView = () => {
-    setViewedProfile(null);
-    const origin = profileViewOrigin;
-    setProfileViewOrigin(null);
-
-    // This logic handles returning to the correct sub-tab in the community section
-    if (origin === 'leaderboard' || origin === 'friends' || origin === 'notifications' || origin === 'community') {
-        setCommunitySubTab(origin);
-        setActiveTab('community');
-    } else if (origin && origin.startsWith('community')) {
-        // Fallback for any other community-related origin
-        setActiveTab('community');
-    }
-    // Other origins like 'pubDetails' do not trigger a tab change, which is correct.
-  };
   
   const handleFriendRequest = async (targetUserId) => {
     if (!session) {
@@ -1861,34 +1908,53 @@ const App = () => {
     return null; // Success
   };
 
+  const handleUpdateUserDetails = async ({ dob, country_code }) => {
+    if (!session || !userProfile) return 'You must be logged in.';
+    trackEvent('update_user_details');
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({ dob, country_code })
+        .eq('id', userProfile.id);
+
+    if (error) {
+        console.error("Error updating user details:", error);
+        return error.message;
+    }
+
+    setIsUpdateDetailsModalOpen(false);
+    await fetchUserData(); // Refresh profile data
+    setAlertInfo({
+        isOpen: true,
+        title: 'Success!',
+        message: 'Your profile details have been updated.',
+        theme: 'success',
+    });
+    return null; // Success
+  };
+
   const handleViewFriends = async (targetUser) => {
     if (!targetUser) return;
     trackEvent('view_friends_list', { target_user_id: targetUser.id });
+    history.pushState({ view: 'friends', userId: targetUser.id }, '');
 
-    // On desktop, switch back to map view so the side panel is visible
     if (isDesktop) {
       setActiveTab('map');
     }
     
-    // Set state to show the friends list UI
     setViewingFriendsOf(targetUser);
     setIsFetchingFriendsList(true);
-    setFriendsList([]); // Clear previous list
+    setFriendsList([]);
 
     try {
         const { data, error } = await supabase.rpc('get_friends_list', {
             user_id_param: targetUser.id,
         });
-
-        if (error) {
-            throw error;
-        }
-        
+        if (error) throw error;
         setFriendsList(data || []);
     } catch (error) {
         console.error("Error fetching friends list:", error);
         alert(`Could not load friends list: ${error.message}`);
-        // Go back if the fetch fails to avoid a broken state
         setViewingFriendsOf(null); 
     } finally {
         setIsFetchingFriendsList(false);
@@ -1896,7 +1962,7 @@ const App = () => {
   };
 
   const profilePage = useMemo(() => {
-      const onBackHandler = viewedProfile ? handleBackFromProfileView : undefined;
+      const onBackHandler = viewedProfile ? () => window.history.back() : undefined;
       return (
           <ProfilePage
               userProfile={viewedProfile || userProfile}
@@ -1908,6 +1974,7 @@ const App = () => {
               onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
               onEditUsernameClick={() => setIsEditUsernameModalOpen(true)}
               onEditBioClick={() => setIsEditBioModalOpen(true)}
+              onOpenUpdateDetailsModal={() => setIsUpdateDetailsModalOpen(true)}
               onProfileUpdate={handleProfileUpdate}
               friendships={friendships}
               onFriendRequest={handleFriendRequest}
@@ -1918,7 +1985,7 @@ const App = () => {
       );
   }, [
       viewedProfile, userProfile, viewedRatings, userRatings, 
-      handleBackFromProfileView, handleSelectPub, levelRequirements, 
+      handleSelectPub, levelRequirements, 
       handleProfileUpdate, friendships, handleFriendRequest, 
       handleFriendAction, handleViewFriends, handleDeleteRating
   ]);
@@ -2346,7 +2413,8 @@ const App = () => {
       filterGuinnessZero, onFilterGuinnessZeroChange: setFilterGuinnessZero,
       handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
       handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
-      refreshTrigger, getDistance, isListExpanded, setIsListExpanded,
+      refreshTrigger, getDistance,
+      isListExpanded, setIsListExpanded,
       getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
       profilePage, session, userProfile, handleLogout: () => supabase.auth.signOut(),
       selectedPub, existingUserRatingForSelectedPub, handleRatePub,
@@ -2380,7 +2448,7 @@ const App = () => {
       handleViewFriends,
       onProfileUpdate: handleProfileUpdate,
       handleBackFromProfileView,
-      handleBackFromFriendsList: () => setViewingFriendsOf(null),
+      handleBackFromFriendsList,
       handleFindPlace,
       handleFindCurrentPub,
       requestLocationPermission,
@@ -2427,10 +2495,13 @@ const App = () => {
       // New handler for marketing consent
       handleMarketingConsentChange,
       
-      // Username and Bio change
+      // Username, Bio, and Details change
       onEditUsernameClick: () => setIsEditUsernameModalOpen(true),
       onEditBioClick: () => setIsEditBioModalOpen(true),
+      onOpenUpdateDetailsModal: () => setIsUpdateDetailsModalOpen(true),
       setAlertInfo,
+      showAllDbPubs,
+      onToggleShowAllDbPubs: handleToggleShowAllDbPubs,
   };
 
   const renderModals = () => (
@@ -2450,6 +2521,12 @@ const App = () => {
             onClose={() => setIsEditBioModalOpen(false)}
             onSubmit={handleUpdateBio}
           />
+        )}
+        {isUpdateDetailsModalOpen && userProfile && (
+            <UpdateDetailsModal
+                onClose={() => setIsUpdateDetailsModalOpen(false)}
+                onSubmit={handleUpdateUserDetails}
+            />
         )}
         {isAddPubModalOpen && (
             <AddPubModal 

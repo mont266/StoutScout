@@ -14,8 +14,10 @@ import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 
 // Action sheet modal for profile editing options
-const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername, onEditBio }) => {
+const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername, onEditBio, onOpenUpdateDetailsModal, userProfile }) => {
     if (!isOpen) return null;
+
+    const needsDetailsUpdate = userProfile && (!userProfile.dob || !userProfile.country_code);
 
     return (
         <div 
@@ -30,6 +32,14 @@ const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername
             >
                 <div className="w-10 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-4"></div>
                 <ul className="space-y-2 text-gray-800 dark:text-gray-200">
+                    {needsDetailsUpdate && (
+                        <li>
+                            <button onClick={onOpenUpdateDetailsModal} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3 text-amber-600 dark:text-amber-400 font-semibold">
+                                <i className="fas fa-calendar-check w-6 text-center"></i>
+                                <span>Set Date of Birth</span>
+                            </button>
+                        </li>
+                    )}
                     <li><button onClick={onEditAvatar} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-user-circle w-6 text-center text-gray-500"></i><span>Change Avatar</span></button></li>
                     <li><button onClick={onEditUsername} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-id-card w-6 text-center text-gray-500"></i><span>Edit Username</span></button></li>
                     <li><button onClick={onEditBio} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-book-open w-6 text-center text-gray-500"></i><span>Edit Bio</span></button></li>
@@ -191,7 +201,7 @@ const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendReque
     }
 }
 
-const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating }) => {
+const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating }) => {
     const isDesktop = useIsDesktop();
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
@@ -215,7 +225,7 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
 
     const handleOpenModal = (modalOpener) => {
         setIsEditActionsModalOpen(false);
-        modalOpener();
+        if (modalOpener) modalOpener();
     };
     
     if (!profile) {
@@ -543,6 +553,8 @@ const ProfilePage = ({ userProfile, userRatings, onViewPub, loggedInUserProfile,
                     onEditAvatar={() => handleOpenModal(onAvatarChangeClick)}
                     onEditUsername={() => handleOpenModal(onEditUsernameClick)}
                     onEditBio={() => handleOpenModal(onEditBioClick)}
+                    onOpenUpdateDetailsModal={() => handleOpenModal(onOpenUpdateDetailsModal)}
+                    userProfile={profile}
                 />
             )}
             

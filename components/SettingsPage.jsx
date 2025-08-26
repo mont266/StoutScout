@@ -14,7 +14,7 @@ import KofiModal from './KofiModal.jsx';
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewProfile, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange }) => {
+const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewProfile, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isKofiModalOpen, setIsKofiModalOpen] = useState(false);
@@ -338,66 +338,81 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                 </div>
               </div>
               {settings.developerMode && (
-                  <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg space-y-3 animate-fade-in-down">
-                      <p className="text-xs text-center text-gray-500 dark:text-gray-400">Use these tools to fix data inconsistencies.</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <button
-                            onClick={handleRebuildDynamicPricing}
-                            disabled={isRebuilding}
-                            className="flex-1 flex items-center justify-center space-x-2 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-bold py-3 px-4 rounded-lg hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
-                          >
-                              {isRebuilding 
-                                  ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
-                                  : rebuildSuccess 
-                                      ? <i className="fas fa-check"></i> 
-                                      : <i className="fas fa-cogs"></i>}
-                              <span>
+                  <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg space-y-4 animate-fade-in-down">
+                      <div className="space-y-3">
+                          <p className="text-xs text-center text-gray-500 dark:text-gray-400">Use these tools to fix data inconsistencies or test features.</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <button
+                                onClick={handleRebuildDynamicPricing}
+                                disabled={isRebuilding}
+                                className="flex-1 flex items-center justify-center space-x-2 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-bold py-3 px-4 rounded-lg hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
+                              >
                                   {isRebuilding 
-                                      ? 'Rebuilding...' 
+                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
                                       : rebuildSuccess 
-                                          ? 'Rebuilt!' 
-                                          : 'Rebuild Dynamic Pricing'}
-                              </span>
-                          </button>
-                          <button
-                            onClick={handleManualPriceStatRefresh}
-                            disabled={isRefreshingStats}
-                            className="flex-1 flex items-center justify-center space-x-2 bg-green-500/10 text-green-600 dark:text-green-400 font-bold py-3 px-4 rounded-lg hover:bg-green-500/20 transition-colors disabled:opacity-50"
-                          >
-                              {isRefreshingStats 
-                                  ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
-                                  : refreshStatsSuccess 
-                                      ? <i className="fas fa-check"></i> 
-                                      : <i className="fas fa-calculator"></i>}
-                              <span>
+                                          ? <i className="fas fa-check"></i> 
+                                          : <i className="fas fa-cogs"></i>}
+                                  <span>
+                                      {isRebuilding 
+                                          ? 'Rebuilding...' 
+                                          : rebuildSuccess 
+                                              ? 'Rebuilt!' 
+                                              : 'Rebuild Dynamic Pricing'}
+                                  </span>
+                              </button>
+                              <button
+                                onClick={handleManualPriceStatRefresh}
+                                disabled={isRefreshingStats}
+                                className="flex-1 flex items-center justify-center space-x-2 bg-green-500/10 text-green-600 dark:text-green-400 font-bold py-3 px-4 rounded-lg hover:bg-green-500/20 transition-colors disabled:opacity-50"
+                              >
                                   {isRefreshingStats 
-                                      ? 'Refreshing...' 
+                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
                                       : refreshStatsSuccess 
-                                          ? 'Refreshed!' 
-                                          : 'Refresh Area Prices'}
-                              </span>
-                          </button>
-                      </div>
-                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                          <button
-                              onClick={handleBackfillPubData}
-                              disabled={isBackfilling}
-                              className="w-full flex items-center justify-center space-x-2 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold py-3 px-4 rounded-lg hover:bg-purple-500/20 transition-colors disabled:opacity-50"
-                          >
-                              {isBackfilling 
-                                  ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
-                                  : backfillSuccess 
-                                      ? <i className="fas fa-check"></i> 
-                                      : <i className="fas fa-globe-europe"></i>}
-                              <span>
+                                          ? <i className="fas fa-check"></i> 
+                                          : <i className="fas fa-calculator"></i>}
+                                  <span>
+                                      {isRefreshingStats 
+                                          ? 'Refreshing...' 
+                                          : refreshStatsSuccess 
+                                              ? 'Refreshed!' 
+                                              : 'Refresh Area Prices'}
+                                  </span>
+                              </button>
+                          </div>
+                          <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                              <button
+                                  onClick={handleBackfillPubData}
+                                  disabled={isBackfilling}
+                                  className="w-full flex items-center justify-center space-x-2 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold py-3 px-4 rounded-lg hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                              >
                                   {isBackfilling 
-                                      ? 'Processing Batch...' 
+                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
                                       : backfillSuccess 
-                                          ? 'Batch Done!' 
-                                          : 'Backfill Pub Country Data'}
-                              </span>
-                          </button>
-                          <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">Processes a batch of up to 50 pubs missing country data. This may take up to a minute.</p>
+                                          ? <i className="fas fa-check"></i> 
+                                          : <i className="fas fa-globe-europe"></i>}
+                                  <span>
+                                      {isBackfilling 
+                                          ? 'Processing Batch...' 
+                                          : backfillSuccess 
+                                              ? 'Batch Done!' 
+                                              : 'Backfill Pub Country Data'}
+                                  </span>
+                              </button>
+                              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">Processes a batch of up to 50 pubs missing country data. This may take up to a minute.</p>
+                          </div>
+                      </div>
+                      <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">Map Tools</label>
+                        <button
+                          onClick={onToggleShowAllDbPubs}
+                          className="w-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold py-3 px-4 rounded-lg hover:bg-red-500/20 transition-colors flex items-center justify-center space-x-2"
+                        >
+                          <i className="fas fa-database"></i>
+                          <span>{showAllDbPubs ? 'Show Pubs in Radius' : 'Show All DB Pubs'}</span>
+                        </button>
+                        <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+                          Toggles between the standard radius search and showing every pub in the database on the map.
+                        </p>
                       </div>
                   </div>
               )}

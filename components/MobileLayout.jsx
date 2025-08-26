@@ -73,7 +73,7 @@ const MobileLayout = (props) => {
         refreshTrigger, handleFindCurrentPub, getDistance, isListExpanded,
         setIsListExpanded, getAverageRating, resultsAreCapped,
         isDbPubsLoaded, initialSearchComplete, profilePage, session, handleViewProfile,
-        handleSettingsChange, handleSetSimulatedLocation, userProfile, handleLogout,
+        handleSettingsChange, userProfile, handleLogout,
         existingUserRatingForSelectedPub, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
@@ -110,6 +110,7 @@ const MobileLayout = (props) => {
         handleMarketingConsentChange,
         userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote,
         setAlertInfo,
+        showAllDbPubs, onToggleShowAllDbPubs,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -171,21 +172,20 @@ const MobileLayout = (props) => {
                     )}
                     {activeTab === 'settings' && (() => {
                         if (settingsSubView === 'stats') {
-                            return <StatsPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onViewPub={handleSelectPub} userProfile={userProfile} onAdminDeleteComment={onAdminDeleteComment} />;
+                            return <StatsPage onBack={() => window.history.back()} onViewProfile={handleViewProfile} onViewPub={handleSelectPub} userProfile={userProfile} onAdminDeleteComment={onAdminDeleteComment} />;
                         }
                         if (settingsSubView === 'moderation') {
-                            return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
+                            return <ModerationPage onBack={() => window.history.back()} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
                         }
                         if (legalPageView === 'terms') {
-                            return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
+                            return <TermsOfUsePage onBack={() => window.history.back()} />;
                         }
                         if (legalPageView === 'privacy') {
-                            return <PrivacyPolicyPage onBack={() => handleViewLegal(null)} />;
+                            return <PrivacyPolicyPage onBack={() => window.history.back()} />;
                         }
                         return (
                             <SettingsPage
                                 settings={settings} onSettingsChange={handleSettingsChange}
-                                onSetSimulatedLocation={handleSetSimulatedLocation}
                                 userProfile={userProfile} onLogout={handleLogout}
                                 session={session}
                                 onViewProfile={handleViewProfile}
@@ -198,6 +198,8 @@ const MobileLayout = (props) => {
                                 onShowIosInstall={() => setIsIosInstallModalOpen(true)}
                                 onMarketingConsentChange={handleMarketingConsentChange}
                                 setAlertInfo={setAlertInfo}
+                                showAllDbPubs={showAllDbPubs}
+                                onToggleShowAllDbPubs={onToggleShowAllDbPubs}
                             />
                         );
                     })()}
@@ -250,7 +252,7 @@ const MobileLayout = (props) => {
                             pubs={sortedPubs} userLocation={userLocation}
                             center={mapCenter}
                             onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                            onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
+                            onNominatimResults={handleNominatimResults} theme={settings.theme}
                             onMapMove={handleMapMove}
                             refreshTrigger={refreshTrigger}
                             showSearchAreaButton={showSearchAreaButton}
@@ -262,6 +264,8 @@ const MobileLayout = (props) => {
                             onPlacementPinMove={handlePlacementPinMove}
                             isDesktop={isDesktop}
                             mapTileRefreshKey={mapTileRefreshKey}
+                            searchOrigin={searchOrigin}
+                            radius={settings.radius}
                         />
                          <button
                             onClick={handleFindCurrentPub}
@@ -301,7 +305,7 @@ const MobileLayout = (props) => {
                     {props.selectedPub && (
                         <PubDetails
                             pub={props.selectedPub}
-                            onClose={() => handleSelectPub(null)}
+                            onClose={() => window.history.back()}
                             onRate={handleRatePub}
                             getAverageRating={getAverageRating}
                             existingUserRating={existingUserRatingForSelectedPub}
@@ -338,7 +342,7 @@ const MobileLayout = (props) => {
                             loggedInUser={userProfile}
                             friendsList={friendsList}
                             isLoading={isFetchingFriendsList}
-                            onBack={handleBackFromFriendsList}
+                            onBack={() => window.history.back()}
                             onViewProfile={handleViewProfile}
                             onFriendAction={handleFriendAction}
                         />

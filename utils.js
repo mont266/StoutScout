@@ -2,6 +2,28 @@
 import { RANK_DETAILS } from './constants.js';
 
 /**
+ * Calculates the distance between two lat/lng coordinates in meters using the Haversine formula.
+ * @param {{lat: number, lng: number}} location1 The first location.
+ * @param {{lat: number, lng: number}} location2 The second location.
+ * @returns {number} The distance in meters.
+ */
+export const getDistance = (location1, location2) => {
+  if (!location1 || !location2) return Infinity;
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = location1.lat * Math.PI / 180;
+  const φ2 = location2.lat * Math.PI / 180;
+  const Δφ = (location2.lat - location1.lat) * Math.PI / 180;
+  const Δλ = (location2.lng - location1.lng) * Math.PI / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+};
+
+/**
  * Returns the full rank data object for a given level.
  * It finds the highest rank achieved for the user's level.
  * @param {number} level The user's current level.
@@ -116,6 +138,65 @@ export const normalizeNominatimResult = (nominatimResult) => {
             lat: parseFloat(lat),
             lng: parseFloat(lon),
         },
+    };
+};
+
+/**
+ * Creates a clean, formatted address string from Overpass API address tags.
+ * @param {object} tags The 'tags' object from an Overpass API response element.
+ * @returns {string} A formatted address string.
+ */
+export const formatOverpassAddress = (tags) => {
+    if (!tags) return 'Address unknown';
+    const streetAddress = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
+    const parts = [
+        streetAddress || tags['addr:road'],
+        tags['addr:suburb'],
+        tags['addr:city'],
+        tags['addr:county'],
+        tags['addr:postcode'],
+        tags['addr:country']
+    ];
+    const uniqueParts = [...new Set(parts.filter(p => p && p.trim() !== ''))];
+    if (uniqueParts.length === 0) return 'Address unknown';
+    return uniqueParts.join(', ');
+};
+
+/**
+ * Normalizes a result from the Overpass API into the app's internal Pub object format.
+ * @param {object} element A single result object from the Overpass API `elements` array.
+ * @returns {object | null} A pub object, or null if it's invalid (e.g., no name).
+ */
+export const normalizeOverpassResult = (element) => {
+    if (!element.tags || !element.tags.name) {
+        return null;
+    }
+
+    const { id, type, tags } = element;
+    const location = type === 'node' 
+        ? { lat: element.lat, lng: element.lon }
+        : { lat: element.center?.lat, lng: element.center?.lon };
+
+    // If a way or relation has no center point, we can't use it.
+    if (!location || location.lat === undefined || location.lng === undefined) {
+        return null;
+    }
+
+    const address = formatOverpassAddress(tags);
+
+    // Use the buggy `osm-${id}` format to maintain compatibility with existing pub IDs in the database.
+    const uniqueId = `osm-${id}`;
+
+    return {
+        id: uniqueId,
+        name: tags.name,
+        address: address,
+        postcode: tags['addr:postcode'] ? tags['addr:postcode'].toUpperCase().replace(/\s+/g, '') : null,
+        // Overpass `addr:country` is typically the 2-letter code
+        country_code: tags['addr:country'],
+        // We don't get the full country name reliably from Overpass
+        country_name: null, 
+        location: location,
     };
 };
 

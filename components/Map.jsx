@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { normalizeNominatimResult } from '../utils.js';
+import { normalizeOverpassResult, getDistance } from '../utils.js';
 
 const containerStyle = {
   width: '100%',
@@ -24,6 +24,22 @@ const createPubIcon = (fillColor, strokeColor, sellsGuinnessZero) => L.divIcon({
       </svg>
       <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-3">
         ${sellsGuinnessZero ? '<div class="w-3 h-3 rounded-full bg-black border-2 border-amber-400"></div>' : `<i class="fas fa-beer text-base" style="color: ${strokeColor}"></i>`}
+      </div>
+    </div>
+  `,
+  className: '',
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+});
+
+const createClosedPubIcon = (strokeColor) => L.divIcon({
+  html: `
+    <div class="w-10 h-10 relative flex items-center justify-center opacity-60">
+      <svg viewBox="0 0 24 24" fill="#6B7280" stroke="${strokeColor}" stroke-width="1" class="w-full h-full drop-shadow-lg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+      </svg>
+      <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-3">
+        <i class="fas fa-times text-lg" style="color: ${strokeColor}"></i>
       </div>
     </div>
   `,
@@ -88,59 +104,84 @@ const MapComponent = ({
   pubPlacementState, finalPlacementLocation, onPlacementPinMove,
   isDesktop,
   mapTileRefreshKey,
+  searchOrigin,
+  radius,
 }) => {
   const mapRef = useRef(null);
+  const isSearchingRef = useRef(false);
 
-  const searchForPubs = useCallback(async (map) => {
-    if (!map) return;
+  const searchForPubs = useCallback(async () => {
+    if (isSearchingRef.current) {
+        console.warn('Search already in progress, skipping.');
+        return;
+    }
+    if (!searchOrigin || !radius) {
+      console.warn('Search attempted without searchOrigin or radius.');
+      onNominatimResults([], false);
+      return;
+    }
     
-    const bounds = map.getBounds();
-    const viewbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+    isSearchingRef.current = true;
+
+    const overpassQuery = `
+      [out:json][timeout:25];
+      (
+        node["amenity"~"^(pub|bar)$"](around:${radius},${searchOrigin.lat},${searchOrigin.lng});
+        way["amenity"~"^(pub|bar)$"](around:${radius},${searchOrigin.lat},${searchOrigin.lng});
+        relation["amenity"~"^(pub|bar)$"](around:${radius},${searchOrigin.lat},${searchOrigin.lng});
+      );
+      out center;
+    `;
+    
     const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
-    // Search for amenities that are pubs OR bars. Tavern is less common and often duplicates.
-    const searchTerms = ['pub', 'bar'];
+    const endpoint = 'https://overpass-api.de/api/interpreter';
     
     try {
-        const searchPromises = searchTerms.map(term => {
-            // This is a structured query for a specific amenity type, confined to the map view.
-            // It's more precise than a generic text search (`q=...`).
-            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&viewbox=${viewbox}&bounded=1&limit=50&amenity=${term}`;
-            return fetch(url, { headers: { 'User-Agent': userAgent } });
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'User-Agent': userAgent,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: `data=${encodeURIComponent(overpassQuery)}`
         });
 
-        const responses = await Promise.all(searchPromises);
-        
-        const results = await Promise.all(responses.map(res => {
-            if (!res.ok) {
-                 console.warn(`A Nominatim search request for a term failed with status: ${res.status}`);
-                 return []; // Return empty array for failed requests
-            }
-            return res.json();
-        }));
+        if (!response.ok) {
+            console.error(`Overpass API request failed with status: ${response.status}`);
+            onNominatimResults([], false);
+            return;
+        }
 
-        const allPlaces = [].concat(...results);
+        const data = await response.json();
         
-        // De-duplicate results based on osm_id, as a pub can be tagged as both a pub and a bar.
-        const uniquePlaces = Array.from(new window.Map(allPlaces.map(place => [place.osm_id, place])).values());
-
-        const normalizedPlaces = uniquePlaces.map(normalizeNominatimResult);
+        // Normalize and filter out invalid results (e.g., no name, no location)
+        const allFoundPubs = data.elements
+            .map(normalizeOverpassResult)
+            .filter(pub => pub && pub.name && pub.location);
         
-        // Nominatim's hard limit is 50 results per query. If the combined unique results
-        // are close to this limit for any of the search terms, we can assume the results were capped.
-        const isCapped = uniquePlaces.length >= 49;
+        // Sort the found pubs by distance from the search origin
+        const sortedPubs = allFoundPubs.sort((a, b) => 
+            getDistance(a.location, searchOrigin) - getDistance(b.location, searchOrigin)
+        );
 
-        onNominatimResults(normalizedPlaces, isCapped);
+        // Take the closest 50
+        const top50Pubs = sortedPubs.slice(0, 50);
+        const isCapped = sortedPubs.length > 50;
+
+        onNominatimResults(top50Pubs, isCapped);
 
     } catch (error) {
-        console.error('Nominatim search failed:', error);
+        console.error('Overpass API search failed:', error);
         onNominatimResults([], false);
+    } finally {
+        isSearchingRef.current = false;
     }
-  }, [onNominatimResults]);
+  }, [onNominatimResults, searchOrigin, radius]);
   
   // This handles manual refreshes from the refresh button or "Search this Area"
   useEffect(() => {
-    if (refreshTrigger > 0 && mapRef.current) {
-      searchForPubs(mapRef.current);
+    if (refreshTrigger > 0) {
+      searchForPubs();
     }
   }, [refreshTrigger, searchForPubs]);
 
@@ -171,6 +212,7 @@ const MapComponent = ({
       unratedZero: sellsGuinnessZeroIcon('#6B7280'),
       ratedZero: sellsGuinnessZeroIcon('#F59E0B'),
       selectedZero: sellsGuinnessZeroIcon('#FBBF24'),
+      closed: createClosedPubIcon(strokeColor),
     }
   }, [theme]);
 
@@ -201,7 +243,9 @@ const MapComponent = ({
           let icon;
           const sellsGuinnessZero = (pub.guinness_zero_confirmations || 0) > (pub.guinness_zero_denials || 0);
 
-          if (pub.id === selectedPubId) {
+          if (pub.is_closed) {
+            icon = icons.closed;
+          } else if (pub.id === selectedPubId) {
             icon = sellsGuinnessZero ? icons.selectedZero : icons.selected;
           } else if (pub.ratings?.length > 0) {
             icon = sellsGuinnessZero ? icons.ratedZero : icons.rated;

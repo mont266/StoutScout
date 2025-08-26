@@ -157,6 +157,17 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
             fetchStats(timePeriod);
         }
     }, [currentView, timePeriod, fetchStats]);
+
+    useEffect(() => {
+        const handlePopState = (event) => {
+            // The stats page should only manage its own internal state history
+            setCurrentView(event.state?.statsView || 'main');
+        };
+        window.addEventListener('popstate', handlePopState);
+        // Add our flag to the initial history entry for this page
+        history.replaceState({ ...history.state, isStatsInternal: true, statsView: 'main' }, '');
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
     
     const handleRefresh = () => {
         trackEvent('refresh_stats', { time_period: timePeriod });
@@ -166,10 +177,11 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     const handleViewChange = (viewName) => {
         trackEvent(`stats_navigate_to_${viewName}`);
         setCurrentView(viewName);
+        history.pushState({ isStatsInternal: true, statsView: viewName }, '');
     };
     
     const handleBackFromSubView = useCallback(() => {
-        setCurrentView('main');
+        window.history.back();
     }, []);
 
     if (currentView === 'utm_stats') {

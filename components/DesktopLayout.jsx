@@ -38,7 +38,7 @@ const DesktopLayout = (props) => {
         handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
         refreshTrigger, handleFindCurrentPub, getDistance,
         getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
-        profilePage, session, userProfile, handleViewProfile, handleBackFromProfileView,
+        profilePage, session, userProfile, handleViewProfile,
         handleSettingsChange, handleLogout,
         existingUserRatingForSelectedPub, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
@@ -51,7 +51,7 @@ const DesktopLayout = (props) => {
         handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
         handleFindPlace,
         levelRequirements,
-        locationPermissionStatus, requestLocationPermission,
+        locationPermissionStatus, requestPermission,
         mapTileRefreshKey,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
@@ -74,6 +74,7 @@ const DesktopLayout = (props) => {
         handleMarketingConsentChange,
         userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote,
         setAlertInfo,
+        showAllDbPubs, onToggleShowAllDbPubs,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -86,8 +87,8 @@ const DesktopLayout = (props) => {
                     loggedInUser={userProfile}
                     friendsList={friendsList}
                     isLoading={isFetchingFriendsList}
-                    onBack={handleBackFromFriendsList}
-                    onViewProfile={onViewProfile}
+                    onBack={() => window.history.back()}
+                    onViewProfile={handleViewProfile}
                     onFriendAction={handleFriendAction}
                 />
             );
@@ -109,7 +110,7 @@ const DesktopLayout = (props) => {
                 return (
                     <PubDetails 
                         pub={props.selectedPub} 
-                        onClose={() => handleSelectPub(null)}
+                        onClose={() => window.history.back()}
                         onRate={handleRatePub}
                         getAverageRating={getAverageRating}
                         existingUserRating={existingUserRatingForSelectedPub}
@@ -217,10 +218,10 @@ const DesktopLayout = (props) => {
 
         if (activeTab === 'settings') {
              if (legalPageView === 'terms') {
-                return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
+                return <TermsOfUsePage onBack={() => window.history.back()} />;
             }
             if (legalPageView === 'privacy') {
-                return <PrivacyPolicyPage onBack={() => handleViewLegal(null)} />;
+                return <PrivacyPolicyPage onBack={() => window.history.back()} />;
             }
             return (
                 <div className="h-full flex flex-col">
@@ -240,6 +241,8 @@ const DesktopLayout = (props) => {
                             onShowIosInstall={() => setIsIosInstallModalOpen(true)}
                             onMarketingConsentChange={handleMarketingConsentChange}
                             setAlertInfo={setAlertInfo}
+                            showAllDbPubs={showAllDbPubs}
+                            onToggleShowAllDbPubs={onToggleShowAllDbPubs}
                         />
                     </div>
                 </div>
@@ -276,14 +279,14 @@ const DesktopLayout = (props) => {
                             {locationPermissionStatus === 'denied' && (
                                 <LocationPermissionPrompt 
                                     status={locationPermissionStatus} 
-                                    onRequestPermission={requestLocationPermission}
+                                    onRequestPermission={requestPermission}
                                 />
                             )}
                             <MapComponent
                                 pubs={sortedPubs} userLocation={userLocation}
                                 center={mapCenter}
                                 onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                                onNominatimResults={handleNominatimResults} theme={settings.theme} filter={filter}
+                                onNominatimResults={handleNominatimResults} theme={settings.theme}
                                 onMapMove={handleMapMove}
                                 refreshTrigger={refreshTrigger}
                                 showSearchAreaButton={showSearchAreaButton}
@@ -295,6 +298,8 @@ const DesktopLayout = (props) => {
                                 onPlacementPinMove={handlePlacementPinMove}
                                 isDesktop={isDesktop}
                                 mapTileRefreshKey={mapTileRefreshKey}
+                                searchOrigin={searchOrigin}
+                                radius={settings.radius}
                             />
                             {(locationError && locationPermissionStatus !== 'denied') && 
                                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
@@ -318,7 +323,7 @@ const DesktopLayout = (props) => {
                     {/* Stats Page */}
                     <div className={`absolute inset-0 ${activeTab === 'stats' ? '' : 'hidden'}`}>
                         <StatsPage 
-                            onBack={() => handleTabChange('settings')} 
+                            onBack={() => window.history.back()} 
                             onViewProfile={handleViewProfile}
                             onViewPub={handleSelectPub}
                             userProfile={userProfile}
@@ -330,7 +335,7 @@ const DesktopLayout = (props) => {
                     <div className={`absolute inset-0 ${activeTab === 'moderation' ? '' : 'hidden'}`}>
                         <ModerationPage
                             onViewProfile={handleViewProfile}
-                            onBack={() => handleTabChange('settings')}
+                            onBack={() => window.history.back()}
                             onDataRefresh={handleDataRefresh}
                             reportedComments={reportedComments}
                             onFetchReportedComments={onFetchReportedComments}

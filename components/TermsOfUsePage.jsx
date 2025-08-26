@@ -20,7 +20,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const TermsOfUsePage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Terms of Use" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 14, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 25, 2025</p>
             <p>Welcome to Stoutly! These Terms of Use ("Terms") govern your access to and use of the Stoutly web application and any related services (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Description of Service</h2>
@@ -28,8 +28,8 @@ const TermsOfUsePage = ({ onBack }) => {
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">2. Eligibility and User Accounts</h2>
             <ul className="list-disc list-inside space-y-2 pl-4">
-                <li><strong>Age Requirement:</strong> You must be of legal drinking age in your jurisdiction (e.g., 18 or 21 years or older) to create an account and use the Service. By creating an account, you represent and warrant that you meet this age requirement.</li>
-                <li><strong>Account Creation:</strong> You must create an account to submit ratings, comment, and access certain features. You agree to provide accurate, current, and complete information during the registration process.</li>
+                <li><strong>Age Requirement:</strong> You must be of legal drinking age in your jurisdiction (e.g., 18 or 21 years or older) to create an account and use the Service. By creating an account, you represent and warrant that you meet this age requirement. We collect your date of birth and country during signup to verify this.</li>
+                <li><strong>Account Creation:</strong> To access certain features, you must create an account. You agree to provide accurate, current, and complete information during the registration process.</li>
                 <li><strong>Account Responsibility:</strong> You are responsible for safeguarding your password and for all activities that occur under your account. You must notify us immediately of any unauthorized use of your account.</li>
                 <li><strong>One Account per User:</strong> You may not maintain more than one account.</li>
             </ul>

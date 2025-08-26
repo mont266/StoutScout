@@ -387,6 +387,8 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   };
 
   const renderYourRatingSection = () => {
+    if (localPub.is_closed) return null;
+
     if (!session) {
         return (
             <Section title="Your Rating">
@@ -483,6 +485,17 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
         </header>
 
         <main className="flex-grow overflow-y-auto p-4 space-y-6 pb-safe">
+            {localPub.is_closed && (
+                <div className="p-4 bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 rounded-r-lg shadow-md" role="alert">
+                    <div className="flex items-start">
+                        <div className="py-1"><i className="fas fa-store-slash fa-lg mr-4"></i></div>
+                        <div>
+                            <p className="font-bold">Permanently Closed</p>
+                            <p className="text-sm">This establishment has been reported as permanently closed. Information may be outdated.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
             {isDeveloper && (
                 <Section>
                     <div className="flex justify-center items-center gap-2 mb-2">
@@ -528,7 +541,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                 <p className="text-gray-500 dark:text-gray-400 italic text-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">No Guinness ratings yet. Be the first!</p>
             )}
             
-            <GuinnessZeroStatus />
+            {!localPub.is_closed && <GuinnessZeroStatus />}
 
             <Section>
                 <div className="p-2 bg-white dark:bg-gray-800 rounded-lg text-center shadow-md">
