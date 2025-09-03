@@ -106,36 +106,56 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   const isDeveloper = loggedInUserProfile?.is_developer;
 
   useEffect(() => {
-    // This effect ensures we always have the most complete pub data available,
-    // protecting against cases where an incomplete pub object might be passed from an external context.
+    // This effect ensures we always have the most complete pub data available.
+    // It handles two cases for missing country info: rated pubs (in our DB)
+    // and unrated pubs (new from OSM).
+    setLocalPub(pub); // Optimistically set the local pub first
+
     const hasCountryInfo = pub.country_code || pub.country_name;
     const isRated = pub.ratings?.length > 0 || pub.pub_score != null;
 
-    if (!hasCountryInfo && isRated && pub.id) {
-        // If we have a rated pub but no country info, it's likely an incomplete object.
-        // Fetch the full record from the DB as the source of truth.
-        const fetchFullPubData = async () => {
-            const { data, error } = await supabase
-                .from('pubs')
-                .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since')
-                .eq('id', pub.id)
-                .single();
+    if (!hasCountryInfo && pub.id && pub.location) {
+        // Pub is missing country info, we need to fetch it.
+        if (isRated) {
+            // It's a rated pub, so it must exist in our DB. Fetch full record.
+            const fetchFullPubData = async () => {
+                const { data, error } = await supabase
+                    .from('pubs')
+                    .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since')
+                    .eq('id', pub.id)
+                    .single();
 
-            if (data && !error) {
-                const enrichedPub = {
-                    ...pub, // Keep live data like ratings from the prop
-                    ...data, // Overwrite with the full data from DB
-                    location: { lat: data.lat, lng: data.lng }
-                };
-                setLocalPub(enrichedPub);
-            } else {
-                setLocalPub(pub); // Fallback to original prop on error
-            }
-        };
-        fetchFullPubData();
-    } else {
-        // If the pub prop is fine, or if it changes to a new pub, update local state
-        setLocalPub(pub);
+                if (data && !error) {
+                    setLocalPub(prevPub => ({
+                        ...prevPub, // Keep live data like ratings from the prop
+                        ...data, // Overwrite with the full data from DB
+                        location: { lat: data.lat, lng: data.lng }
+                    }));
+                }
+            };
+            fetchFullPubData();
+        } else {
+            // It's unrated, likely a new pub from OSM. Reverse geocode to get country.
+            const reverseGeocodeForCountry = async () => {
+                try {
+                    const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
+                    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pub.location.lat}&lon=${pub.location.lng}&addressdetails=1`;
+                    const response = await fetch(url, { headers: { 'User-Agent': userAgent } });
+                    const data = await response.json();
+                    
+                    if (data && data.address) {
+                        setLocalPub(prevPub => ({
+                            ...prevPub,
+                            country_code: data.address.country_code,
+                            country_name: data.address.country,
+                        }));
+                    }
+                } catch (error) {
+                    console.error("Reverse geocoding for country failed:", error);
+                }
+            };
+            reverseGeocodeForCountry();
+        }
     }
   }, [pub]);
 
