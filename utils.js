@@ -264,70 +264,52 @@ export const formatTimeAgo = (timestamp) => {
     return Math.floor(seconds) + " seconds ago";
   };
 
-const EUROZONE_COUNTRIES = [
-    'Austria', 'Belgium', 'Croatia', 'Cyprus', 'Estonia', 'Finland', 
-    'France', 'Germany', 'Greece', 'Ireland', 'Italy', 'Latvia', 
-    'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Portugal', 
-    'Slovakia', 'Slovenia', 'Spain'
-];
-
 const EUROZONE_COUNTRY_CODES = new Set([
     'at', 'be', 'hr', 'cy', 'ee', 'fi', 'fr', 'de', 'gr', 'ie', 
     'it', 'lv', 'lt', 'lu', 'mt', 'nl', 'pt', 'sk', 'si', 'es'
 ]);
 
 /**
- * Infers currency information based on a pub's location data.
- * Defaults to GBP (£) for UK/unidentified locations.
- * @param {{address?: string, country_code?: string, country_name?: string}} pubLocationData The pub's location data.
+ * Infers currency information based *only* on a pub's country code.
+ * Defaults to GBP (£) for UK or any unidentified/missing country codes.
+ * @param {{country_code?: string}} pubLocationData The pub's location data, only using country_code.
  * @returns {{symbol: string, code: string}} The currency symbol and code.
  */
 export const getCurrencyInfo = (pubLocationData = {}) => {
-    const { address, country_code, country_name } = pubLocationData;
+    const { country_code } = pubLocationData;
 
-    // 1. Country Code (Most reliable)
+    // 1. Check if country_code exists.
     if (country_code) {
-        const code = country_code.toLowerCase();
-        if (EUROZONE_COUNTRY_CODES.has(code)) return { symbol: '€', code: 'EUR' };
-        if (code === 'us') return { symbol: '$', code: 'USD' };
-        if (code === 'au') return { symbol: '$', code: 'AUD' };
-        if (code === 'ca') return { symbol: '$', code: 'CAD' };
-        if (code === 'tr') return { symbol: '₺', code: 'TRY' };
-        if (code === 'pl') return { symbol: 'zł', code: 'PLN' };
-        if (code === 'il') return { symbol: '₪', code: 'ILS' };
-        // We don't return for 'gb' here, as we want to fall through to the string search
-        // to correctly handle Northern Ireland vs. other parts of GB if the address is available.
+        const code = country_code.toLowerCase().trim();
+
+        // 2. Match against a strict list of known codes.
+        if (EUROZONE_COUNTRY_CODES.has(code)) {
+            return { symbol: '€', code: 'EUR' };
+        }
+        if (code === 'us') {
+            return { symbol: '$', code: 'USD' };
+        }
+        if (code === 'gb' || code === 'uk') {
+            return { symbol: '£', code: 'GBP' };
+        }
+        if (code === 'au') {
+            return { symbol: '$', code: 'AUD' };
+        }
+        if (code === 'ca') {
+            return { symbol: '$', code: 'CAD' };
+        }
+        if (code === 'tr') {
+            return { symbol: '₺', code: 'TRY' };
+        }
+        if (code === 'pl') {
+            return { symbol: 'zł', code: 'PLN' };
+        }
+        if (code === 'il') {
+            return { symbol: '₪', code: 'ILS' };
+        }
     }
 
-    // 2. String Search (Less reliable, for legacy/bad data)
-    const searchText = `${(country_name || '').toLowerCase()} ${(address || '').toLowerCase()}`;
-
-    // Handle the tricky Ireland/Northern Ireland case very explicitly.
-    // If "northern ireland" is present, it's definitely GBP.
-    if (searchText.includes('northern ireland')) {
-        return { symbol: '£', code: 'GBP' };
-    }
-    // If only "ireland" is present (and not "northern ireland"), it's EUR.
-    if (searchText.includes('ireland')) {
-        return { symbol: '€', code: 'EUR' };
-    }
-    
-    // Check for other countries by name.
-    if (searchText.includes('usa') || searchText.includes('united states')) return { symbol: '$', code: 'USD' };
-    if (searchText.includes('australia')) return { symbol: '$', code: 'AUD' };
-    if (searchText.includes('canada')) return { symbol: '$', code: 'CAD' };
-    if (searchText.includes('turkey')) return { symbol: '₺', code: 'TRY' };
-    if (searchText.includes('poland')) return { symbol: 'zł', code: 'PLN' };
-    if (searchText.includes('israel')) return { symbol: '₪', code: 'ILS' };
-
-    // This is a broader check for other Eurozone countries that might not have been caught by country_code.
-    // This runs after the specific Ireland checks to avoid ambiguity.
-    if (EUROZONE_COUNTRIES.some(c => searchText.includes(c.toLowerCase()))) {
-        return { symbol: '€', code: 'EUR' };
-    }
-    
-    // 3. Default
-    // If we're here, it's likely UK or an unknown country. Default to GBP.
+    // 3. If country_code is null, empty, or not in the list above, default to GBP.
     return { symbol: '£', code: 'GBP' };
 };
 

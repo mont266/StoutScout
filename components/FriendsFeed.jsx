@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
 import RatingCard from './RatingCard.jsx';
@@ -152,7 +152,7 @@ const UserSearch = ({ onBack, onViewProfile, userProfile, onFriendRequest, onFri
 };
 
 
-const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, userProfile, friendships, onFriendRequest, onFriendAction, allRatings, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment }) => {
+const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, userProfile, friendships, onFriendRequest, onFriendAction, allRatings, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs }) => {
     const [view, setView] = useState('feed'); // 'feed' or 'search'
     const [ratings, setRatings] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -171,6 +171,10 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
 
     const isRefreshing = loading && page === 1;
     const hasFriends = friendships.some(f => f.status === 'accepted');
+
+    const dbPubsMap = useMemo(() => {
+        return new Map((dbPubs || []).map(p => [p.id, p]));
+    }, [dbPubs]);
 
     const fetchRatings = useCallback(async (pageNum) => {
         if (!hasFriends) {
@@ -241,30 +245,34 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         onToggleLike(ratingToToggle);
     };
 
-    // Optimistically update comment count on add
+    // Update comment count based on the reliable list from the parent
     const handleFeedAddComment = async (ratingId, content) => {
-        await onAddComment(ratingId, content);
-        setRatings(currentRatings =>
-            currentRatings.map(rating => {
-                if (rating.id === ratingId) {
-                    return { ...rating, comment_count: (rating.comment_count || 0) + 1 };
-                }
-                return rating;
-            })
-        );
+        const newCommentsList = await onAddComment(ratingId, content);
+        if (newCommentsList) {
+            setRatings(currentRatings =>
+                currentRatings.map(rating => {
+                    if (rating.id === ratingId) {
+                        return { ...rating, comment_count: newCommentsList.length };
+                    }
+                    return rating;
+                })
+            );
+        }
     };
 
-    // Optimistically update comment count on delete
+    // Update comment count based on the reliable list from the parent
     const handleFeedDeleteComment = async (commentId, ratingId) => {
-        await onDeleteComment(commentId, ratingId);
-        setRatings(currentRatings =>
-            currentRatings.map(rating => {
-                if (rating.id === ratingId) {
-                    return { ...rating, comment_count: Math.max(0, (rating.comment_count || 1) - 1) };
-                }
-                return rating;
-            })
-        );
+        const newCommentsList = await onDeleteComment(commentId, ratingId);
+        if (newCommentsList !== null) {
+            setRatings(currentRatings =>
+                currentRatings.map(rating => {
+                    if (rating.id === ratingId) {
+                        return { ...rating, comment_count: newCommentsList.length };
+                    }
+                    return rating;
+                })
+            );
+        }
     };
 
     const handleRefresh = useCallback((method = 'button') => {
@@ -423,25 +431,30 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
 
         return (
             <div className="p-2 sm:p-4 space-y-4">
-                {ratings.map(rating => (
-                    <RatingCard 
-                        key={rating.id}
-                        rating={rating}
-                        userLikes={userLikes}
-                        onToggleLike={handleFeedToggleLike}
-                        onViewProfile={onViewProfile}
-                        onLoginRequest={onLoginRequest}
-                        onViewImage={onViewImage}
-                        onViewPub={onViewPub}
-                        loggedInUserProfile={loggedInUserProfile}
-                        comments={commentsByRating.get(rating.id)}
-                        isCommentsLoading={isCommentsLoading}
-                        onFetchComments={onFetchComments}
-                        onAddComment={handleFeedAddComment}
-                        onDeleteComment={handleFeedDeleteComment}
-                        onReportComment={onReportComment}
-                    />
-                ))}
+                {ratings.map(rating => {
+                    const fallbackPubData = dbPubsMap.get(rating.pub_id);
+                    return (
+                        <RatingCard 
+                            key={rating.id}
+                            rating={rating}
+                            userLikes={userLikes}
+                            onToggleLike={handleFeedToggleLike}
+                            onViewProfile={onViewProfile}
+                            onLoginRequest={onLoginRequest}
+                            onViewImage={onViewImage}
+                            onViewPub={onViewPub}
+                            loggedInUserProfile={loggedInUserProfile}
+                            comments={commentsByRating.get(rating.id)}
+                            isCommentsLoading={isCommentsLoading}
+                            onFetchComments={onFetchComments}
+                            onAddComment={handleFeedAddComment}
+                            onDeleteComment={handleFeedDeleteComment}
+                            onReportComment={onReportComment}
+                            onOpenShareRatingModal={onOpenShareRatingModal}
+                            fallbackLocationData={fallbackPubData}
+                        />
+                    );
+                })}
                 <div ref={loaderRef} className="h-10 text-center">
                     {loading && page > 1 && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400 mx-auto mt-4"></div>}
                     {!loading && !hasMore && <p className="text-gray-500 dark:text-gray-400 mt-4">You've reached the end of your friends' ratings!</p>}

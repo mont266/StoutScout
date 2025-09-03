@@ -40,7 +40,7 @@ const DesktopLayout = (props) => {
         getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
         profilePage, session, userProfile, handleViewProfile,
         handleSettingsChange, handleLogout,
-        existingUserRatingForSelectedPub, handleRatePub,
+        selectedPub, existingUserRatingForSelectedPub, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
@@ -75,6 +75,14 @@ const DesktopLayout = (props) => {
         userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote,
         setAlertInfo,
         showAllDbPubs, onToggleShowAllDbPubs,
+        onOpenShareModal, onOpenShareRatingModal,
+        scrollToSection, onScrollComplete,
+        setConfettiState,
+        // Password change
+        isChangingPassword, handleChangePassword,
+        userTrophies,
+        allTrophies,
+        dbPubs,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -89,7 +97,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={() => window.history.back()}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={handleFriendAction}
+                    onFriendAction={onFriendAction}
                 />
             );
         }
@@ -135,6 +143,8 @@ const DesktopLayout = (props) => {
                         userZeroVotes={userZeroVotes}
                         onGuinnessZeroVote={onGuinnessZeroVote}
                         onClearGuinnessZeroVote={onClearGuinnessZeroVote}
+                        onOpenShareModal={onOpenShareModal}
+                        onOpenShareRatingModal={onOpenShareRatingModal}
                     />
                 );
             }
@@ -212,6 +222,8 @@ const DesktopLayout = (props) => {
                     onAddComment={onAddComment}
                     onDeleteComment={onDeleteComment}
                     onReportComment={onReportComment}
+                    onOpenShareRatingModal={onOpenShareRatingModal}
+                    dbPubs={dbPubs}
                 />
             );
         }
@@ -243,6 +255,14 @@ const DesktopLayout = (props) => {
                             setAlertInfo={setAlertInfo}
                             showAllDbPubs={showAllDbPubs}
                             onToggleShowAllDbPubs={onToggleShowAllDbPubs}
+                            onLoginRequest={() => setIsAuthOpen(true)}
+                            setConfettiState={setConfettiState}
+                            handleChangePassword={handleChangePassword}
+                            isChangingPassword={isChangingPassword}
+                            scrollToSection={scrollToSection}
+                            onScrollComplete={onScrollComplete}
+                            userTrophies={userTrophies}
+                            allTrophies={allTrophies}
                         />
                     </div>
                 </div>

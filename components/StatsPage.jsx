@@ -12,6 +12,7 @@ import OnlineUsersPage from './OnlineUsersPage.jsx';
 import AllCommentsPage from './AllCommentsPage.jsx';
 import ForecastsPage from './ForecastsPage.jsx';
 import UtmStatsPage from './UtmStatsPage.jsx';
+import FinancialStatsPage from './FinancialStatsPage.jsx';
 
 const StatCard = ({ label, value, icon, customIcon, format = (v) => v.toLocaleString(), onClick, className = '', subValue = null }) => (
     <div
@@ -183,6 +184,10 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     const handleBackFromSubView = useCallback(() => {
         window.history.back();
     }, []);
+
+    if (currentView === 'financial_stats') {
+        return <FinancialStatsPage onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
+    }
 
     if (currentView === 'utm_stats') {
         return <UtmStatsPage onBack={handleBackFromSubView} />;
@@ -369,6 +374,14 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
         </div>
     );
 
+    const navButtonCount = [
+        userProfile?.is_developer, // Financials
+        true, // Forecasts
+        true, // UTM
+    ].filter(Boolean).length;
+    
+    const gridColsClass = navButtonCount === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3';
+
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800/50">
            {onBack && (
@@ -400,7 +413,24 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                 </div>
             </header>
             <main className="flex-grow overflow-y-auto p-4 md:p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className={`grid grid-cols-1 ${gridColsClass} gap-6 mb-6`}>
+                    {userProfile?.is_developer && (
+                        <button
+                            onClick={() => handleViewChange('financial_stats')}
+                            className="w-full bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center justify-between transition-all hover:shadow-lg hover:scale-[1.02] hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                        >
+                            <div className="flex items-center space-x-4">
+                                <div className="bg-green-100 dark:bg-green-900/50 p-3 rounded-full">
+                                    <i className="fas fa-hand-holding-usd text-xl text-green-500 dark:text-green-400 w-7 h-7 flex items-center justify-center"></i>
+                                </div>
+                                <div className="text-left">
+                                    <div className="font-bold text-lg">Financials</div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">View donation metrics</div>
+                                </div>
+                            </div>
+                            <i className="fas fa-arrow-right text-xl text-gray-400 dark:text-gray-500 opacity-70"></i>
+                        </button>
+                    )}
                     <button
                         onClick={() => handleViewChange('forecasts')}
                         className="w-full bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center justify-between transition-all hover:shadow-lg hover:scale-[1.02] hover:bg-gray-50 dark:hover:bg-gray-700/50"

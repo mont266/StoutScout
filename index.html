@@ -1,9 +1,33 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh https://aistudiocdn.com https://js.stripe.com https://cdnjs.cloudflare.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.stripe.com https://overpass-api.de https://nominatim.openstreetmap.org https://www.google-analytics.com; img-src 'self' data: https://*.supabase.co https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://api.dicebear.com https://quickchart.io; frame-src 'self' https://js.stripe.com; font-src 'self' https://cdnjs.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^18.3.1",
+    "react/": "https://esm.sh/react@^18.3.1/",
+    "recharts": "https://esm.sh/recharts@^3.1.2",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.55.0",
+    "react-dom/": "https://esm.sh/react-dom@^18.3.1/",
+    "react-dom": "https://esm.sh/react-dom@^18.3.1",
+    "react-easy-crop": "https://esm.sh/react-easy-crop@^5.5.0",
+    "leaflet": "https://esm.sh/leaflet@^1.9.4",
+    "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0",
+    "react-confetti": "https://esm.sh/react-confetti@^6.4.0",
+    "@stripe/stripe-js": "https://esm.sh/@stripe/stripe-js@3.3.0",
+    "@stripe/react-stripe-js": "https://esm.sh/@stripe/react-stripe-js@2.7.0",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.0.2",
+    "@testing-library/jest-dom": "https://aistudiocdn.com/@testing-library/jest-dom@^6.8.0",
+    "vitest/": "https://aistudiocdn.com/vitest@^3.2.4/",
+    "vitest": "https://aistudiocdn.com/vitest@^3.2.4",
+    "@testing-library/react": "https://aistudiocdn.com/@testing-library/react@^16.3.0",
+    "@testing-library/user-event": "https://aistudiocdn.com/@testing-library/user-event@^14.6.1",
+    "vite-plugin-mkcert": "https://aistudiocdn.com/vite-plugin-mkcert@^1.17.8"
+  }
+}
+</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
     <!-- Primary Meta Tags -->
@@ -36,105 +60,27 @@
     <meta name="apple-mobile-web-app-title" content="Stoutly">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><rect width='100' height='100' rx='22' fill='%232C1F17'/><g transform='translate(10, 11.6) scale(0.8)'><path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F' stroke='%23F59E0B' stroke-width='4'/><path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/></g></svg>">
     
-    <link rel="icon" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><g transform='translate(10, 11.6) scale(0.8)'><path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F' stroke='%23F59E0B' stroke-width='4'/><path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/></g></svg>" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="icon" href="data:image/svg+xml,<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><g transform='translate(10, 11.6) scale(0.8)'><path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F' stroke='%23F59E0B' stroke-width='4'/><path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/></g></svg>">
     
-    <!-- Leaflet CSS - Required for react-leaflet maps -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-    <!-- Structured Data -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "Stoutly",
-      "operatingSystem": "Web",
-      "applicationCategory": "LifestyleApplication",
-      "description": "Stoutly helps you find and rate the best pints of Guinness based on price, quality, and your location.",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "GBP"
-      }
-    }
-    </script>
-    
-    <script type="module" src="/index.tsx"></script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^18.2.0",
-    "react/": "https://esm.sh/react@^18.2.0/",
-    "react-dom": "https://esm.sh/react-dom@^18.2.0",
-    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.39.8",
-    "vite": "https://esm.sh/vite@^7.0.5",
-    "leaflet": "https://esm.sh/leaflet@^1.9.4",
-    "react-leaflet": "https://esm.sh/react-leaflet@^4.2.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.7.0",
-    "react-easy-crop": "https://esm.sh/react-easy-crop@^5.0.7",
-    "recharts": "https://esm.sh/recharts@^2.12.7",
-    "std/": "https://esm.sh/std@^0.1.40/",
-    "vite-plugin-mkcert": "https://esm.sh/vite-plugin-mkcert@^1.17.8"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
-</head>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <div id="modal-root"></div>
     <div id="orientation-lock-overlay">
       <div class="phone-graphic">
-        <svg class="phone-outline" viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg">
-          <rect x="5" y="5" width="90" height="190" rx="15" stroke-width="5" stroke="#FDEED4" fill="none"/>
-          <line x1="35" y1="15" x2="65" y2="15" stroke-width="4" stroke="#FDEED4" stroke-linecap="round"/>
-        </svg>
-        <svg class="stoutly-logo" viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'>
-          <g transform='translate(0 2)'>
-            <path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='#111827' stroke='#F59E0B' strokeWidth='4'/>
-            <path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='#FDEED4'/>
-          </g>
-        </svg>
+        <svg class="phone-outline" viewBox="0 0 100 200" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="98" height="198" rx="20" stroke="white" stroke-width="2"/><rect x="30" y="6" width="40" height="4" rx="2" fill="white"/></svg>
+        <div class="stoutly-logo">
+          <svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><g transform='translate(10, 11.6) scale(0.8)'><path d='M50 5 C 29.5 5, 12.5 22.5, 12.5 42.5 C 12.5 67.5, 50 95, 50 95 C 50 95, 87.5 67.5, 87.5 42.5 C 87.5 22.5, 70.5 5, 50 5 Z' fill='%231A120F' stroke='%23F59E0B' stroke-width='4'/><path d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' fill='%23FDEED4'/></g></svg>
+        </div>
       </div>
-      <h2 class="text-3xl font-bold text-amber-400 mt-8">A Better View Awaits</h2>
-      <p class="mt-2 text-gray-300 max-w-xs">For the best experience, please rotate your phone to portrait mode.</p>
+      <h2 class="text-2xl font-bold mt-8">Please rotate your device</h2>
+      <p class="mt-2 text-gray-300">Stoutly is best enjoyed in portrait mode.</p>
     </div>
-
-    <!-- Netlify form for ban appeals. This is hidden and only for Netlify's build process. -->
-    <form name="ban-appeal" netlify netlify-honeypot="bot-field" hidden>
-      <input type="hidden" name="form-name" value="ban-appeal" />
-      <p class="hidden">
-        <label>
-          Don’t fill this out if you’re human: <input name="bot-field" />
-        </label>
-      </p>
-      <input type="text" name="user_id" />
-      <input type="text" name="username" />
-      <textarea name="appeal_reason"></textarea>
-    </form>
-
-    <!-- Netlify form for contact submissions -->
-    <form name="contact" netlify netlify-honeypot="bot-field" hidden>
-      <input type="hidden" name="form-name" value="contact" />
-      <p class="hidden"><label>Don’t fill this out if you’re human: <input name="bot-field" /></label></p>
-      <input type="text" name="user_id" />
-      <input type="text" name="username" />
-      <input type="text" name="name" />
-      <input type="email" name="email" />
-      <textarea name="message"></textarea>
-    </form>
-
-    <!-- Netlify form for feedback submissions -->
-    <form name="feedback" netlify netlify-honeypot="bot-field" hidden>
-      <input type="hidden" name="form-name" value="feedback" />
-      <p class="hidden"><label>Don’t fill this out if you’re human: <input name="bot-field" /></label></p>
-      <input type="text" name="user_id" />
-      <input type="text" name="username" />
-      <select name="type"><option>Bug Report</option><option>Feature Request</option></select>
-      <input type="text" name="subject" />
-      <textarea name="description"></textarea>
-    </form>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

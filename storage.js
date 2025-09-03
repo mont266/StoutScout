@@ -14,7 +14,6 @@ export const loadSettings = () => {
     radius: DEFAULT_RADIUS_MI * MILES_TO_METERS,
     theme: 'dark',
     developerMode: false,
-    simulatedLocation: null,
   };
 
   try {

@@ -9,21 +9,21 @@ import { getMobileOS } from '../utils.js';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import ContactModal from './ContactModal.jsx';
 import FeedbackModal from './FeedbackModal.jsx';
-import KofiModal from './KofiModal.jsx';
+import DonationForm from './DonationForm.jsx';
 
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewProfile, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs }) => {
+const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
-  const [isKofiModalOpen, setIsKofiModalOpen] = useState(false);
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
   const [refreshStatsSuccess, setRefreshStatsSuccess] = useState(false);
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [rebuildSuccess, setRebuildSuccess] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [backfillSuccess, setBackfillSuccess] = useState(false);
+  const isDesktop = useIsDesktop();
   
   const handleUnitChange = (unit) => onSettingsChange({ ...settings, unit });
   const handleThemeChange = (theme) => onSettingsChange({ ...settings, theme });
@@ -34,6 +34,24 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
     onSettingsChange({ ...settings, radius: radiusInMiles * MILES_TO_METERS });
   };
   
+  useEffect(() => {
+    if (scrollToSection) {
+        const element = document.getElementById(`${scrollToSection}-section`);
+        if (element) {
+            // Using a timeout to ensure the element is rendered and layout is complete
+            setTimeout(() => {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Add a temporary highlight effect for better user feedback
+                element.classList.add('highlight-rating');
+                setTimeout(() => {
+                    element.classList.remove('highlight-rating');
+                }, 2500); // Highlight duration matches other highlights in the app
+            }, 100);
+        }
+        onScrollComplete(); // Clear the state after attempting to scroll
+    }
+  }, [scrollToSection, onScrollComplete]);
+
   const handleInstallClick = async () => {
     if (!installPromptEvent) return;
     trackEvent('pwa_install_prompt_triggered');
@@ -47,11 +65,6 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   const handleIosInstallClick = () => {
     trackEvent('share', { method: 'Add to Home Screen', content_type: 'app' });
     onShowIosInstall();
-  };
-
-  const handleDonateClick = () => {
-    trackEvent('click_donate_kofi');
-    setIsKofiModalOpen(true);
   };
 
   const handleManualPriceStatRefresh = async () => {
@@ -141,6 +154,41 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
     }
   };
 
+  const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
+
+  const triggerConfetti = () => {
+      setConfettiState({
+          active: true,
+          recycle: true,
+          opacity: 1,
+          key: crypto.randomUUID(),
+          numberOfPieces: 300,
+      });
+  };
+  
+  const handleTestFirstDonation = () => {
+    trackEvent('dev_test_donation', { type: 'first_time' });
+    setAlertInfo({
+        isOpen: true,
+        title: 'Trophy Unlocked!',
+        message: "You've unlocked the 'Stoutly Patron' trophy! Thank you so much for your donation and for supporting the development of Stoutly.",
+        theme: 'success',
+        customIcon: 'fa-hand-holding-heart',
+    });
+    triggerConfetti();
+  };
+
+  const handleTestRepeatDonation = () => {
+    trackEvent('dev_test_donation', { type: 'repeat' });
+    setAlertInfo({
+        isOpen: true,
+        title: 'Thank You!',
+        message: "Your continued support means the world. Thank you for your donation and for helping us keep Stoutly running and ad-free. Cheers!",
+        theme: 'success',
+    });
+    triggerConfetti();
+  };
+
   const isKm = settings.unit === 'km';
   const radiusInMilesRaw = settings.radius / MILES_TO_METERS;
 
@@ -186,7 +234,6 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
 
   return (
     <>
-      <KofiModal isOpen={isKofiModalOpen} onClose={() => setIsKofiModalOpen(false)} />
       {isContactModalOpen && <ContactModal userProfile={userProfile} session={session} onClose={() => setIsContactModalOpen(false)} />}
       {isFeedbackModalOpen && <FeedbackModal userProfile={userProfile} onClose={() => setIsFeedbackModalOpen(false)} />}
       <div className="p-4 sm:p-6 space-y-8">
@@ -267,30 +314,30 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
           </div>
           
           {userProfile && (
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2" id="marketing-label">
-                      Marketing Preferences
-                  </h3>
-                  <div className="bg-gray-100 dark:bg-gray-900 p-3 rounded-lg">
-                      <label htmlFor="marketing-consent-toggle" className="flex items-center justify-between cursor-pointer">
-                          <span className="flex flex-col">
-                              <span className="font-medium text-gray-700 dark:text-gray-300">Receive marketing emails</span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">Get news about new features, events, and offers.</span>
-                          </span>
-                          <div className="relative">
-                              <input
-                                  id="marketing-consent-toggle"
-                                  type="checkbox"
-                                  className="sr-only peer"
-                                  checked={userProfile.accepts_marketing || false}
-                                  onChange={(e) => onMarketingConsentChange(e.target.checked)}
-                              />
-                              <div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
-                              <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
-                          </div>
-                      </label>
-                  </div>
-              </div>
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2" id="marketing-label">
+                    Marketing Preferences
+                </h3>
+                <div className="bg-gray-100 dark:bg-gray-900 p-3 rounded-lg">
+                    <label htmlFor="marketing-consent-toggle" className="flex items-center justify-between cursor-pointer">
+                        <span className="flex flex-col">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Receive marketing emails</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Get news about new features, events, and offers.</span>
+                        </span>
+                        <div className="relative">
+                            <input
+                                id="marketing-consent-toggle"
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={userProfile.accepts_marketing || false}
+                                onChange={(e) => onMarketingConsentChange(e.target.checked)}
+                            />
+                            <div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
+                            <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
+                        </div>
+                    </label>
+                </div>
+            </div>
           )}
 
           {/* Admin Tools Section */}
@@ -414,25 +461,57 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                           Toggles between the standard radius search and showing every pub in the database on the map.
                         </p>
                       </div>
+                      <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">Donation Testing</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button onClick={handleTestFirstDonation} className="flex-1 flex items-center justify-center space-x-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold py-3 px-4 rounded-lg hover:bg-blue-500/20 transition-colors">
+                                <i className="fas fa-trophy"></i>
+                                <span>Test 1st Donation</span>
+                            </button>
+                            <button onClick={handleTestRepeatDonation} className="flex-1 flex items-center justify-center space-x-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold py-3 px-4 rounded-lg hover:bg-blue-500/20 transition-colors">
+                                <i className="fas fa-redo-alt"></i>
+                                <span>Test Repeat Donation</span>
+                            </button>
+                        </div>
+                        <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+                          Triggers the success popup without an actual donation.
+                        </p>
+                      </div>
                   </div>
               )}
             </div>
           )}
 
           {/* Support Us Section */}
-           <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
+           <div id="support-section" className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white px-2">Support Stoutly</h3>
-              <div className="px-2">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                      If you enjoy using Stoutly, please consider supporting its development. Every contribution helps keep the app running and ad-free!
+              <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      If you enjoy using Stoutly, please consider supporting its development. Every contribution helps keep the app running and ad-free, and you'll earn an exclusive trophy!
                   </p>
-                  <button
-                      onClick={handleDonateClick}
-                      className="w-full flex items-center justify-center space-x-3 bg-amber-500 text-black font-bold py-3 px-4 rounded-lg hover:bg-amber-400 transition-colors"
-                  >
-                      <i className="fas fa-heart"></i>
-                      <span>Buy me a pint</span>
-                  </button>
+                  {userProfile ? (
+                    <DonationForm 
+                        userProfile={userProfile}
+                        setAlertInfo={setAlertInfo}
+                        onSuccess={() => {
+                            onDataRefresh();
+                            setConfettiState({
+                                active: true,
+                                recycle: true,
+                                opacity: 1,
+                                key: crypto.randomUUID(),
+                                numberOfPieces: 300,
+                            });
+                        }}
+                        userTrophies={userTrophies}
+                        allTrophies={allTrophies}
+                    />
+                  ) : (
+                    <div className="text-center p-4 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-gray-600 dark:text-gray-400 mb-3">Please sign in to support Stoutly and earn your trophy.</p>
+                      <button onClick={onLoginRequest} className="bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors">Sign In</button>
+                    </div>
+                  )}
               </div>
           </div>
 
@@ -514,13 +593,29 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
               </div>
               
               {userProfile && (
-                <button
-                  onClick={onLogout}
-                  className="w-full flex items-center justify-center space-x-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-red-500/80 hover:text-white dark:hover:bg-red-600/80 transition-colors"
-                >
-                  <i className="fas fa-sign-out-alt"></i>
-                  <span>Sign Out</span>
-                </button>
+                <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2 text-center">Account Actions</h3>
+                  <div>
+                    <button
+                      onClick={handleChangePassword}
+                      disabled={isChangingPassword}
+                      className="w-full flex items-center justify-center space-x-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                    >
+                      {isChangingPassword ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> : <i className="fas fa-key"></i>}
+                      <span>Change Password</span>
+                    </button>
+                    <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+                        This will send a password reset link to your email.
+                    </p>
+                  </div>
+                  <button
+                    onClick={onLogout}
+                    className="w-full flex items-center justify-center space-x-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-red-500/80 hover:text-white dark:hover:bg-red-600/80 transition-colors"
+                  >
+                    <i className="fas fa-sign-out-alt"></i>
+                    <span>Sign Out</span>
+                  </button>
+                </div>
               )}
           </div>
       </div>

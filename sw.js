@@ -71,7 +71,6 @@ const urlsToCache = [
   '/components/AlertModal.jsx',
   '/components/PubScoreExplanationModal.jsx',
   '/components/CoachMark.jsx',
-  '/components/KofiModal.jsx',
   '/components/CookieConsentBanner.jsx',
   '/components/OnlineUsersPage.jsx',
   '/components/CommentsSection.jsx',
@@ -85,6 +84,9 @@ const urlsToCache = [
   '/components/ShopItemCard.jsx',
   '/components/CoasterWelcomeModal.jsx',
   '/components/UtmStatsPage.jsx',
+  '/components/ShareModal.jsx',
+  '/components/ShareProfileModal.jsx',
+  '/components/FinancialStatsPage.jsx',
 ];
 
 self.addEventListener('install', event => {

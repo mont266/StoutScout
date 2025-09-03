@@ -22,7 +22,7 @@ const THEME_CLASSES = {
     },
 };
 
-const AlertModal = ({ onClose, title, message, theme = 'info' }) => {
+const AlertModal = ({ onClose, title, message, theme = 'info', customIcon }) => {
     useEffect(() => {
         const handleKeyDown = (event) => {
             if (event.key === 'Escape' || event.key === 'Enter') {
@@ -34,6 +34,7 @@ const AlertModal = ({ onClose, title, message, theme = 'info' }) => {
     }, [onClose]);
 
     const themeClasses = THEME_CLASSES[theme] || THEME_CLASSES.info;
+    const iconToDisplay = customIcon || themeClasses.icon;
 
     const modalContent = (
          <div 
@@ -48,7 +49,7 @@ const AlertModal = ({ onClose, title, message, theme = 'info' }) => {
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="text-center">
-                    <i className={`fas ${themeClasses.icon} text-5xl ${themeClasses.iconText} mb-4`}></i>
+                    <i className={`fas ${iconToDisplay} text-5xl ${themeClasses.iconText} mb-4`}></i>
                     <h3 id="alert-title" className="text-lg leading-6 font-bold text-gray-900 dark:text-white">
                         {title}
                     </h3>

@@ -4,13 +4,21 @@ import StarRating from './StarRating.jsx';
 import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import CommentsSection from './CommentsSection.jsx';
 
-const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment }) => {
+const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, fallbackLocationData = null }) => {
 
     const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng, comment_count, message, pub_country_code, pub_country_name } = rating;
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
 
     const isLiked = userLikes && userLikes.has(id);
-    const currencyInfo = getCurrencyInfo({ address: pub_address, country_code: pub_country_code, country_name: pub_country_name });
+    
+    // Prioritize the rating's specific location data, but use the pub's data as a fallback.
+    const effectiveLocationData = {
+        country_code: pub_country_code || fallbackLocationData?.country_code,
+        country_name: pub_country_name || fallbackLocationData?.country_name,
+        address: pub_address || fallbackLocationData?.address
+    };
+    
+    const currencyInfo = getCurrencyInfo(effectiveLocationData);
     const rankData = user.level ? getRankData(user.level) : null;
 
     useEffect(() => {
@@ -33,10 +41,24 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                 country_code: pub_country_code,
                 country_name: pub_country_name,
             };
-            onViewPub(pubForSelection);
+            onViewPub(pubForSelection, { highlightRatingId: id });
         } else {
             console.warn("Cannot view pub on map: missing location data.", rating);
         }
+    };
+
+    const handleShare = () => {
+        // Create an enriched rating object right here to guarantee all data is present for the modal.
+        const enrichedRating = {
+            ...rating,
+            pub_country_code: pub_country_code || fallbackLocationData?.country_code,
+            pub_country_name: pub_country_name || fallbackLocationData?.country_name,
+            pub_name: pub_name || fallbackLocationData?.name,
+            pub_address: pub_address || fallbackLocationData?.address,
+            pub_lat: pub_lat || fallbackLocationData?.location?.lat,
+            pub_lng: pub_lng || fallbackLocationData?.location?.lng,
+        };
+        onOpenShareRatingModal(enrichedRating);
     };
 
     return (
@@ -134,6 +156,14 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                 >
                     <i className="far fa-comment"></i>
                     <span>{comment_count || 0}</span>
+                </button>
+                <button
+                    onClick={handleShare}
+                    className="flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    aria-label="Share this rating"
+                >
+                    <i className="far fa-share-square"></i>
+                    <span>Share</span>
                 </button>
             </div>
 

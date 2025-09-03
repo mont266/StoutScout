@@ -3,10 +3,13 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased;
+  html {
     /* Prevent horizontal scrollbars which can cause unwanted white space */
     overflow-x: hidden;
+  }
+
+  body {
+    @apply bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased;
     /* Prevent the browser's native pull-to-refresh action */
     overscroll-behavior-y: contain;
   }
@@ -67,4 +70,13 @@
 
 .highlight-comment {
   animation: highlight 2.5s ease-in-out;
+}
+
+@keyframes shrink-width {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+.progress-bar-animate {
+  animation: shrink-width linear forwards;
 }

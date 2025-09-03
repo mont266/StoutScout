@@ -20,7 +20,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const TermsOfUsePage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Terms of Use" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 25, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: September 3, 2025</p>
             <p>Welcome to Stoutly! These Terms of Use ("Terms") govern your access to and use of the Stoutly web application and any related services (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Description of Service</h2>
@@ -53,24 +53,30 @@ const TermsOfUsePage = ({ onBack }) => {
                 <li><strong>Public Display:</strong> You understand and agree that your username, avatar, rank, ratings, and comments will be publicly visible to other users of the Service.</li>
                 <li><strong>Content Warranty:</strong> You represent and warrant that you own or have the necessary licenses, rights, consents, and permissions to publish the User Content you submit. You further agree that the User Content you submit will not contain third-party copyrighted material, or material that is subject to other third-party proprietary rights, unless you have permission from the rightful owner of the material.</li>
             </ul>
+            
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">5. Donations</h2>
+            <p>Stoutly is a free service supported by its community. If you choose to make a donation to support the app's development, your payment will be processed by our third-party payment processor, Stripe. Donations are voluntary and non-refundable. We do not store your credit card information.</p>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">5. Moderation and Termination</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">6. Stoutly Intellectual Property</h2>
+            <p>Excluding your User Content, all aspects of the Service, including its "look and feel," branding, code, and content created by Stoutly, are the exclusive property of Stoutly and its licensors. You may not copy, modify, or distribute any part of the Service without our prior written consent.</p>
+
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">7. Moderation and Termination</h2>
             <p>We are committed to maintaining a high-quality and trustworthy platform. We reserve the right, but do not have the obligation, to:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li>Monitor, screen, or remove any User Content at our sole discretion, including comments, profile pictures, or photographs that we deem inappropriate or in violation of these Terms.</li>
                 <li>Suspend or permanently terminate your account for any reason, without notice, especially for violations of these Terms. Our decisions on moderation and termination are final.</li>
             </ul>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">6. Disclaimers</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Disclaimers</h2>
             <p>The Service is provided "AS IS" and "AS AVAILABLE" without warranties of any kind. We do not warrant that the information provided (including pub locations or average ratings) is accurate, complete, or reliable. You rely on any information available through the Service at your own risk.</p>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">7. Limitation of Liability</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">9. Limitation of Liability</h2>
             <p>To the fullest extent permitted by law, Stoutly and its operators shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly, resulting from your use of the Service.</p>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Changes to Terms</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">10. Changes to Terms</h2>
             <p>We may modify these Terms at any time. We will post the revised Terms and update the "Last Updated" date. Your continued use of the Service after any modification constitutes your acceptance of the new Terms.</p>
             
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">9. Contact Us</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">11. Contact Us</h2>
             <p>If you have any questions about these Terms, please contact us at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a> or through the "Contact Us" form in the app's settings.</p>
         </LegalPageWrapper>
     );

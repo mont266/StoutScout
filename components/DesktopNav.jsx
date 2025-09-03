@@ -44,7 +44,7 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
   );
 };
 
-const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements, unreadNotificationsCount, settings }) => {
+const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements, unreadNotificationsCount, settings, handleChangePassword }) => {
   const region = useRegion();
 
   const mainTabs = [

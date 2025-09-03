@@ -111,6 +111,14 @@ const MobileLayout = (props) => {
         userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote,
         setAlertInfo,
         showAllDbPubs, onToggleShowAllDbPubs,
+        onOpenShareModal, onOpenShareRatingModal,
+        scrollToSection, onScrollComplete,
+        setConfettiState,
+        // Password change
+        isChangingPassword, handleChangePassword,
+        userTrophies,
+        allTrophies,
+        dbPubs,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -168,6 +176,8 @@ const MobileLayout = (props) => {
                             onAddComment={onAddComment}
                             onDeleteComment={onDeleteComment}
                             onReportComment={onReportComment}
+                            onOpenShareRatingModal={onOpenShareRatingModal}
+                            dbPubs={dbPubs}
                         />
                     )}
                     {activeTab === 'settings' && (() => {
@@ -200,6 +210,14 @@ const MobileLayout = (props) => {
                                 setAlertInfo={setAlertInfo}
                                 showAllDbPubs={showAllDbPubs}
                                 onToggleShowAllDbPubs={onToggleShowAllDbPubs}
+                                onLoginRequest={() => setIsAuthOpen(true)}
+                                setConfettiState={setConfettiState}
+                                handleChangePassword={handleChangePassword}
+                                isChangingPassword={isChangingPassword}
+                                scrollToSection={scrollToSection}
+                                onScrollComplete={onScrollComplete}
+                                userTrophies={userTrophies}
+                                allTrophies={allTrophies}
                             />
                         );
                     })()}
@@ -330,6 +348,8 @@ const MobileLayout = (props) => {
                             userZeroVotes={userZeroVotes}
                             onGuinnessZeroVote={onGuinnessZeroVote}
                             onClearGuinnessZeroVote={onClearGuinnessZeroVote}
+                            onOpenShareModal={onOpenShareModal}
+                            onOpenShareRatingModal={onOpenShareRatingModal}
                         />
                     )}
                 </div>
