@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
 import { getCroppedImg } from '../imageUtils.js';
 
@@ -37,9 +38,9 @@ const ImageCropper = ({ imageSrc, onCropComplete, onClose }) => {
     }
   };
 
-  return (
+  const modalContent = (
     <div 
-        className="fixed inset-0 bg-black/90 z-[1400] flex flex-col items-center justify-center p-4 animate-modal-fade-in"
+        className="fixed inset-0 bg-black/90 z-[2100] flex flex-col items-center justify-center p-4 animate-modal-fade-in"
         role="dialog"
         aria-modal="true"
         aria-labelledby="crop-image-title"
@@ -98,6 +99,11 @@ const ImageCropper = ({ imageSrc, onCropComplete, onClose }) => {
       </div>
     </div>
   );
+
+  const modalRoot = document.getElementById('modal-root');
+  if (!modalRoot) return null;
+
+  return createPortal(modalContent, modalRoot);
 };
 
 export default ImageCropper;
