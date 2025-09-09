@@ -5,12 +5,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
+    "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest"
   },
   "dependencies": {
+    "@google/genai": "^0.15.0",
     "@stripe/react-stripe-js": "2.7.0",
     "@stripe/stripe-js": "3.3.0",
     "@supabase/supabase-js": "^2.55.0",
