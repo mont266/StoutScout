@@ -35,6 +35,78 @@ const StatCard = ({ label, value, icon, customIcon, format = (v) => v.toLocaleSt
     </div>
 );
 
+const ApiUsageStats = ({ onBack }) => {
+    const [usage, setUsage] = useState({ total_prompt_tokens: 0, total_candidates_tokens: 0 });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const fetchUsage = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        trackEvent('view_api_usage_stats');
+        try {
+            const { data, error: rpcError } = await supabase.rpc('get_api_token_usage');
+            if (rpcError) throw rpcError;
+            setUsage(data[0] || { total_prompt_tokens: 0, total_candidates_tokens: 0 });
+        } catch (err) {
+            console.error("Error fetching API usage:", err);
+            setError("Could not load API usage stats.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchUsage();
+    }, [fetchUsage]);
+
+    const totalTokens = (usage.total_prompt_tokens || 0) + (usage.total_candidates_tokens || 0);
+    // Pricing for gemini-2.5-flash: $0.35/1M input, $0.70/1M output
+    const inputCost = ((usage.total_prompt_tokens || 0) / 1_000_000) * 0.35;
+    const outputCost = ((usage.total_candidates_tokens || 0) / 1_000_000) * 0.70;
+    const totalCost = inputCost + outputCost;
+
+    return (
+         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800/50">
+            <header className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <button onClick={onBack} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 -ml-2 rounded-lg transition-colors">
+                            <i className="fas fa-arrow-left"></i>
+                            <span className="font-semibold hidden sm:inline">Back to Stats</span>
+                        </button>
+                        <div>
+                            <h3 className="text-xl md:text-2xl font-bold text-amber-500 dark:text-amber-400">API Usage</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Gemini API token consumption and estimated cost.</p>
+                        </div>
+                    </div>
+                    <button onClick={fetchUsage} disabled={loading} className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 disabled:opacity-50">
+                        <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
+                    </button>
+                </div>
+            </header>
+            <main className="flex-grow overflow-y-auto p-4 md:p-6">
+                {loading ? <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-400 mx-auto"></div> :
+                error ? <div className="text-center text-red-500">{error}</div> :
+                <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md text-center">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Estimated Total Cost (USD)</p>
+                        <p className="text-5xl font-bold text-gray-900 dark:text-white my-2">${totalCost.toFixed(4)}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Based on gemini-2.5-flash pricing. This is an estimate and may not match your final bill exactly.</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <StatCard label="Total Tokens Used" value={totalTokens} icon="fa-brain" />
+                        <StatCard label="Input (Prompt) Tokens" value={usage.total_prompt_tokens} icon="fa-arrow-right-to-bracket" />
+                        <StatCard label="Output (Response) Tokens" value={usage.total_candidates_tokens} icon="fa-arrow-left" />
+                    </div>
+                </div>
+                }
+            </main>
+        </div>
+    )
+}
+
+
 const TimePeriodFilter = ({ activePeriod, onPeriodChange }) => {
     const periods = [
         { id: '1d', label: '24h' },
@@ -184,6 +256,10 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     const handleBackFromSubView = useCallback(() => {
         window.history.back();
     }, []);
+
+    if (currentView === 'api_usage') {
+        return <ApiUsageStats onBack={handleBackFromSubView} />;
+    }
 
     if (currentView === 'financial_stats') {
         return <FinancialStatsPage onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
@@ -378,9 +454,10 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
         userProfile?.is_developer, // Financials
         true, // Forecasts
         true, // UTM
+        userProfile?.is_developer, // API Usage
     ].filter(Boolean).length;
     
-    const gridColsClass = navButtonCount === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3';
+    const gridColsClass = navButtonCount === 2 ? 'md:grid-cols-2' : navButtonCount === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-4';
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800/50">
@@ -461,6 +538,23 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                         </div>
                         <i className="fas fa-arrow-right text-xl text-gray-400 dark:text-gray-500 opacity-70"></i>
                     </button>
+                    {userProfile?.is_developer && (
+                         <button
+                            onClick={() => handleViewChange('api_usage')}
+                            className="w-full bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center justify-between transition-all hover:shadow-lg hover:scale-[1.02] hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                        >
+                            <div className="flex items-center space-x-4">
+                                <div className="bg-red-100 dark:bg-red-900/50 p-3 rounded-full">
+                                    <i className="fas fa-robot text-xl text-red-500 dark:text-red-400 w-7 h-7 flex items-center justify-center"></i>
+                                </div>
+                                <div className="text-left">
+                                    <div className="font-bold text-lg">API Usage</div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">View Gemini API cost & tokens</div>
+                                </div>
+                            </div>
+                            <i className="fas fa-arrow-right text-xl text-gray-400 dark:text-gray-500 opacity-70"></i>
+                        </button>
+                    )}
                 </div>
                 {loading ? renderLoading() : error ? renderError() : (isDesktop ? renderDesktopDashboard() : renderMobileDashboard())}
             </main>

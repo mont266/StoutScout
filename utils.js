@@ -269,20 +269,60 @@ const EUROZONE_COUNTRY_CODES = new Set([
     'it', 'lv', 'lt', 'lu', 'mt', 'nl', 'pt', 'sk', 'si', 'es'
 ]);
 
+// New mapping from country names to 2-letter codes.
+const COUNTRY_NAME_TO_CODE = {
+    'ireland': 'ie',
+    'portugal': 'pt',
+    'israel': 'il',
+    'poland': 'pl',
+    'united states': 'us',
+    'italy': 'it',
+    'spain': 'es',
+    'germany': 'de',
+    'france': 'fr',
+    'austria': 'at',
+    'belgium': 'be',
+    'croatia': 'hr',
+    'cyprus': 'cy',
+    'estonia': 'ee',
+    'finland': 'fi',
+    'greece': 'gr',
+    'latvia': 'lv',
+    'lithuania': 'lt',
+    'luxembourg': 'lu',
+    'malta': 'mt',
+    'netherlands': 'nl',
+    'slovakia': 'sk',
+    'slovenia': 'si',
+    'united kingdom': 'gb',
+    'england': 'gb',
+    'scotland': 'gb',
+    'wales': 'gb',
+    'northern ireland': 'gb',
+    'australia': 'au',
+    'canada': 'ca',
+    'turkey': 'tr',
+};
+
 /**
- * Infers currency information based *only* on a pub's country code.
+ * Infers currency information based on a pub's country code or country name.
  * Defaults to GBP (£) for UK or any unidentified/missing country codes.
- * @param {{country_code?: string}} pubLocationData The pub's location data, only using country_code.
+ * @param {{country_code?: string, country_name?: string}} pubLocationData The pub's location data.
  * @returns {{symbol: string, code: string}} The currency symbol and code.
  */
 export const getCurrencyInfo = (pubLocationData = {}) => {
-    const { country_code } = pubLocationData;
+    let { country_code, country_name } = pubLocationData;
 
-    // 1. Check if country_code exists.
+    // 1. If country_code is missing, try to derive it from country_name.
+    if (!country_code && country_name) {
+        country_code = COUNTRY_NAME_TO_CODE[country_name.toLowerCase().trim()];
+    }
+
+    // 2. Check if country_code exists.
     if (country_code) {
         const code = country_code.toLowerCase().trim();
 
-        // 2. Match against a strict list of known codes.
+        // 3. Match against a strict list of known codes.
         if (EUROZONE_COUNTRY_CODES.has(code)) {
             return { symbol: '€', code: 'EUR' };
         }
@@ -309,7 +349,7 @@ export const getCurrencyInfo = (pubLocationData = {}) => {
         }
     }
 
-    // 3. If country_code is null, empty, or not in the list above, default to GBP.
+    // 4. If country_code is null, empty, or not in the list above, default to GBP.
     return { symbol: '£', code: 'GBP' };
 };
 

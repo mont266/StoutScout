@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Avatar from './Avatar.jsx';
 import { formatTimeAgo } from '../utils.js';
 import { supabase } from '../supabase.js';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import AlertModal from './AlertModal.jsx';
+import { trackEvent } from '../analytics.js';
 
 const NotificationItem = ({ notification, onViewProfile, onFriendAction, onNavigate, onDeleteNotification }) => {
     const { id, actor, type, created_at, is_read, metadata, entity_id } = notification;
@@ -111,12 +112,18 @@ const NotificationItem = ({ notification, onViewProfile, onFriendAction, onNavig
     );
 };
 
+const PULL_THRESHOLD = 80;
+
 const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDataRefresh, onViewPub, friendships, onDeleteNotification }) => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
     const [isNavigating, setIsNavigating] = useState(false);
     const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [alertInfo, setAlertInfo] = useState({ isOpen: false });
+    const [pullPosition, setPullPosition] = useState(0);
+    const [isPulling, setIsPulling] = useState(false);
+    const touchStartRef = useRef(0);
+    const containerRef = useRef(null);
 
     // Filter out friend requests that have already been actioned (accepted/declined)
     const activeNotifications = notifications.filter(n => {
@@ -128,8 +135,9 @@ const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDat
         return true;
     });
 
-    const handleRefresh = async () => {
+    const handleRefresh = async (method = 'button') => {
         if (isRefreshing) return;
+        trackEvent('refresh_feed', { feed_type: 'notifications', method });
         setIsRefreshing(true);
         if (onDataRefresh) {
             await onDataRefresh();
@@ -217,6 +225,39 @@ const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDat
         }
     };
     
+    const handleTouchStart = (e) => {
+        if (containerRef.current && containerRef.current.scrollTop === 0) {
+            setIsPulling(true);
+            touchStartRef.current = e.touches[0].clientY;
+        }
+    };
+
+    const handleTouchMove = (e) => {
+        if (!isPulling || isRefreshing) return;
+        const touchY = e.touches[0].clientY;
+        const pullDistance = touchY - touchStartRef.current;
+        if (pullDistance > 0) {
+            const dampenedPull = Math.pow(pullDistance, 0.85);
+            setPullPosition(dampenedPull);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (!isPulling || isRefreshing) return;
+        setIsPulling(false);
+        if (pullPosition > PULL_THRESHOLD) {
+            handleRefresh('pull');
+        } else {
+            setPullPosition(0);
+        }
+    };
+    
+    useEffect(() => {
+        if (!isRefreshing) {
+            setPullPosition(0);
+        }
+    }, [isRefreshing]);
+
     return (
         <>
             {confirmation.isOpen && (
@@ -232,63 +273,94 @@ const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDat
                     onClose={() => setAlertInfo({ isOpen: false })}
                 />
             )}
-            <div className="bg-white dark:bg-gray-900 min-h-full">
-                <div className="sticky top-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-3 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Notifications</h3>
-                        <div className="flex items-center gap-2">
-                            {clearableNotifications.length > 0 && (
-                                <button
-                                    onClick={handleClearNotifications}
-                                    disabled={isClearing}
-                                    className="text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-50"
-                                    aria-label="Clear all notifications"
-                                    title="Clear all notifications"
-                                >
-                                    {isClearing ? 'Clearing...' : 'Clear All'}
-                                </button>
+            <div
+                ref={containerRef}
+                className="bg-white dark:bg-gray-900 h-full overflow-y-auto relative overscroll-y-contain"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+            >
+                <div
+                    className="absolute top-0 left-0 right-0 z-0"
+                    style={{
+                        transform: `translateY(${isRefreshing ? PULL_THRESHOLD : (isPulling ? pullPosition : 0)}px)`,
+                        transition: isPulling ? 'none' : 'transform 0.3s ease-out'
+                    }}
+                >
+                    <div className="absolute top-0 left-0 right-0 h-20 flex items-center justify-center -translate-y-full">
+                        <div className="bg-white dark:bg-gray-800 rounded-full shadow-lg w-10 h-10 flex items-center justify-center">
+                            {isRefreshing ? (
+                                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-amber-400"></div>
+                            ) : (
+                                <i
+                                    className="fas fa-arrow-down text-amber-500 text-xl transition-transform"
+                                    style={{
+                                        transform: `rotate(${pullPosition > PULL_THRESHOLD ? 180 : 0}deg)`,
+                                        opacity: Math.min(pullPosition / (PULL_THRESHOLD / 1.5), 1)
+                                    }}
+                                ></i>
                             )}
-                            <button
-                                onClick={handleRefresh}
-                                disabled={isRefreshing}
-                                className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
-                                aria-label="Refresh notifications"
-                                title="Refresh notifications"
-                            >
-                                <i className={`fas fa-sync-alt ${isRefreshing ? 'animate-spin' : ''}`}></i>
-                            </button>
                         </div>
+                    </div>
+                    <div>
+                        <div className="sticky top-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-3 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Notifications</h3>
+                                <div className="flex items-center gap-2">
+                                    {clearableNotifications.length > 0 && (
+                                        <button
+                                            onClick={handleClearNotifications}
+                                            disabled={isClearing}
+                                            className="text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-50"
+                                            aria-label="Clear all notifications"
+                                            title="Clear all notifications"
+                                        >
+                                            {isClearing ? 'Clearing...' : 'Clear All'}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => handleRefresh('button')}
+                                        disabled={isRefreshing}
+                                        className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
+                                        aria-label="Refresh notifications"
+                                        title="Refresh notifications"
+                                    >
+                                        <i className={`fas fa-sync-alt ${isRefreshing ? 'animate-spin' : ''}`}></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {isNavigating && (
+                            <div className="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center">
+                                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-400"></div>
+                            </div>
+                        )}
+                        {activeNotifications.length === 0 ? (
+                            <div className="p-4 h-full flex items-center justify-center text-center">
+                                <div className="text-gray-500 dark:text-gray-400">
+                                    <i className="fas fa-bell-slash fa-3x mb-4"></i>
+                                    <h2 className="text-xl font-bold">All caught up!</h2>
+                                    <p className="mt-2">You have no new notifications.</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-2">
+                                <ul className="space-y-1">
+                                    {activeNotifications.map(n => (
+                                        <NotificationItem 
+                                            key={n.id} 
+                                            notification={n}
+                                            onViewProfile={onViewProfile}
+                                            onFriendAction={onFriendAction}
+                                            onNavigate={handleNavigate}
+                                            onDeleteNotification={onDeleteNotification}
+                                        />
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                     </div>
                 </div>
-                {isNavigating && (
-                    <div className="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-400"></div>
-                    </div>
-                )}
-                {activeNotifications.length === 0 ? (
-                    <div className="p-4 h-full flex items-center justify-center text-center">
-                        <div className="text-gray-500 dark:text-gray-400">
-                            <i className="fas fa-bell-slash fa-3x mb-4"></i>
-                            <h2 className="text-xl font-bold">All caught up!</h2>
-                            <p className="mt-2">You have no new notifications.</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="p-2">
-                        <ul className="space-y-1">
-                            {activeNotifications.map(n => (
-                                <NotificationItem 
-                                    key={n.id} 
-                                    notification={n}
-                                    onViewProfile={onViewProfile}
-                                    onFriendAction={onFriendAction}
-                                    onNavigate={handleNavigate}
-                                    onDeleteNotification={onDeleteNotification}
-                                />
-                            ))}
-                        </ul>
-                    </div>
-                )}
             </div>
         </>
     );

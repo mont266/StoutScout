@@ -19,6 +19,7 @@ import UpdateDetailsModal from './components/UpdateDetailsModal.jsx';
 import SuggestEditModal from './components/SuggestEditModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
 import StatsPage from './components/StatsPage.jsx';
+import SocialContentHub from './components/SocialContentHub.jsx';
 import PubScoreExplanationModal from './components/PubScoreExplanationModal.jsx';
 import CookieConsentBanner from './components/CookieConsentBanner.jsx';
 import { OnlineStatusContext } from './contexts/OnlineStatusContext.jsx';
@@ -125,7 +126,7 @@ const App = () => {
   
   // State for legal & admin sub-pages
   const [legalPageView, setLegalPageView] = useState(null); // 'terms' or 'privacy'
-  const [settingsSubView, setSettingsSubView] = useState(null); // 'stats' or 'moderation'
+  const [settingsSubView, setSettingsSubView] = useState(null); // 'stats', 'moderation', or 'social'
 
   // PWA Install prompt state
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
@@ -170,6 +171,7 @@ const App = () => {
 
   // Developer state
   const [showAllDbPubs, setShowAllDbPubs] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
 
   // Trophy State
   const [allTrophies, setAllTrophies] = useState([]);
@@ -1123,6 +1125,49 @@ const App = () => {
 
   // --- CORE APP LOGIC & HANDLERS ---
 
+  const handleBackfillCountryData = useCallback(async () => {
+    if (isBackfilling) return;
+    setIsBackfilling(true);
+    trackEvent('dev_backfill_country_data_start');
+    try {
+        const { data, error } = await supabase.functions.invoke('backfill-country-data');
+        if (error) throw new Error(error.message);
+
+        setAlertInfo({
+            isOpen: true,
+            title: 'Backfill Complete',
+            message: data.message || 'The backfill process completed successfully.',
+            theme: 'success',
+        });
+        trackEvent('dev_backfill_country_data_success', { result_message: data.message });
+        await handleDataRefresh();
+    } catch (err) {
+        console.error("Backfill error:", err);
+        setAlertInfo({
+            isOpen: true,
+            title: 'Backfill Failed',
+            message: `An error occurred: ${err.message}`,
+            theme: 'error',
+        });
+        trackEvent('dev_backfill_country_data_failed', { error_message: err.message });
+    } finally {
+        setIsBackfilling(false);
+    }
+  }, [isBackfilling, handleDataRefresh]);
+
+  const handleDonationSuccess = useCallback(async () => {
+    trackEvent('donation_success_client');
+    setConfettiState({
+        active: true,
+        recycle: true,
+        opacity: 1,
+        key: crypto.randomUUID(),
+        numberOfPieces: 500,
+    });
+    await handleDataRefresh();
+  }, [handleDataRefresh, setConfettiState]);
+
+
   const handleChangePassword = async () => {
     if (!session?.user?.email) {
         setAlertInfo({ isOpen: true, title: 'Error', message: 'Could not find your user email.', theme: 'error' });
@@ -1923,6 +1968,7 @@ const App = () => {
   const handleViewAdminPage = (page) => {
     trackEvent('view_admin_page', { page_name: page });
     setSettingsSubView(page);
+    setActiveTab('settings'); // Switch to settings tab to host the admin page
   };
 
   const handlePlacementPinMove = useCallback((newLocation) => {
@@ -2723,6 +2769,12 @@ const App = () => {
       showAllDbPubs,
       onToggleShowAllDbPubs: handleToggleShowAllDbPubs,
       dbPubs,
+      // Social Content Hub
+      SocialContentHub,
+      onViewSocialHub: () => handleViewAdminPage('social'),
+      onDonationSuccess: handleDonationSuccess,
+      isBackfilling,
+      onBackfillCountryData: handleBackfillCountryData,
   };
 
   const renderModals = () => (

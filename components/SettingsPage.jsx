@@ -14,7 +14,7 @@ import DonationForm from './DonationForm.jsx';
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies }) => {
+const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, onViewSocialHub }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
@@ -345,6 +345,13 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
               <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
                    <h3 className="text-xl font-bold text-red-500 dark:text-red-400 text-center">Admin Tools</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                            onClick={() => { onViewSocialHub(); trackEvent('view_social_hub'); }}
+                            className="flex-1 flex items-center justify-center space-x-2 bg-purple-500/10 text-purple-500 dark:text-purple-400 font-bold py-3 px-4 rounded-lg hover:bg-purple-500/20 transition-colors"
+                        >
+                            <i className="fas fa-magic"></i>
+                            <span>Social Hub</span>
+                        </button>
                         {userProfile?.is_developer && (
                           <button
                               onClick={() => { onViewModeration(); trackEvent('view_moderation_center'); }}

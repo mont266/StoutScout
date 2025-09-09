@@ -26,6 +26,7 @@ import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
+import SocialContentHub from './SocialContentHub.jsx';
 
 const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount }) => {
   const tabs = [
@@ -64,7 +65,6 @@ const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount }) => {
 
 const MobileLayout = (props) => {
     const {
-        isDesktop,
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
         activeTab, locationError, settings, filter, handleFilterChange,
         filterGuinnessZero, onFilterGuinnessZeroChange,
@@ -119,6 +119,8 @@ const MobileLayout = (props) => {
         userTrophies,
         allTrophies,
         dbPubs,
+        onViewSocialHub,
+        isDesktop,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -128,7 +130,7 @@ const MobileLayout = (props) => {
         <div className="w-full max-w-md mx-auto h-dvh flex flex-col overflow-hidden">
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
-            {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(false)} />}
+            {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(true)} />}
             {reportCommentInfo.isOpen && <ReportCommentModal comment={reportCommentInfo.comment} onClose={onCloseReportCommentModal} onSubmit={onSubmitReportComment} />}
             <SubmittingRatingModal isVisible={isSubmittingRating} />
             {toastNotification && (
@@ -182,16 +184,19 @@ const MobileLayout = (props) => {
                     )}
                     {activeTab === 'settings' && (() => {
                         if (settingsSubView === 'stats') {
-                            return <StatsPage onBack={() => window.history.back()} onViewProfile={handleViewProfile} onViewPub={handleSelectPub} userProfile={userProfile} onAdminDeleteComment={onAdminDeleteComment} />;
+                            return <StatsPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onViewPub={handleSelectPub} userProfile={userProfile} onAdminDeleteComment={onAdminDeleteComment} />;
                         }
                         if (settingsSubView === 'moderation') {
-                            return <ModerationPage onBack={() => window.history.back()} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
+                            return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
+                        }
+                        if (settingsSubView === 'social') {
+                            return <SocialContentHub onBack={() => handleViewAdminPage(null)} userProfile={userProfile} />;
                         }
                         if (legalPageView === 'terms') {
-                            return <TermsOfUsePage onBack={() => window.history.back()} />;
+                            return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
                         }
                         if (legalPageView === 'privacy') {
-                            return <PrivacyPolicyPage onBack={() => window.history.back()} />;
+                            return <PrivacyPolicyPage onBack={() => handleViewLegal(null)} />;
                         }
                         return (
                             <SettingsPage
@@ -202,6 +207,7 @@ const MobileLayout = (props) => {
                                 onViewLegal={handleViewLegal}
                                 onViewStats={() => handleViewAdminPage('stats')}
                                 onViewModeration={() => handleViewAdminPage('moderation')}
+                                onViewSocialHub={onViewSocialHub}
                                 onDataRefresh={handleDataRefresh}
                                 installPromptEvent={installPromptEvent}
                                 setInstallPromptEvent={setInstallPromptEvent}
@@ -323,7 +329,7 @@ const MobileLayout = (props) => {
                     {props.selectedPub && (
                         <PubDetails
                             pub={props.selectedPub}
-                            onClose={() => window.history.back()}
+                            onClose={() => handleSelectPub(null)}
                             onRate={handleRatePub}
                             getAverageRating={getAverageRating}
                             existingUserRating={existingUserRatingForSelectedPub}
@@ -362,7 +368,7 @@ const MobileLayout = (props) => {
                             loggedInUser={userProfile}
                             friendsList={friendsList}
                             isLoading={isFetchingFriendsList}
-                            onBack={() => window.history.back()}
+                            onBack={() => handleBackFromFriendsList()}
                             onViewProfile={handleViewProfile}
                             onFriendAction={handleFriendAction}
                         />

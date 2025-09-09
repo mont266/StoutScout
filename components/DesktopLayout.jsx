@@ -27,10 +27,10 @@ import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 import ShopPage from './ShopPage.jsx';
+import SocialContentHub from './SocialContentHub.jsx';
 
 const DesktopLayout = (props) => {
     const {
-        isDesktop,
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
         activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
         filterGuinnessZero, onFilterGuinnessZeroChange,
@@ -60,6 +60,7 @@ const DesktopLayout = (props) => {
         deleteConfirmationInfo,
         // Stats props
         StatsPage,
+        settingsSubView, handleViewAdminPage,
         onOpenScoreExplanation,
         // "Suggest Edit" handlers
         onOpenSuggestEditModal,
@@ -83,9 +84,12 @@ const DesktopLayout = (props) => {
         userTrophies,
         allTrophies,
         dbPubs,
+        onViewSocialHub,
+        isBackfilling, onBackfillCountryData,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
+    const isSocialHubFullScreen = activeTab === 'settings' && settingsSubView === 'social';
 
     const renderContentPanel = () => {
         if (viewingFriendsOf) {
@@ -95,7 +99,7 @@ const DesktopLayout = (props) => {
                     loggedInUser={userProfile}
                     friendsList={friendsList}
                     isLoading={isFetchingFriendsList}
-                    onBack={() => window.history.back()}
+                    onBack={() => handleBackFromFriendsList()}
                     onViewProfile={handleViewProfile}
                     onFriendAction={onFriendAction}
                 />
@@ -118,7 +122,7 @@ const DesktopLayout = (props) => {
                 return (
                     <PubDetails 
                         pub={props.selectedPub} 
-                        onClose={() => window.history.back()}
+                        onClose={() => handleSelectPub(null)}
                         onRate={handleRatePub}
                         getAverageRating={getAverageRating}
                         existingUserRating={existingUserRatingForSelectedPub}
@@ -229,11 +233,20 @@ const DesktopLayout = (props) => {
         }
 
         if (activeTab === 'settings') {
-             if (legalPageView === 'terms') {
-                return <TermsOfUsePage onBack={() => window.history.back()} />;
+            if (settingsSubView === 'stats') {
+                return <StatsPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onViewPub={handleSelectPub} userProfile={userProfile} onAdminDeleteComment={onAdminDeleteComment} />;
+            }
+            if (settingsSubView === 'moderation') {
+                return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
+            }
+            if (settingsSubView === 'social') {
+                return <SocialContentHub onBack={() => handleViewAdminPage(null)} userProfile={userProfile} />;
+            }
+            if (legalPageView === 'terms') {
+                return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
             }
             if (legalPageView === 'privacy') {
-                return <PrivacyPolicyPage onBack={() => window.history.back()} />;
+                return <PrivacyPolicyPage onBack={() => handleViewLegal(null)} />;
             }
             return (
                 <div className="h-full flex flex-col">
@@ -245,8 +258,9 @@ const DesktopLayout = (props) => {
                             onViewProfile={handleViewProfile}
                             onLogout={handleLogout}
                             onViewLegal={handleViewLegal}
-                            onViewStats={() => handleTabChange('stats')}
-                            onViewModeration={() => handleTabChange('moderation')}
+                            onViewStats={() => handleViewAdminPage('stats')}
+                            onViewModeration={() => handleViewAdminPage('moderation')}
+                            onViewSocialHub={onViewSocialHub}
                             onDataRefresh={handleDataRefresh}
                             installPromptEvent={installPromptEvent}
                             setInstallPromptEvent={setInstallPromptEvent}
@@ -263,6 +277,8 @@ const DesktopLayout = (props) => {
                             onScrollComplete={onScrollComplete}
                             userTrophies={userTrophies}
                             allTrophies={allTrophies}
+                            isBackfilling={isBackfilling}
+                            onBackfillCountryData={onBackfillCountryData}
                         />
                     </div>
                 </div>
@@ -272,7 +288,7 @@ const DesktopLayout = (props) => {
         return null;
     };
     
-    const isFullScreenTab = ['stats', 'moderation', 'profile', 'shop'].includes(activeTab);
+    const isFullScreenTab = ['stats', 'moderation', 'profile', 'shop'].includes(activeTab) || (activeTab === 'settings' && !!settingsSubView);
 
     return (
         <div className="w-full h-dvh flex">
@@ -316,7 +332,7 @@ const DesktopLayout = (props) => {
                                 pubPlacementState={pubPlacementState}
                                 finalPlacementLocation={finalPlacementLocation}
                                 onPlacementPinMove={handlePlacementPinMove}
-                                isDesktop={isDesktop}
+                                isDesktop={props.isDesktop}
                                 mapTileRefreshKey={mapTileRefreshKey}
                                 searchOrigin={searchOrigin}
                                 radius={settings.radius}
@@ -340,29 +356,11 @@ const DesktopLayout = (props) => {
                         <ShopPage userProfile={userProfile} />
                     </div>
 
-                    {/* Stats Page */}
-                    <div className={`absolute inset-0 ${activeTab === 'stats' ? '' : 'hidden'}`}>
-                        <StatsPage 
-                            onBack={() => window.history.back()} 
-                            onViewProfile={handleViewProfile}
-                            onViewPub={handleSelectPub}
-                            userProfile={userProfile}
-                            onAdminDeleteComment={onAdminDeleteComment}
-                        />
+                    {/* Stats, Moderation, Social Hub (now rendered from content panel) */}
+                    <div className={`absolute inset-0 ${activeTab === 'settings' && settingsSubView ? '' : 'hidden'}`}>
+                        {renderContentPanel()}
                     </div>
-
-                    {/* Moderation Page */}
-                    <div className={`absolute inset-0 ${activeTab === 'moderation' ? '' : 'hidden'}`}>
-                        <ModerationPage
-                            onViewProfile={handleViewProfile}
-                            onBack={() => window.history.back()}
-                            onDataRefresh={handleDataRefresh}
-                            reportedComments={reportedComments}
-                            onFetchReportedComments={onFetchReportedComments}
-                            onResolveCommentReport={onResolveCommentReport}
-                        />
-                    </div>
-
+                    
                     {/* Full Screen Profile Page */}
                     <div className={`absolute inset-0 ${activeTab === 'profile' ? '' : 'hidden'}`}>
                         {profilePage}

@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh https://aistudiocdn.com https://js.stripe.com https://cdnjs.cloudflare.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.stripe.com https://overpass-api.de https://nominatim.openstreetmap.org https://www.google-analytics.com; img-src 'self' data: blob: https://*.supabase.co https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://api.dicebear.com https://quickchart.io; frame-src 'self' https://js.stripe.com; font-src 'self' https://cdnjs.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh https://aistudiocdn.com https://js.stripe.com https://cdnjs.cloudflare.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.stripe.com https://m.stripe.network https://overpass-api.de https://nominatim.openstreetmap.org https://www.google-analytics.com https://generativelanguage.googleapis.com; img-src 'self' data: blob: https://*.supabase.co https://*.stripe.com https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://api.dicebear.com https://quickchart.io; frame-src 'self' https://js.stripe.com; font-src 'self' https://cdnjs.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self';">
     <script type="importmap">
 {
   "imports": {
@@ -16,6 +16,7 @@
     "leaflet": "https://esm.sh/leaflet@^1.9.4",
     "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0",
     "react-confetti": "https://esm.sh/react-confetti@^6.4.0",
+    "@google/genai": "https://esm.sh/@google/genai@^0.15.0",
     "@stripe/stripe-js": "https://esm.sh/@stripe/stripe-js@3.3.0",
     "@stripe/react-stripe-js": "https://esm.sh/@stripe/react-stripe-js@2.7.0",
     "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.0.2",

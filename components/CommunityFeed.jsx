@@ -290,7 +290,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     return (
         <div 
             ref={containerRef}
-            className="bg-gray-100 dark:bg-gray-900 h-full overflow-y-auto relative"
+            className="bg-gray-100 dark:bg-gray-900 h-full overflow-y-auto relative overscroll-y-contain"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
