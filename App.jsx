@@ -891,6 +891,22 @@ const App = () => {
     const userIdFromUrl = urlParams.get('user_id');
     const ratingIdFromUrl = urlParams.get('rating_id');
     const commentIdFromUrl = urlParams.get('comment_id');
+    const utmSource = urlParams.get('utm_source');
+
+    if (utmSource) {
+        // Store for analytics during signup
+        sessionStorage.setItem('stoutly-utm-source', utmSource);
+        trackEvent('campaign_landing', {
+            source: utmSource,
+            medium: urlParams.get('utm_medium'),
+            campaign: urlParams.get('utm_campaign'),
+        });
+    }
+
+    if (utmSource === 'coaster') {
+        setIsCoasterWelcomeModalOpen(true);
+        trackEvent('view_coaster_welcome_modal');
+    }
 
     if (pubIdFromUrl) {
       const highlightOptions = {
