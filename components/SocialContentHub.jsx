@@ -6,6 +6,7 @@ import SocialContentCard, { ANGLE_CONFIG } from './SocialContentCard.jsx';
 import LocationStatsPage from './LocationStatsPage.jsx';
 import PintPulseReportCard from './PintPulseReportCard.jsx';
 import PintOfTheWeekCard from './PintOfTheWeekCard.jsx';
+import GuinnessFactCard from './GuinnessFactCard.jsx';
 
 
 // Initialize the Gemini AI client
@@ -150,6 +151,7 @@ const SocialContentHub = ({ onBack, userProfile }) => {
     const [error, setError] = useState(null);
     const [potentialContent, setPotentialContent] = useState([]);
     const [strategicReport, setStrategicReport] = useState(null);
+    const [guinnessFactPost, setGuinnessFactPost] = useState(null);
     const [filterAngle, setFilterAngle] = useState('all');
 
     const runAnalysis = useCallback(async (scanType, dbQuery, promptGenerator) => {
@@ -158,6 +160,7 @@ const SocialContentHub = ({ onBack, userProfile }) => {
         setError(null);
         setPotentialContent([]);
         setStrategicReport(null);
+        setGuinnessFactPost(null);
         setFilterAngle('all');
         trackEvent('social_hub_scan_start', { scan_type: scanType });
 
@@ -311,6 +314,7 @@ const SocialContentHub = ({ onBack, userProfile }) => {
         setError(null);
         setPotentialContent([]);
         setStrategicReport(null);
+        setGuinnessFactPost(null);
         setFilterAngle('all');
         trackEvent('social_hub_scan_start', { scan_type: 'pint_pulse' });
 
@@ -376,6 +380,7 @@ const SocialContentHub = ({ onBack, userProfile }) => {
         setError(null);
         setPotentialContent([]);
         setStrategicReport(null);
+        setGuinnessFactPost(null);
         setFilterAngle('all');
         trackEvent('social_hub_scan_start', { scan_type: 'pint_of_week' });
     
@@ -501,6 +506,75 @@ const SocialContentHub = ({ onBack, userProfile }) => {
             setLoadingType(null);
         }
     };
+    
+    const handleGenerateGuinnessFact = async () => {
+        setIsLoading(true);
+        setLoadingType('guinness_fact');
+        setError(null);
+        setPotentialContent([]);
+        setStrategicReport(null);
+        setGuinnessFactPost(null);
+        trackEvent('social_hub_scan_start', { scan_type: 'guinness_fact' });
+    
+        try {
+            // Step 1: Generate the fact
+            const factPrompt = "Generate one surprising, witty, or little-known fact about Guinness beer, its history, or its culture. The fact should be concise and suitable for an Instagram story post. Do not repeat facts you have given recently. Format the output as a JSON object with a single key: 'factText'.";
+            const factSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    factText: { type: Type.STRING, description: "The interesting fact about Guinness." }
+                }
+            };
+    
+            const factResponse = await generateContentWithRetry({
+                model: 'gemini-2.5-flash',
+                contents: factPrompt,
+                config: { responseMimeType: 'application/json', responseSchema: factSchema },
+            });
+            
+            await supabase.from('api_usage_logs').insert({
+                user_id: userProfile.id,
+                prompt_tokens: factResponse.usageMetadata?.promptTokenCount || 0,
+                candidates_tokens: factResponse.usageMetadata?.candidatesTokenCount || 0,
+                feature: 'guinness_fact_text',
+            });
+    
+            const { factText } = JSON.parse(factResponse.text);
+    
+            // Step 2: Generate the image
+            const imagePrompt = `A visually striking, high-quality photograph for an Instagram post. The image should creatively represent the following fact about Guinness: "${factText}". The style should be moody and atmospheric, with rich, dark tones and a touch of gold or cream color. Vertical 3:4 aspect ratio.`;
+            
+            const imageResponse = await ai.models.generateImages({
+                model: 'imagen-4.0-generate-001',
+                prompt: imagePrompt,
+                config: {
+                  numberOfImages: 1,
+                  outputMimeType: 'image/jpeg',
+                  aspectRatio: '3:4',
+                },
+            });
+            
+            await supabase.from('api_usage_logs').insert({
+                user_id: userProfile.id,
+                feature: 'guinness_fact_image',
+            });
+    
+            const base64ImageBytes = imageResponse.generatedImages[0].image.imageBytes;
+            const imageUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
+    
+            // Step 3: Set state
+            setGuinnessFactPost({ factText, imageUrl });
+            trackEvent('social_hub_scan_success', { scan_type: 'guinness_fact' });
+    
+        } catch (err) {
+            console.error("Error generating Guinness Fact:", err);
+            setError(err.message || "An error occurred while generating the content.");
+            trackEvent('social_hub_scan_failed', { scan_type: 'guinness_fact', error: err.message });
+        } finally {
+            setIsLoading(false);
+            setLoadingType(null);
+        }
+    };
 
     const filteredContent = useMemo(() => {
         if (filterAngle === 'all') {
@@ -551,7 +625,7 @@ const SocialContentHub = ({ onBack, userProfile }) => {
                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
                         Generate data-driven reports and summaries for higher-level content strategy.
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <button
                             onClick={handleGeneratePintPulse}
                             disabled={isLoading}
@@ -567,6 +641,14 @@ const SocialContentHub = ({ onBack, userProfile }) => {
                         >
                             {loadingType === 'pint_of_week' ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <i className="fas fa-trophy"></i>}
                             <span>Pint of the Week</span>
+                        </button>
+                        <button
+                            onClick={handleGenerateGuinnessFact}
+                            disabled={isLoading}
+                            className="bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors disabled:bg-gray-500 disabled:cursor-wait flex items-center justify-center space-x-2"
+                        >
+                            {loadingType === 'guinness_fact' ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <i className="fas fa-lightbulb"></i>}
+                            <span>Guinness Fact</span>
                         </button>
                         <button
                             onClick={() => setView('location_stats')}
@@ -587,8 +669,11 @@ const SocialContentHub = ({ onBack, userProfile }) => {
                 {strategicReport?.type === 'pint_of_the_week' && (
                     <PintOfTheWeekCard report={strategicReport.content} winner={strategicReport.winner} />
                 )}
+                {guinnessFactPost && (
+                    <GuinnessFactCard report={guinnessFactPost} />
+                )}
 
-                {potentialContent.length > 0 && !strategicReport && (
+                {potentialContent.length > 0 && !strategicReport && !guinnessFactPost && (
                     <section className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md animate-fade-in-down">
                         <h4 className="text-lg font-bold text-gray-800 dark:text-white mb-3">Filter by Angle</h4>
                         <div className="flex flex-wrap gap-2">
@@ -609,7 +694,7 @@ const SocialContentHub = ({ onBack, userProfile }) => {
                     </section>
                 )}
 
-                {!isLoading && !strategicReport && !error && (
+                {!isLoading && !strategicReport && !guinnessFactPost && !error && (
                     filteredContent.length > 0 ? (
                         <div className="space-y-4">
                             {filteredContent.map(content => (

@@ -5,12 +5,18 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "cap:sync": "capacitor sync android",
+    "cap:open": "capacitor open android"
   },
   "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/geolocation": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0",
     "@google/genai": "^0.15.0",
     "@stripe/react-stripe-js": "2.7.0",
     "@stripe/stripe-js": "3.3.0",
@@ -25,6 +31,8 @@
     "recharts": "^2.12.7"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
     "@testing-library/jest-dom": "^6.4.6",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.5.2",

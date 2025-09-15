@@ -34,6 +34,9 @@ import TrophyUnlockedPopup from './components/TrophyUnlockedPopup.jsx';
 
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
+import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { Geolocation } from '@capacitor/geolocation';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
@@ -816,17 +819,6 @@ const App = () => {
             .single();
 
         if (profileError) throw profileError;
-
-        // Check for donation status
-        const { count: donationCount, error: donationError } = await supabase
-            .from('donations')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', userId);
-            
-        if (donationError) {
-            console.error("Error checking donation status for viewed profile:", donationError);
-        }
-        profile.has_donated = (donationCount || 0) > 0;
         
         // Correctly fetch the friend count
         const { data: friendCount, error: friendCountError } = await supabase.rpc('get_friends_count', { user_id_param: userId }).single();
@@ -891,22 +883,6 @@ const App = () => {
     const userIdFromUrl = urlParams.get('user_id');
     const ratingIdFromUrl = urlParams.get('rating_id');
     const commentIdFromUrl = urlParams.get('comment_id');
-    const utmSource = urlParams.get('utm_source');
-
-    if (utmSource) {
-        // Store for analytics during signup
-        sessionStorage.setItem('stoutly-utm-source', utmSource);
-        trackEvent('campaign_landing', {
-            source: utmSource,
-            medium: urlParams.get('utm_medium'),
-            campaign: urlParams.get('utm_campaign'),
-        });
-    }
-
-    if (utmSource === 'coaster') {
-        setIsCoasterWelcomeModalOpen(true);
-        trackEvent('view_coaster_welcome_modal');
-    }
 
     if (pubIdFromUrl) {
       const highlightOptions = {
@@ -1053,7 +1029,7 @@ const App = () => {
 
     // Fetch user profile and friend count in parallel
     const [profileResult, friendCountResult] = await Promise.all([
-        supabase.from('profiles').select('*, accepts_marketing').eq('id', userId).single(),
+        supabase.from('profiles').select('*, accepts_marketing, has_donated').eq('id', userId).single(),
         supabase.rpc('get_friends_count', { user_id_param: userId }).single()
     ]);
 
@@ -1073,17 +1049,6 @@ const App = () => {
         setUserRatings([]);
         return { profile, ratings: [] };
     }
-
-    // Check for donation status
-    const { count: donationCount, error: donationError } = await supabase
-        .from('donations')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId);
-
-    if (donationError) {
-        console.error("Error checking donation status:", donationError);
-    }
-    profile.has_donated = (donationCount || 0) > 0;
 
     // Add friend count to the profile object
     profile.friends_count = friendCountResult.data || 0;
@@ -1181,7 +1146,8 @@ const App = () => {
         numberOfPieces: 500,
     });
     await handleDataRefresh();
-  }, [handleDataRefresh, setConfettiState]);
+    await fetchUserData(); // Re-fetch user data to get the new has_donated flag
+  }, [handleDataRefresh, fetchUserData, setConfettiState]);
 
 
   const handleChangePassword = async () => {
@@ -1288,57 +1254,115 @@ const App = () => {
     }
   }, []);
 
-  const requestLocationPermission = useCallback(() => {
-    trackEvent('location_permission_requested');
-    if (!navigator.geolocation) {
+  const handleRequestPermission = useCallback(async (trigger = 'manual') => {
+    trackEvent('location_permission_requested', { trigger });
+    const isNative = Capacitor.isNativePlatform();
+
+    const getPositionAndSetState = async () => {
+        const position = await Geolocation.getCurrentPosition({
+            enableHighAccuracy: true,
+            timeout: 20000,
+            maximumAge: 0,
+        });
+        const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setLocationPermissionStatus('granted');
+        setLocationError(null);
+        setRealUserLocation(newLocation);
+
+        if (!initialLocationSet) {
+            setSearchOrigin(newLocation);
+            setMapCenter(newLocation);
+            setInitialLocationSet(true);
+            
+            // Trigger refresh directly
+            setIsRefreshing(true);
+            setShowSearchAreaButton(false);
+            setRefreshTrigger(c => c + 1);
+            trackEvent('refresh_pubs', { trigger: 'permission_grant' });
+        }
+    };
+
+    try {
+        if (isNative) {
+            const permissions = await Geolocation.requestPermissions();
+            if (permissions.location !== 'granted') {
+                throw new Error('Permission denied');
+            }
+        }
+        // For both native (after permission) and web (which prompts here), get the position.
+        // The Capacitor plugin handles the web's navigator.geolocation.getCurrentPosition call.
+        await getPositionAndSetState();
+        trackEvent('location_permission_result', { status: 'granted' });
+    } catch (error) {
+        console.error("Error requesting location permissions:", error);
+        trackEvent('location_permission_result', { status: 'error', error_message: error.message });
+        const message = error.code === 1 || error.message === 'Permission denied' 
+            ? "Location access was denied." 
+            : "Could not request location access. Please check your device settings.";
         setLocationPermissionStatus('denied');
-        setLocationError("Geolocation is not supported by your browser.");
-        return;
+        setLocationError(message);
     }
-
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            if (!locationPermissionTracked.current) {
-                trackEvent('location_permission_result', { status: 'granted' });
-                locationPermissionTracked.current = true;
-            }
-            setLocationPermissionStatus('granted');
-            const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-            setRealUserLocation(newLocation);
-            setLocationError(null);
-
-            if (!initialLocationSet) {
-                setSearchOrigin(newLocation);
-                setMapCenter(newLocation);
-                setInitialLocationSet(true);
-                setSearchOnNextMoveEnd(true);
-            }
-        },
-        (error) => {
-            if (!locationPermissionTracked.current) {
-                const status = error.code === error.PERMISSION_DENIED ? 'denied' : 'error';
-                trackEvent('location_permission_result', { status, error_code: error.code, error_message: error.message });
-                locationPermissionTracked.current = true;
-            }
-
-            if (error.code === error.PERMISSION_DENIED) {
-                setLocationError("Location access denied.");
-                setLocationPermissionStatus('denied');
-            } else {
-                setLocationError("Could not get your location. Please check your device's location services and try again.");
-                setLocationPermissionStatus('checking'); // Hides prompt, allows error banner to show
-            }
-        },
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-    );
   }, [initialLocationSet]);
 
-  // New effect to automatically request permission on load if it's in the 'prompt' state.
+
+  // Consolidated app initialization and location permission logic
   useEffect(() => {
-    if (locationPermissionStatus === 'prompt' && !initialLocationSet) {
-      requestLocationPermission();
-    }
-  }, [locationPermissionStatus, requestLocationPermission, initialLocationSet]);
+    const initializeApp = async () => {
+      const isNative = Capacitor.isNativePlatform();
+      if (isNative) {
+        await SplashScreen.hide();
+      }
+      
+      let permissionState = 'prompt';
+      try {
+        if (isNative) {
+            const permissions = await Geolocation.checkPermissions();
+            permissionState = permissions.location;
+        } else if (navigator.permissions) {
+            const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+            permissionState = permissionStatus.state;
+            permissionStatus.onchange = () => {
+                setLocationPermissionStatus(permissionStatus.state);
+            };
+        }
+      } catch (e) {
+        console.warn("Could not query geolocation permissions. This is normal in some browsers like Safari.", e);
+        // Stays as 'prompt', which is the safe default that requires user interaction.
+      }
+
+      setLocationPermissionStatus(permissionState);
+
+      if (permissionState === 'granted' && !initialLocationSet) {
+        try {
+            const position = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+            const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+            setRealUserLocation(newLocation);
+            setSearchOrigin(newLocation);
+            setMapCenter(newLocation);
+            setInitialLocationSet(true);
+            
+            // Trigger refresh directly
+            setIsRefreshing(true);
+            setShowSearchAreaButton(false);
+            setRefreshTrigger(c => c + 1);
+            trackEvent('refresh_pubs', { trigger: 'initial_load_granted' });
+        } catch (error) {
+            console.error("Error getting location despite granted permission:", error);
+            setLocationError("Could not get your location. Please check signal or try again.");
+            // We do NOT set permission to 'denied' here, as the permission is still granted.
+        }
+      } else if (permissionState === 'prompt' && !initialLocationSet) {
+          // New logic: Automatically request permission instead of just showing the prompt component.
+          // The prompt component will still be visible while the native browser prompt is open.
+          await handleRequestPermission('auto_initial_load');
+      }
+      else if (permissionState === 'denied' && !initialLocationSet) {
+          setLocationError("Location access denied.");
+      }
+    };
+
+    initializeApp();
+  }, [initialLocationSet, handleRequestPermission]);
 
   const handleFindCurrentPub = useCallback(() => {
     if (locationPermissionStatus === 'granted' && realUserLocation && (realUserLocation.lat !== DEFAULT_LOCATION.lat || realUserLocation.lng !== DEFAULT_LOCATION.lng)) {
@@ -1347,9 +1371,9 @@ const App = () => {
         setMapCenter(realUserLocation);
         setSearchOnNextMoveEnd(true);
     } else {
-        requestLocationPermission();
+        handleRequestPermission();
     }
-  }, [realUserLocation, locationPermissionStatus, requestLocationPermission]);
+  }, [realUserLocation, locationPermissionStatus, handleRequestPermission]);
 
   // Popup visibility timers
   useEffect(() => { if (reviewPopupInfo) { const timer = setTimeout(() => setReviewPopupInfo(null), 3000); return () => clearTimeout(timer); } }, [reviewPopupInfo]);
@@ -1468,68 +1492,47 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (!navigator.geolocation || !navigator.permissions) {
-      setLocationError("Geolocation is not supported by your browser.");
-      setLocationPermissionStatus('denied');
-      return;
-    }
-
-    let permissionStatus;
-    const handlePermissionChange = () => {
-      setLocationPermissionStatus(permissionStatus.state);
-    };
-
-    navigator.permissions.query({ name: 'geolocation' }).then(status => {
-      permissionStatus = status;
-      setLocationPermissionStatus(permissionStatus.state);
-      permissionStatus.addEventListener('change', handlePermissionChange);
-    }).catch(error => {
-        console.error("Could not query geolocation permission:", error);
-        setLocationPermissionStatus('denied');
-        setLocationError("Could not request location access.");
-    });
-
-    return () => {
-      if (permissionStatus) {
-        permissionStatus.removeEventListener('change', handlePermissionChange);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     let watcherId = null;
 
     if (locationPermissionStatus === 'granted') {
-        watcherId = navigator.geolocation.watchPosition(
-            (position) => {
-                if (!locationPermissionTracked.current) {
+        const watchCallback = (position, error) => {
+            if (error) {
+                // Only show a generic "could not get location" error if we never successfully found the user.
+                // This prevents the error banner from flashing if watchPosition times out after an initial success.
+                // Always show an error if permission is explicitly revoked.
+                if (realUserLocation === DEFAULT_LOCATION || error.code === 1) { // code 1 is PERMISSION_DENIED
+                    const message = error.code === 1 ? "Location access was revoked." : "Could not get your location.";
+                    setLocationError(message);
+                }
+                
+                if (error.code === 1) { // PERMISSION_DENIED
+                    setLocationPermissionStatus('denied');
+                }
+                return;
+            }
+            if (position) {
+                 if (!locationPermissionTracked.current) {
                     trackEvent('location_permission_result', { status: 'granted' });
                     locationPermissionTracked.current = true;
                 }
                 const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
                 setRealUserLocation(newLocation);
                 setLocationError(null);
-            },
-            (error) => {
-                // Only show a generic "could not get location" error if we never successfully found the user.
-                // This prevents the error banner from flashing if watchPosition times out after an initial success.
-                // Always show an error if permission is explicitly revoked.
-                if (realUserLocation === DEFAULT_LOCATION || error.code === error.PERMISSION_DENIED) {
-                    const message = error.code === error.PERMISSION_DENIED ? "Location access was revoked." : "Could not get your location.";
-                    setLocationError(message);
-                }
-                
-                if (error.code === error.PERMISSION_DENIED) {
-                    setLocationPermissionStatus('denied');
-                }
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
+            }
+        };
+
+        (async () => {
+            try {
+                watcherId = await Geolocation.watchPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }, watchCallback);
+            } catch(e) {
+                console.error("Failed to start location watcher:", e);
+            }
+        })();
     }
     
     return () => {
         if (watcherId) {
-            navigator.geolocation.clearWatch(watcherId);
+            Geolocation.clearWatch({ id: watcherId });
         }
     };
   }, [locationPermissionStatus, realUserLocation]);
@@ -2728,7 +2731,7 @@ const App = () => {
       handleBackFromFriendsList: () => setViewingFriendsOf(null),
       handleFindPlace,
       handleFindCurrentPub,
-      requestLocationPermission,
+      onRequestPermission: handleRequestPermission,
       handleUpdateAvatar,
       
       // Guinness 0.0 handlers

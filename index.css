@@ -12,10 +12,25 @@
     @apply bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased;
     /* Prevent the browser's native pull-to-refresh action */
     overscroll-behavior-y: contain;
+    /* Add horizontal padding for device notches in landscape mode */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  
+  /* Add top padding to the main header to account for the status bar notch */
+  header {
+    padding-top: env(safe-area-inset-top);
+    /* Ensure padding adds to the height, preserving the original content height */
+    box-sizing: content-box;
   }
 }
 
 @layer components {
+  /* This class is used in MobileLayout.jsx to add padding for the home indicator */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   #orientation-lock-overlay {
     @apply fixed inset-0 z-[100] bg-gray-900 text-white flex-col items-center justify-center text-center p-8 hidden; /* hidden by default */
   }

@@ -3,6 +3,21 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 import { trackEvent } from './analytics.js';
+import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { StatusBar, Style } from '@capacitor/status-bar';
+
+// Capacitor-specific initialization for native platforms
+if (Capacitor.isNativePlatform()) {
+  try {
+    // Set StatusBar style. The app defaults to dark mode, so this is appropriate.
+    StatusBar.setStyle({ style: Style.Dark });
+    // Hide the native splash screen once the web view is ready.
+    SplashScreen.hide();
+  } catch (e) {
+    console.error("Error initializing Capacitor plugins.", e);
+  }
+}
 
 // Register Service Worker for PWA functionality
 if ('serviceWorker' in navigator) {

@@ -357,7 +357,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         const allTrophiesWithStatus = (allTrophies || []).map(trophy => {
             let isUnlocked;
 
-            // The "Stoutly Patron" trophy is unlocked *only* if the user has donated.
+            // The "Stoutly Patron" trophy is unlocked ONLY if the user has donated.
             if (trophy.id === PATRON_TROPHY_ID) {
                 isUnlocked = !!profile?.has_donated;
             } else {

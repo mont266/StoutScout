@@ -25,7 +25,6 @@ import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
-import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 import SocialContentHub from './SocialContentHub.jsx';
 
 const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount }) => {
@@ -86,7 +85,7 @@ const MobileLayout = (props) => {
         isConfirmingLocation, finalPlacementLocation, handlePlacementPinMove, isSubmittingRating,
         handleFindPlace,
         levelRequirements,
-        locationPermissionStatus, requestPermission,
+        locationPermissionStatus, onRequestPermission,
         mapTileRefreshKey,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
@@ -231,10 +230,9 @@ const MobileLayout = (props) => {
                 
                 {/* Map View Container - kept visible to preserve map state */}
                 <div className={`flex-grow flex flex-col overflow-hidden ${activeTab === 'map' ? '' : 'hidden'}`}>
-                    {locationError && locationPermissionStatus !== 'denied' && 
-                        !(settings.developerMode && settings.simulatedLocation) && 
+                    {locationError && locationPermissionStatus !== 'denied' && (
                         <div className="p-2 bg-red-500 dark:bg-red-800 text-white text-center text-sm" role="alert">{locationError}</div>
-                    }
+                    )}
                     
                     <FilterControls
                         currentFilter={filter}
@@ -245,13 +243,6 @@ const MobileLayout = (props) => {
                         onFilterGuinnessZeroChange={onFilterGuinnessZeroChange}
                     />
                     <div className="flex-grow min-h-0 relative">
-                        {locationPermissionStatus === 'denied' && 
-                            !(settings.developerMode && settings.simulatedLocation) && (
-                            <LocationPermissionPrompt 
-                                status={locationPermissionStatus} 
-                                onRequestPermission={requestPermission}
-                            />
-                        )}
                         {isSearchExpanded ? (
                              <div className="absolute top-4 left-4 right-4 z-[1000] animate-fade-in-down">
                                 <MapSearchBar
@@ -370,7 +361,7 @@ const MobileLayout = (props) => {
                             isLoading={isFetchingFriendsList}
                             onBack={() => handleBackFromFriendsList()}
                             onViewProfile={handleViewProfile}
-                            onFriendAction={handleFriendAction}
+                            onFriendAction={onFriendAction}
                         />
                     )}
                 </div>

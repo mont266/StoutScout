@@ -98,7 +98,7 @@ const TrophyModal = ({ isOpen, onClose, allTrophies, unlockedTrophyIds, userStat
                         {allTrophies.map(trophy => {
                             let isUnlocked;
 
-                            // The "Stoutly Patron" trophy is unlocked *only* if the user has donated.
+                            // The "Stoutly Patron" trophy is unlocked ONLY if the user has donated.
                             if (trophy.id === PATRON_TROPHY_ID) {
                                 isUnlocked = !!userProfile?.has_donated;
                             } else {

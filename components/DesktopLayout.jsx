@@ -25,7 +25,6 @@ import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
-import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 import ShopPage from './ShopPage.jsx';
 import SocialContentHub from './SocialContentHub.jsx';
 
@@ -51,7 +50,7 @@ const DesktopLayout = (props) => {
         handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
         handleFindPlace,
         levelRequirements,
-        locationPermissionStatus, requestPermission,
+        locationPermissionStatus, onRequestPermission,
         mapTileRefreshKey,
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
@@ -312,12 +311,6 @@ const DesktopLayout = (props) => {
                             {renderContentPanel()}
                         </aside>
                         <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
-                            {locationPermissionStatus === 'denied' && (
-                                <LocationPermissionPrompt 
-                                    status={locationPermissionStatus} 
-                                    onRequestPermission={requestPermission}
-                                />
-                            )}
                             <MapComponent
                                 pubs={sortedPubs} userLocation={userLocation}
                                 center={mapCenter}

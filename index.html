@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh https://aistudiocdn.com https://js.stripe.com https://cdnjs.cloudflare.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.stripe.com https://m.stripe.network https://overpass-api.de https://nominatim.openstreetmap.org https://www.google-analytics.com https://generativelanguage.googleapis.com; img-src 'self' data: blob: https://*.supabase.co https://*.stripe.com https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://api.dicebear.com https://quickchart.io; frame-src 'self' https://js.stripe.com; font-src 'self' https://cdnjs.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh https://aistudiocdn.com https://js.stripe.com https://cdnjs.cloudflare.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; connect-src 'self' capacitor://* http://localhost:* https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.stripe.com https://m.stripe.network https://overpass-api.de https://nominatim.openstreetmap.org https://www.google-analytics.com https://generativelanguage.googleapis.com; img-src 'self' data: blob: https://*.supabase.co https://*.stripe.com https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://api.dicebear.com https://quickchart.io; frame-src 'self' https://js.stripe.com; font-src 'self' https://cdnjs.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self';">
     <script type="importmap">
 {
   "imports": {
@@ -25,11 +25,12 @@
     "vitest": "https://aistudiocdn.com/vitest@^3.2.4",
     "@testing-library/react": "https://aistudiocdn.com/@testing-library/react@^16.3.0",
     "@testing-library/user-event": "https://aistudiocdn.com/@testing-library/user-event@^14.6.1",
-    "vite-plugin-mkcert": "https://aistudiocdn.com/vite-plugin-mkcert@^1.17.8"
+    "vite-plugin-mkcert": "https://aistudiocdn.com/vite-plugin-mkcert@^1.17.8",
+    "@capacitor/cli": "https://aistudiocdn.com/@capacitor/cli@^7.4.3"
   }
 }
 </script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     
     <!-- Primary Meta Tags -->
     <title>Stoutly - Find the Perfect Pint of Guinness</title>
@@ -68,7 +69,8 @@
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  </head>
+  <link rel="stylesheet" href="/index.css">
+</head>
   <body>
     <div id="root"></div>
     <div id="modal-root"></div>

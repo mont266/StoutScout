@@ -87,6 +87,10 @@ const urlsToCache = [
   '/components/ShareModal.jsx',
   '/components/ShareProfileModal.jsx',
   '/components/FinancialStatsPage.jsx',
+  '/components/SocialContentHub.jsx',
+  '/components/GuinnessFactCard.jsx',
+  '/components/PintPulseReportCard.jsx',
+  '/components/PintOfTheWeekCard.jsx',
 ];
 
 self.addEventListener('install', event => {
