@@ -15,6 +15,7 @@ import BannedPage from './components/BannedPage.jsx';
 import AddPubModal from './components/AddPubModal.jsx';
 import EditUsernameModal from './components/EditUsernameModal.jsx';
 import EditBioModal from './components/EditBioModal.jsx';
+import EditSocialsModal from './components/EditSocialsModal.jsx';
 import UpdateDetailsModal from './components/UpdateDetailsModal.jsx';
 import SuggestEditModal from './components/SuggestEditModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
@@ -106,6 +107,7 @@ const App = () => {
   const [isPubScoreModalOpen, setIsPubScoreModalOpen] = useState(false);
   const [isEditUsernameModalOpen, setIsEditUsernameModalOpen] = useState(false);
   const [isEditBioModalOpen, setIsEditBioModalOpen] = useState(false);
+  const [isEditSocialsModalOpen, setIsEditSocialsModalOpen] = useState(false);
   const [isUpdateDetailsModalOpen, setIsUpdateDetailsModalOpen] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '', theme: 'info' });
@@ -2114,6 +2116,37 @@ const App = () => {
     return null; // Success
   };
 
+  const handleUpdateSocials = async (socialsData) => {
+    if (!session || !userProfile) return "You must be logged in.";
+    
+    trackEvent('update_socials');
+    const { instagram_handle, youtube_handle, x_handle } = socialsData;
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({ 
+            instagram_handle: instagram_handle || null,
+            youtube_handle: youtube_handle || null,
+            x_handle: x_handle || null,
+        })
+        .eq('id', userProfile.id);
+
+    if (error) {
+        console.error("Error updating socials:", error);
+        return error.message;
+    }
+
+    setIsEditSocialsModalOpen(false);
+    await fetchUserData(); // Refresh profile data
+    setAlertInfo({
+        isOpen: true,
+        title: 'Success!',
+        message: 'Your social links have been updated.',
+        theme: 'success',
+    });
+    return null; // Success
+  };
+
   const handleUpdateUserDetails = async ({ dob, country_code }) => {
     if (!session || !userProfile) return 'You must be logged in.';
     trackEvent('update_user_details');
@@ -2188,6 +2221,7 @@ const App = () => {
               onAvatarChangeClick={() => setIsAvatarModalOpen(true)}
               onEditUsernameClick={() => setIsEditUsernameModalOpen(true)}
               onEditBioClick={() => setIsEditBioModalOpen(true)}
+              onEditSocialsClick={() => setIsEditSocialsModalOpen(true)}
               onOpenUpdateDetailsModal={() => setIsUpdateDetailsModalOpen(true)}
               onProfileUpdate={handleProfileUpdate}
               friendships={friendships}
@@ -2723,7 +2757,7 @@ const App = () => {
       
       // Implemented handlers
       handleViewProfile,
-      handleFriendRequest,
+      onFriendRequest: handleFriendRequest,
       handleFriendAction,
       handleViewFriends,
       onProfileUpdate: handleProfileUpdate,
@@ -2783,6 +2817,7 @@ const App = () => {
       // Username, Bio, and Details change
       onEditUsernameClick: () => setIsEditUsernameModalOpen(true),
       onEditBioClick: () => setIsEditBioModalOpen(true),
+      onEditSocialsClick: () => setIsEditSocialsModalOpen(true),
       onOpenUpdateDetailsModal: () => setIsUpdateDetailsModalOpen(true),
       setAlertInfo,
       showAllDbPubs,
@@ -2822,6 +2857,13 @@ const App = () => {
             onClose={() => setIsEditBioModalOpen(false)}
             onSubmit={handleUpdateBio}
           />
+        )}
+        {isEditSocialsModalOpen && userProfile && (
+            <EditSocialsModal
+                userProfile={userProfile}
+                onClose={() => setIsEditSocialsModalOpen(false)}
+                onSubmit={handleUpdateSocials}
+            />
         )}
         {isUpdateDetailsModalOpen && userProfile && (
             <UpdateDetailsModal

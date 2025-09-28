@@ -65,7 +65,7 @@ const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount }) => {
 const MobileLayout = (props) => {
     const {
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
-        activeTab, locationError, settings, filter, handleFilterChange,
+        activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
         filterGuinnessZero, onFilterGuinnessZeroChange,
         handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
         handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
@@ -88,7 +88,7 @@ const MobileLayout = (props) => {
         locationPermissionStatus, onRequestPermission,
         mapTileRefreshKey,
         // Community props
-        CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
+        CommunityPage, friendships, userLikes, onToggleLike, onFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
         deleteConfirmationInfo,
@@ -129,7 +129,7 @@ const MobileLayout = (props) => {
         <div className="w-full max-w-md mx-auto h-dvh flex flex-col overflow-hidden">
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
-            {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(true)} />}
+            {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(false)} />}
             {reportCommentInfo.isOpen && <ReportCommentModal comment={reportCommentInfo.comment} onClose={onCloseReportCommentModal} onSubmit={onSubmitReportComment} />}
             <SubmittingRatingModal isVisible={isSubmittingRating} />
             {toastNotification && (
@@ -145,7 +145,7 @@ const MobileLayout = (props) => {
                 activeTab={activeTab}
                 userProfile={userProfile}
                 levelRequirements={levelRequirements}
-                onProfileClick={() => props.handleTabChange('profile')}
+                onProfileClick={() => handleTabChange('profile')}
                 onLoginRequest={() => setIsAuthOpen(true)}
             />
 
@@ -157,7 +157,7 @@ const MobileLayout = (props) => {
                             userProfile={userProfile}
                             onViewProfile={handleViewProfile}
                             friendships={friendships}
-                            onFriendRequest={handleFriendRequest}
+                            onFriendRequest={onFriendRequest}
                             onFriendAction={handleFriendAction}
                             userLikes={userLikes}
                             onToggleLike={onToggleLike}
@@ -361,7 +361,7 @@ const MobileLayout = (props) => {
                             isLoading={isFetchingFriendsList}
                             onBack={() => handleBackFromFriendsList()}
                             onViewProfile={handleViewProfile}
-                            onFriendAction={onFriendAction}
+                            onFriendAction={handleFriendAction}
                         />
                     )}
                 </div>
@@ -376,7 +376,7 @@ const MobileLayout = (props) => {
                 )}
             </main>
 
-            <TabBar activeTab={activeTab} onTabChange={props.handleTabChange} unreadNotificationsCount={unreadNotificationsCount} />
+            <TabBar activeTab={activeTab} onTabChange={handleTabChange} unreadNotificationsCount={unreadNotificationsCount} />
 
             {/* Popups and Modals (sit outside main content flow) */}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}

@@ -15,7 +15,7 @@ import useIsDesktop from '../hooks/useIsDesktop.js';
 import TrophyModal from './TrophyModal.jsx';
 
 // Action sheet modal for profile editing options
-const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername, onEditBio, onOpenUpdateDetailsModal, userProfile }) => {
+const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername, onEditBio, onEditSocials, onOpenUpdateDetailsModal, userProfile }) => {
     if (!isOpen) return null;
 
     const needsDetailsUpdate = userProfile && (!userProfile.dob || !userProfile.country_code);
@@ -44,6 +44,7 @@ const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername
                     <li><button onClick={onEditAvatar} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-user-circle w-6 text-center text-gray-500"></i><span>Change Avatar</span></button></li>
                     <li><button onClick={onEditUsername} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-id-card w-6 text-center text-gray-500"></i><span>Edit Username</span></button></li>
                     <li><button onClick={onEditBio} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-book-open w-6 text-center text-gray-500"></i><span>Edit Bio</span></button></li>
+                    <li><button onClick={onEditSocials} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3"><i className="fas fa-share-alt w-6 text-center text-gray-500"></i><span>Edit Socials</span></button></li>
                 </ul>
                 <button onClick={onClose} className="w-full mt-4 bg-gray-200 dark:bg-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600">Cancel</button>
                 <div className="pb-safe"></div>
@@ -122,6 +123,39 @@ const BioRenderer = ({ text }) => {
                 return <span key={i}>{part}</span>;
             })}
         </p>
+    );
+};
+
+const SocialLinks = ({ handles, className = '' }) => {
+    if (!handles) return null;
+
+    const { instagram_handle, youtube_handle, x_handle } = handles;
+
+    if (!instagram_handle && !youtube_handle && !x_handle) {
+        return null;
+    }
+
+    const socials = [
+        { platform: 'instagram', handle: instagram_handle, icon: 'fab fa-instagram', url: `https://www.instagram.com/${instagram_handle}` },
+        { platform: 'youtube', handle: youtube_handle, icon: 'fab fa-youtube', url: `https://www.youtube.com/@${youtube_handle}` },
+        { platform: 'x', handle: x_handle, icon: 'fab fa-twitter', url: `https://x.com/${x_handle}` }
+    ];
+
+    return (
+        <div className={`flex items-center gap-4 ${className}`}>
+            {socials.map(social => social.handle && (
+                <a 
+                    key={social.platform} 
+                    href={social.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer nofollow" 
+                    className="text-gray-500 dark:text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors text-2xl"
+                    aria-label={`View ${handles.username}'s ${social.platform} profile`}
+                >
+                    <i className={social.icon}></i>
+                </a>
+            ))}
+        </div>
     );
 };
 
@@ -294,7 +328,7 @@ const hasMetConditions = (trophy, stats) => {
     return true;
 };
 
-const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings }) => {
+const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings }) => {
     const isDesktop = useIsDesktop();
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
@@ -703,7 +737,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                 </div>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{r.pubAddress}</p>
                                 {r.rating.message && (
-                                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md border-l-4 border-gray-200 dark:border-gray-600">
+                                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md border-l-4 border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
                                         "{r.rating.message}"
                                     </p>
                                 )}
@@ -741,7 +775,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
         {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={isActionLoading} onClose={() => setConfirmation({ isOpen: false })} />}
         {alertInfo.isOpen && <AlertModal {...alertInfo} onClose={() => setAlertInfo({ isOpen: false })} />}
-        {isViewingOwnProfile && <EditProfileActionsModal isOpen={isEditActionsModalOpen} onClose={() => setIsEditActionsModalOpen(false)} onEditAvatar={() => handleOpenModal(onAvatarChangeClick)} onEditUsername={() => handleOpenModal(onEditUsernameClick)} onEditBio={() => handleOpenModal(onEditBioClick)} onOpenUpdateDetailsModal={() => handleOpenModal(onOpenUpdateDetailsModal)} userProfile={profile} />}
+        {isViewingOwnProfile && <EditProfileActionsModal isOpen={isEditActionsModalOpen} onClose={() => setIsEditActionsModalOpen(false)} onEditAvatar={() => handleOpenModal(onAvatarChangeClick)} onEditUsername={() => handleOpenModal(onEditUsernameClick)} onEditBio={() => handleOpenModal(onEditBioClick)} onEditSocials={() => handleOpenModal(onEditSocialsClick)} onOpenUpdateDetailsModal={() => handleOpenModal(onOpenUpdateDetailsModal)} userProfile={profile} />}
         {isTrophyModalOpen && (
             <TrophyModal
                 isOpen={isTrophyModalOpen}
@@ -850,6 +884,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                 <span className="text-lg lg:text-xl font-semibold">{rankData.name}</span>
                             </div>
                             <UserBadges profile={profile} className="mt-4" />
+                            <SocialLinks handles={profile} className="mt-4 justify-center" />
                         </div>
                     </section>
                     

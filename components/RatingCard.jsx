@@ -94,7 +94,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
             {/* Message */}
             {message && (
                 <div className="px-3 pb-2">
-                    <p className="text-gray-800 dark:text-gray-200 text-sm italic bg-gray-50 dark:bg-gray-700/50 p-3 rounded-md border-l-4 border-gray-200 dark:border-gray-600">
+                    <p className="text-gray-800 dark:text-gray-200 text-sm italic bg-gray-50 dark:bg-gray-700/50 p-3 rounded-md border-l-4 border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
                         "{message}"
                     </p>
                 </div>

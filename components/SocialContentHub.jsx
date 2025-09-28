@@ -230,15 +230,7 @@ const SocialContentHub = ({ onBack, userProfile }) => {
                     
                     const analysis = JSON.parse(response.text);
 
-                    await Promise.all([
-                        supabase.from('rating_ai_analysis').insert({ rating_id: rating.id, analysis_data: analysis }),
-                        supabase.from('api_usage_logs').insert({
-                            user_id: userProfile.id,
-                            prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-                            candidates_tokens: response.usageMetadata?.candidatesTokenCount || 0,
-                            feature: scanType,
-                        })
-                    ]);
+                    await supabase.from('rating_ai_analysis').insert({ rating_id: rating.id, analysis_data: analysis });
                     
                     return { ...rating, aiAnalysis: analysis };
                 } catch (aiError) {
@@ -353,13 +345,6 @@ const SocialContentHub = ({ onBack, userProfile }) => {
             `;
 
             const response = await generateContentWithRetry({ model: 'gemini-2.5-flash', contents: prompt });
-            
-            await supabase.from('api_usage_logs').insert({
-                user_id: userProfile.id,
-                prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-                candidates_tokens: response.usageMetadata?.candidatesTokenCount || 0,
-                feature: 'pint_pulse',
-            });
 
             setStrategicReport({ type: 'pint_pulse', content: response.text });
             trackEvent('social_hub_scan_success', { scan_type: 'pint_pulse' });
@@ -449,13 +434,6 @@ const SocialContentHub = ({ onBack, userProfile }) => {
                 config: { responseMimeType: 'application/json', responseSchema: dynamicPintOfTheWeekSchema },
             });
             
-            await supabase.from('api_usage_logs').insert({
-                user_id: userProfile.id,
-                prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-                candidates_tokens: response.usageMetadata?.candidatesTokenCount || 0,
-                feature: 'pint_of_the_week',
-            });
-
             const analysis = JSON.parse(response.text);
             const winnerIndex = analysis.winning_contender_index;
             const winnerRating = (winnerIndex >= 0 && winnerIndex < topRatings.length) ? topRatings[winnerIndex] : null;
@@ -531,13 +509,6 @@ const SocialContentHub = ({ onBack, userProfile }) => {
                 contents: factPrompt,
                 config: { responseMimeType: 'application/json', responseSchema: factSchema },
             });
-            
-            await supabase.from('api_usage_logs').insert({
-                user_id: userProfile.id,
-                prompt_tokens: factResponse.usageMetadata?.promptTokenCount || 0,
-                candidates_tokens: factResponse.usageMetadata?.candidatesTokenCount || 0,
-                feature: 'guinness_fact_text',
-            });
     
             const { factText } = JSON.parse(factResponse.text);
     
@@ -552,11 +523,6 @@ const SocialContentHub = ({ onBack, userProfile }) => {
                   outputMimeType: 'image/jpeg',
                   aspectRatio: '3:4',
                 },
-            });
-            
-            await supabase.from('api_usage_logs').insert({
-                user_id: userProfile.id,
-                feature: 'guinness_fact_image',
             });
     
             const base64ImageBytes = imageResponse.generatedImages[0].image.imageBytes;

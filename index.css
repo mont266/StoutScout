@@ -12,16 +12,10 @@
     @apply bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased;
     /* Prevent the browser's native pull-to-refresh action */
     overscroll-behavior-y: contain;
-    /* Add horizontal padding for device notches in landscape mode */
+    /* Add padding for device notches and system UI (status bar, home indicator) */
+    padding-top: env(safe-area-inset-top);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-  }
-  
-  /* Add top padding to the main header to account for the status bar notch */
-  header {
-    padding-top: env(safe-area-inset-top);
-    /* Ensure padding adds to the height, preserving the original content height */
-    box-sizing: content-box;
   }
 }
 
@@ -29,6 +23,24 @@
   /* This class is used in MobileLayout.jsx to add padding for the home indicator */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /*
+    Adds top padding to the header ONLY on the native Android app.
+    This provides a specific fix to prevent the app content from
+    drawing behind the system status bar on Android devices.
+  */
+  .native-android .app-header {
+    padding-top: 1rem; /* 16px, reduced padding for Android status bar */
+  }
+
+  /*
+    Adds bottom padding to elements needing safe area adjustment
+    ONLY on the native Android app. This provides space for the
+    3-button system navigation bar.
+  */
+  .native-android .pb-safe {
+    padding-bottom: 3rem; /* 48px, increased padding for Android navigation bar */
   }
 
   #orientation-lock-overlay {
