@@ -43,7 +43,7 @@ const AndroidBetaModal = ({ onJoin, onClose }) => {
 
                 <div className="mt-6 space-y-3">
                     <a
-                        href="https://play.google.com/apps/internaltest/4700428345964627145"
+                        href="https://play.google.com/apps/testing/uk.co.stoutly.twa"
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={onJoin}

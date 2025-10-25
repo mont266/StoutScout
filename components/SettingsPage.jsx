@@ -235,7 +235,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   const installButton = renderInstallButton();
   const androidBetaButton = isAndroidWebApp ? (
     <a
-      href="https://play.google.com/apps/internaltest/4700428345964627145"
+      href="https://play.google.com/apps/testing/uk.co.stoutly.twa"
       target="_blank"
       rel="noopener noreferrer"
       onClick={() => trackEvent('click_join_android_beta', { source: 'settings' })}
