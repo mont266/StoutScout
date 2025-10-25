@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { trackEvent } from '../analytics.js';
 
-const AndroidBetaModal = ({ onJoin, onClose }) => {
+const AndroidBetaModal = ({ onClose }) => {
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -13,6 +13,12 @@ const AndroidBetaModal = ({ onJoin, onClose }) => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
+
+    const handleLinkClick = (step) => {
+        trackEvent('click_join_android_beta_step', { step });
+        // Mark as seen when they interact
+        localStorage.setItem('stoutly-android-beta-prompt-seen', 'true');
+    };
 
     const modalContent = (
         <div
@@ -32,26 +38,53 @@ const AndroidBetaModal = ({ onJoin, onClose }) => {
                         Join the Android Beta!
                     </h2>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        You're on Android! For a faster, smoother experience, try our new native app.
+                        For a faster, smoother experience, try our new native app. Joining is a two-step process:
                     </p>
                 </div>
 
-                <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800/60 rounded-lg text-yellow-800 dark:text-yellow-200 text-xs text-center">
-                    <i className="fas fa-bug mr-2"></i>
-                    This is a <strong className="font-semibold">beta test</strong>, so you may encounter issues. Please report any bugs using the feedback form in the settings.
+                <div className="mt-6 space-y-4 text-left">
+                    {/* Step 1 */}
+                    <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white font-bold rounded-full flex items-center justify-center">1</div>
+                        <div>
+                            <h3 className="font-bold text-gray-800 dark:text-white">Join the Beta Group</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">First, you need to join our Google Group to become an eligible tester.</p>
+                            <a
+                                href="https://groups.google.com/g/stoutly-open-beta"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => handleLinkClick(1)}
+                                className="inline-block mt-2 bg-blue-500 text-white text-sm font-bold py-2 px-3 rounded-lg hover:bg-blue-600 transition-colors"
+                            >
+                                Join Group
+                            </a>
+                        </div>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white font-bold rounded-full flex items-center justify-center">2</div>
+                        <div>
+                            <h3 className="font-bold text-gray-800 dark:text-white">Become a Tester</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">After joining the group, use this link to opt-in on the Play Store and download the app.</p>
+                             <a
+                                href="https://play.google.com/apps/testing/uk.co.stoutly.twa"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => handleLinkClick(2)}
+                                className="inline-block mt-2 bg-green-500 text-white text-sm font-bold py-2 px-3 rounded-lg hover:bg-green-600 transition-colors"
+                            >
+                                Become a Tester
+                            </a>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="mt-6 space-y-3">
-                    <a
-                        href="https://play.google.com/apps/testing/uk.co.stoutly.twa"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={onJoin}
-                        className="w-full flex items-center justify-center space-x-2 bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
-                    >
-                        <span>Join the Beta</span>
-                        <i className="fas fa-arrow-right"></i>
-                    </a>
+                <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-6 italic">
+                    You can find these instructions again in the Settings panel.
+                </p>
+
+                <div className="mt-2">
                     <button
                         type="button"
                         onClick={onClose}

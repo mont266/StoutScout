@@ -15,7 +15,7 @@ import { Capacitor } from '@capacitor/core';
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, onViewSocialHub }) => {
+const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, onViewSocialHub, onOpenAndroidBetaModal }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
@@ -200,7 +200,6 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   const displayUnit = isKm ? 'km' : 'mi';
   
   const mobileOS = getMobileOS();
-  const isAndroidWebApp = mobileOS === 'Android' && !Capacitor.isNativePlatform();
 
   const renderInstallButton = () => {
     const isDesktop = useIsDesktop();
@@ -233,28 +232,25 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   };
   
   const installButton = renderInstallButton();
-  const androidBetaButton = isAndroidWebApp ? (
-    <a
-      href="https://play.google.com/apps/testing/uk.co.stoutly.twa"
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={() => trackEvent('click_join_android_beta', { source: 'settings' })}
-      className="w-full flex items-center justify-center space-x-2 bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
-    >
-      <i className="fab fa-android"></i>
-      <span>Join Android Beta</span>
-    </a>
-  ) : null;
+  const showAndroidBetaButton = mobileOS === 'Android' && !Capacitor.isNativePlatform();
 
   return (
     <>
       {isContactModalOpen && <ContactModal userProfile={userProfile} session={session} onClose={() => setIsContactModalOpen(false)} />}
       {isFeedbackModalOpen && <FeedbackModal userProfile={userProfile} onClose={() => setIsFeedbackModalOpen(false)} />}
       <div className="p-4 sm:p-6 space-y-8">
-          {(installButton || androidBetaButton) && (
+          {(installButton || showAndroidBetaButton) && (
             <div className="border-b border-gray-200 dark:border-gray-700 pb-6 space-y-3">
               {installButton}
-              {androidBetaButton}
+              {showAndroidBetaButton && (
+                  <button
+                    onClick={onOpenAndroidBetaModal}
+                    className="w-full flex items-center justify-center space-x-2 bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
+                  >
+                    <i className="fab fa-android"></i>
+                    <span>Join Android Beta</span>
+                  </button>
+              )}
             </div>
           )}
 

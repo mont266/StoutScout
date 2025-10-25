@@ -87,6 +87,7 @@ const DesktopLayout = (props) => {
         isBackfilling, onBackfillCountryData,
         isPriceByCountryModalOpen,
         onSetIsPriceByCountryModalOpen,
+        onOpenAndroidBetaModal,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -288,6 +289,7 @@ const DesktopLayout = (props) => {
                             allTrophies={allTrophies}
                             isBackfilling={isBackfilling}
                             onBackfillCountryData={onBackfillCountryData}
+                            onOpenAndroidBetaModal={onOpenAndroidBetaModal}
                         />
                     </div>
                 </div>

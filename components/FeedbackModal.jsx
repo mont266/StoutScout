@@ -26,7 +26,7 @@ const FeedbackModal = ({ userProfile, onClose }) => {
         
         try {
             const postUrl = Capacitor.isNativePlatform() 
-              ? 'https://www.stoutly.co.uk/.netlify/functions/submit-form'
+              ? 'https://stoutly.co.uk/.netlify/functions/submit-form'
               : '/';
 
             const response = await fetch(postUrl, {

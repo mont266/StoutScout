@@ -122,7 +122,8 @@ const MobileLayout = (props) => {
         isDesktop,
         isPriceByCountryModalOpen,
         onSetIsPriceByCountryModalOpen,
-        allRatings, communitySubTab, setCommunitySubTab
+        allRatings, communitySubTab, setCommunitySubTab,
+        onOpenAndroidBetaModal,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -234,6 +235,7 @@ const MobileLayout = (props) => {
                                 onScrollComplete={onScrollComplete}
                                 userTrophies={userTrophies}
                                 allTrophies={allTrophies}
+                                onOpenAndroidBetaModal={onOpenAndroidBetaModal}
                             />
                         );
                     })()}

@@ -390,7 +390,7 @@ const App = () => {
   useEffect(() => {
     const hasSeenPrompt = localStorage.getItem('stoutly-android-beta-prompt-seen');
     if (getMobileOS() === 'Android' && !Capacitor.isNativePlatform() && !hasSeenPrompt) {
-        trackEvent('view_android_beta_prompt');
+        trackEvent('view_android_beta_prompt', { source: 'auto_popup' });
         setIsAndroidBetaModalOpen(true);
     }
   }, []);
@@ -1214,12 +1214,6 @@ const App = () => {
 
 
   // --- CORE APP LOGIC & HANDLERS ---
-
-  const handleJoinAndroidBeta = () => {
-    trackEvent('click_join_android_beta', { source: 'modal' });
-    localStorage.setItem('stoutly-android-beta-prompt-seen', 'true');
-    setIsAndroidBetaModalOpen(false);
-  };
 
   const handleCloseAndroidBetaModal = () => {
       trackEvent('dismiss_android_beta_prompt');
@@ -2963,6 +2957,10 @@ const App = () => {
       onBackfillCountryData: handleBackfillCountryData,
       isPriceByCountryModalOpen,
       onSetIsPriceByCountryModalOpen: setIsPriceByCountryModalOpen,
+      onOpenAndroidBetaModal: () => {
+        trackEvent('view_android_beta_prompt', { source: 'settings_button' });
+        setIsAndroidBetaModalOpen(true);
+      },
   };
 
   const renderModals = () => (
@@ -2984,7 +2982,6 @@ const App = () => {
         )}
         {isAndroidBetaModalOpen && (
             <AndroidBetaModal 
-                onJoin={handleJoinAndroidBeta} 
                 onClose={handleCloseAndroidBetaModal} 
             />
         )}

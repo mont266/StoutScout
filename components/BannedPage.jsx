@@ -25,7 +25,7 @@ const BannedPage = ({ userProfile, onLogout }) => {
         try {
             // Use the absolute URL for the Netlify Function on native, relative path for web
             const postUrl = Capacitor.isNativePlatform() 
-              ? 'https://www.stoutly.co.uk/.netlify/functions/submit-form' 
+              ? 'https://stoutly.co.uk/.netlify/functions/submit-form' 
               : '/';
 
             const response = await fetch(postUrl, {
