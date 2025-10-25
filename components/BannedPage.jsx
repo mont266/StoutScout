@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { trackEvent } from '../analytics.js';
+import { Capacitor } from '@capacitor/core';
 
 const BannedPage = ({ userProfile, onLogout }) => {
     const { username, ban_reason, banned_at } = userProfile;
@@ -22,7 +23,12 @@ const BannedPage = ({ userProfile, onLogout }) => {
         formData.append('appeal_reason', appealReason);
 
         try {
-            const response = await fetch('/', {
+            // Use the absolute URL for the Netlify Function on native, relative path for web
+            const postUrl = Capacitor.isNativePlatform() 
+              ? 'https://www.stoutly.co.uk/.netlify/functions/submit-form' 
+              : '/';
+
+            const response = await fetch(postUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams(formData).toString(),
@@ -32,7 +38,8 @@ const BannedPage = ({ userProfile, onLogout }) => {
                 setFormState({ loading: false, success: true, error: null });
                 trackEvent('ban_appeal_success');
             } else {
-                throw new Error('Form submission failed. Please try again later.');
+                const errorText = await response.text();
+                throw new Error(`Form submission failed: ${response.status} ${response.statusText}. ${errorText}`);
             }
         } catch (error) {
             setFormState({ loading: false, success: false, error: error.message });

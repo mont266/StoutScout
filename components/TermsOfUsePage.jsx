@@ -20,7 +20,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const TermsOfUsePage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Terms of Use" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: September 3, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 25, 2025</p>
             <p>Welcome to Stoutly! These Terms of Use ("Terms") govern your access to and use of the Stoutly web application and any related services (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Description of Service</h2>

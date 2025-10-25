@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  html,
+  body,
+  #root {
+    @apply h-full;
+    /* This ensures a consistent height chain for the app to fill the viewport */
+  }
+
   html {
     /* Prevent horizontal scrollbars which can cause unwanted white space */
     overflow-x: hidden;
@@ -26,22 +33,25 @@
   }
 
   /*
-    Adds top padding to the header ONLY on the native Android app.
-    This provides a specific fix to prevent the app content from
-    drawing behind the system status bar on Android devices.
+    Adds a colored strip at the bottom for native Android to provide spacing
+    for the system navigation bar. This is needed because the webview does not
+    respect safe-area-insets reliably for the bottom navigation bar.
+    This is achieved using a flexbox pseudo-element (`::after`) within the
+    main container. This method contains the spacing *within* the viewport height,
+    preventing unwanted vertical scrolling.
   */
-  .native-android .app-header {
-    padding-top: 1rem; /* 16px, reduced padding for Android status bar */
+  .native-android .mobile-layout-container::after {
+    content: '';
+    display: block;
+    height: 1rem; /* Creates the space at the bottom */
+    flex-shrink: 0;
+    background-color: #ffffff; /* Matches light mode Header/TabBar */
   }
 
-  /*
-    Adds bottom padding to elements needing safe area adjustment
-    ONLY on the native Android app. This provides space for the
-    3-button system navigation bar.
-  */
-  .native-android .pb-safe {
-    padding-bottom: 3rem; /* 48px, increased padding for Android navigation bar */
+  .dark.native-android .mobile-layout-container::after {
+    background-color: #1f2937; /* Matches dark mode Header/TabBar (gray-800) */
   }
+
 
   #orientation-lock-overlay {
     @apply fixed inset-0 z-[100] bg-gray-900 text-white flex-col items-center justify-center text-center p-8 hidden; /* hidden by default */

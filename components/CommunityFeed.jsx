@@ -16,7 +16,7 @@ const filterOptions = [
 
 const PULL_THRESHOLD = 80;
 
-const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, allRatings, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs }) => {
+const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs }) => {
     const [ratings, setRatings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -26,7 +26,6 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     const loaderRef = useRef(null);
     const filterMenuRef = useRef(null);
     
-    // State for pull-to-refresh
     const [pullPosition, setPullPosition] = useState(0);
     const [isPulling, setIsPulling] = useState(false);
     const touchStartRef = useRef(0);
@@ -53,7 +52,35 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
 
             if (rpcError) throw rpcError;
 
-            const formattedData = data.map(r => ({
+            let finalRatingsData = [];
+            if (data && data.length > 0) {
+                const ratingIds = data.map(r => r.rating_id);
+                
+                // Fetch all comments for these ratings in a single query to get accurate counts
+                const { data: commentsData, error: commentsError } = await supabase
+                    .from('comments')
+                    .select('rating_id', { count: 'exact', head: false })
+                    .in('rating_id', ratingIds);
+
+                if (commentsError) {
+                    console.warn("Could not fetch fresh comment counts, using potentially stale data from feed.", commentsError);
+                    finalRatingsData = data;
+                } else {
+                    const countsMap = new Map();
+                    for (const comment of commentsData) {
+                        countsMap.set(comment.rating_id, (countsMap.get(comment.rating_id) || 0) + 1);
+                    }
+                    
+                    finalRatingsData = data.map(r => ({
+                        ...r,
+                        comment_count: countsMap.get(r.rating_id) || 0,
+                    }));
+                }
+            } else {
+                finalRatingsData = data || [];
+            }
+
+            const formattedData = finalRatingsData.map(r => ({
                 id: r.rating_id, created_at: r.created_at, quality: r.quality, price: r.price,
                 exact_price: r.exact_price, image_url: r.image_url, like_count: r.like_count,
                 comment_count: r.comment_count,
@@ -69,11 +96,10 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
             
             setRatings(prev => {
                 const combined = pageNum === 1 ? formattedData : [...prev, ...formattedData];
-                // Create a Map to filter out duplicates based on rating ID
                 const uniqueRatingsMap = new Map(combined.map(item => [item.id, item]));
                 return Array.from(uniqueRatingsMap.values());
             });
-            if (data.length < PAGE_SIZE) setHasMore(false);
+            if (finalRatingsData.length < PAGE_SIZE) setHasMore(false);
 
         } catch (err) {
             console.error("Error fetching community feed:", err);
@@ -83,7 +109,6 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         }
     }, [filter]);
     
-    // Optimistically update the feed's local state for likes
     const handleFeedToggleLike = (ratingToToggle) => {
         setRatings(currentRatings => 
             currentRatings.map(rating => {
@@ -100,14 +125,13 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         onToggleLike(ratingToToggle);
     };
 
-    // Update comment count based on the reliable list from the parent
     const handleFeedAddComment = async (ratingId, content) => {
         const newCommentsList = await onAddComment(ratingId, content);
         if (newCommentsList) {
             setRatings(currentRatings => 
                 currentRatings.map(rating => {
                     if (rating.id === ratingId) {
-                        return { ...rating, comment_count: newCommentsList.length };
+                        return { ...rating, comment_count: (rating.comment_count || 0) + 1 };
                     }
                     return rating;
                 })
@@ -115,15 +139,13 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         }
     };
 
-    // Update comment count based on the reliable list from the parent
     const handleFeedDeleteComment = async (commentId, ratingId) => {
         const newCommentsList = await onDeleteComment(commentId, ratingId);
-        // A null check is needed because an empty array is a valid (and falsy in some contexts) result
         if (newCommentsList !== null) {
             setRatings(currentRatings => 
                 currentRatings.map(rating => {
                     if (rating.id === ratingId) {
-                        return { ...rating, comment_count: newCommentsList.length };
+                        return { ...rating, comment_count: Math.max(0, (rating.comment_count || 1) - 1) };
                     }
                     return rating;
                 })
@@ -132,22 +154,20 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     };
 
     const handleRefresh = useCallback((method = 'button') => {
-        if (loading) return; // Prevent multiple refreshes
+        if (loading) return;
         trackEvent('refresh_feed', { feed_type: 'community', method });
         setPage(1);
         setHasMore(true);
         fetchRatings(1);
     }, [fetchRatings, loading]);
 
-    // Re-fetch from page 1 when the filter changes
     useEffect(() => {
         setPage(1);
         setHasMore(true);
-        setRatings([]); // Clear existing ratings to show loading state
+        setRatings([]);
         fetchRatings(1);
     }, [fetchRatings]);
 
-    // Infinite scroll observer
     useEffect(() => {
         const observer = new IntersectionObserver(
             entries => {
@@ -155,7 +175,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                     setPage(prevPage => prevPage + 1);
                 }
             },
-            { threshold: 1.0, rootMargin: '0px 0px 200px 0px' } // Load 200px before it's visible
+            { threshold: 1.0, rootMargin: '0px 0px 200px 0px' }
         );
 
         if (loaderRef.current) observer.observe(loaderRef.current);
@@ -164,12 +184,10 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         };
     }, [loading, hasMore]);
 
-    // Fetch more data when page changes
     useEffect(() => {
         if (page > 1) fetchRatings(page);
     }, [page, fetchRatings]);
     
-    // Close filter menu on outside click
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
@@ -185,7 +203,6 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         setIsFilterMenuOpen(false);
     };
 
-    // Pull-to-refresh handlers
     const handleTouchStart = (e) => {
         if (containerRef.current && containerRef.current.scrollTop === 0) {
             setIsPulling(true);
@@ -222,7 +239,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     const activeFilterLabel = filterOptions.find(opt => opt.sortBy === filter.sortBy && opt.timePeriod === filter.timePeriod)?.label || 'Newest';
 
     const renderContent = () => {
-        if (loading && page === 1 && !isPulling) { // Don't show main loader when pulling to refresh
+        if (loading && page === 1 && !isPulling) {
             return (
                 <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 p-8 text-center min-h-[400px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400"></div>

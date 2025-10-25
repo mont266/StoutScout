@@ -88,13 +88,12 @@ const PintGallery = ({ ratings, onViewImage }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal }) => {
+const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo }) => {
   const [localPub, setLocalPub] = useState(pub);
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
   const [isRatingFormExpanded, setIsRatingFormExpanded] = useState(!existingUserRating && !!session);
   const [confirmation, setConfirmation] = useState({ isOpen: false });
-  const [alertInfo, setAlertInfo] = useState({ isOpen: false });
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [visibleComments, setVisibleComments] = useState({});
   const ratingsListRef = useRef(null);
@@ -198,6 +197,12 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
         }
     }, [highlightedCommentId, commentsByRating, localPub.id, visibleComments]);
 
+  const handleScrollToRatings = () => {
+    if (ratingsListRef.current) {
+        ratingsListRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        trackEvent('click_scroll_to_ratings', { pub_id: localPub.id });
+    }
+  };
 
   const avgQuality = getAverageRating(localPub.ratings, 'quality');
   const avgPrice = getAverageRating(localPub.ratings, 'price');
@@ -463,7 +468,6 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
     {imageToView && <ImageModal rating={imageToView} onClose={() => setImageToView(null)} onReport={() => handleInitiateReport(imageToView)} canReport={loggedInUserProfile && loggedInUserProfile.id !== imageToView.user.id} canAdminRemove={isDeveloper} onAdminRemove={confirmAdminRemoveImage} />}
     {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
     {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={isActionLoading} onClose={() => setConfirmation({ isOpen: false })} />}
-    {alertInfo.isOpen && <AlertModal {...alertInfo} onClose={() => setAlertInfo({ isOpen: false })} />}
     {isCertifiedModalOpen && <CertifiedExplanationModal isOpen={isCertifiedModalOpen} onClose={() => setIsCertifiedModalOpen(false)} />}
 
     <div className="h-full flex flex-col bg-gray-100 dark:bg-gray-900 overflow-hidden">
@@ -570,11 +574,15 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                             </div>
 
                             {/* Ratings Card */}
-                            <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
+                            <button
+                                onClick={handleScrollToRatings}
+                                className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+                                aria-label={`Scroll to ${localPub.ratings.length} community ratings`}
+                            >
                                 <i className="fas fa-users text-3xl text-blue-500 mb-2"></i>
                                 <div className="text-xl font-bold text-gray-900 dark:text-white">{localPub.ratings.length}</div>
                                 <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1">Ratings</div>
-                            </div>
+                            </button>
                         </div>
                     </Section>
                 </>
@@ -604,13 +612,19 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                 <div ref={ratingsListRef} className="space-y-3">
                     {
                         (() => {
-                            // Filter out the logged-in user's rating, since it's displayed separately.
-                            const communityRatings = localPub.ratings.filter(rating => {
-                                return !(existingUserRating && rating.id === existingUserRating.id);
+                            // We now show the user's own rating in this list.
+                            // We sort them to show the user's rating first, followed by the newest ratings.
+                            const sortedRatings = [...localPub.ratings].sort((a, b) => {
+                                if (existingUserRating) {
+                                    if (a.id === existingUserRating.id) return -1; // a comes first
+                                    if (b.id === existingUserRating.id) return 1;  // b comes first
+                                }
+                                // For all other ratings, sort by date (newest first)
+                                return new Date(b.created_at) - new Date(a.created_at);
                             });
 
-                            if (communityRatings.length > 0) {
-                                return communityRatings.map(rating => (
+                            if (sortedRatings.length > 0) {
+                                return sortedRatings.map(rating => (
                                     <RatingCard 
                                         key={rating.id}
                                         rating={rating}
@@ -634,7 +648,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                             } else {
                                 return (
                                     <div className="text-center p-4 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                                        <p>No other community ratings yet. Be the first!</p>
+                                        <p>No community ratings yet. Be the first!</p>
                                     </div>
                                 );
                             }

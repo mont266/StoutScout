@@ -1,8 +1,9 @@
 
+
 import React from 'react';
 import { ResponsiveContainer, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Area } from 'recharts';
 
-const TimeSeriesChart = ({ data, dataKey, title, loading, error, timePeriod, lineColor = '#F59E0B', tooltipLabel = 'items' }) => {
+const TimeSeriesChart = ({ data, dataKey, title, loading, error, timePeriod, lineColor = '#F59E0B', tooltipLabel = 'items', containerClassName }) => {
     
     const formatDate = (dateStr) => {
         if (!dateStr) return '';
@@ -30,24 +31,10 @@ const TimeSeriesChart = ({ data, dataKey, title, loading, error, timePeriod, lin
         return null;
     };
 
-    if (loading) {
-        return (
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md h-96 flex justify-center items-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-400"></div>
-            </div>
-        );
-    }
-    if (error) {
-        return <div className="text-center p-8 text-red-500 bg-white dark:bg-gray-800 rounded-xl shadow-md h-96">{error}</div>;
-    }
-    if (!data || data.length === 0) {
-        return <div className="text-center p-8 text-gray-500 bg-white dark:bg-gray-800 rounded-xl shadow-md h-96">No data available for this period.</div>;
-    }
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md h-96">
-            <h5 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">{title}</h5>
-            <ResponsiveContainer width="100%" height="85%">
+    const chartContent = (
+        <>
+            {title && <h5 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">{title}</h5>}
+            <ResponsiveContainer width="100%" height={title ? "85%" : "95%"}>
                 <AreaChart data={data} margin={{ top: 5, right: 20, left: -15, bottom: 5 }}>
                     <defs>
                         <linearGradient id={`area-gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
@@ -88,6 +75,22 @@ const TimeSeriesChart = ({ data, dataKey, title, loading, error, timePeriod, lin
                     />
                 </AreaChart>
             </ResponsiveContainer>
+        </>
+    );
+
+    const defaultClassName = "bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md h-96";
+
+    const content = loading
+        ? <div className="flex justify-center items-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-400"></div></div>
+        : error
+        ? <div className="text-center p-8 text-red-500">{error}</div>
+        : (!data || data.length === 0)
+        ? <div className="text-center p-8 text-gray-500">No data available for this period.</div>
+        : chartContent;
+
+    return (
+        <div className={containerClassName || defaultClassName}>
+            {content}
         </div>
     );
 };

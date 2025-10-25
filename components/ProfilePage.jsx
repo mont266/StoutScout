@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import { supabase } from '../supabase.js';
@@ -13,6 +14,9 @@ import AlertModal from './AlertModal.jsx';
 import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import TrophyModal from './TrophyModal.jsx';
+import ProfileStatsView from './ProfileStatsView.jsx';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 
 // Action sheet modal for profile editing options
 const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername, onEditBio, onEditSocials, onOpenUpdateDetailsModal, userProfile }) => {
@@ -51,6 +55,41 @@ const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername
             </div>
         </div>
     );
+};
+
+// New Modal component for mobile stats view
+const StatsModal = ({ isOpen, onClose, userRatings, onViewPub, rankData, userProfile, levelRequirements, pubScores }) => {
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
+    
+    if (!isOpen) return null;
+
+    const modalContent = (
+        <div className="fixed inset-0 bg-gray-100 dark:bg-gray-900 z-[1300] flex flex-col animate-fade-in-up pt-[env(safe-area-inset-top)]">
+            <header className="flex items-center p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-800">
+                <button onClick={onClose} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg transition-colors">
+                    <i className="fas fa-arrow-left"></i>
+                    <span className="font-semibold whitespace-nowrap">Back to Profile</span>
+                </button>
+            </header>
+            <div className="flex-grow overflow-y-auto">
+                <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-xl font-bold text-gray-800 dark:text-white">Profile Stats</h2>
+                </div>
+                <ProfileStatsView userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />
+            </div>
+        </div>
+    );
+    
+    const modalRoot = document.getElementById('modal-root');
+    if (!modalRoot) return null;
+    return createPortal(modalContent, modalRoot);
 };
 
 
@@ -328,7 +367,7 @@ const hasMetConditions = (trophy, stats) => {
     return true;
 };
 
-const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings }) => {
+const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen }) => {
     const isDesktop = useIsDesktop();
     const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
@@ -348,8 +387,14 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
     const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
     const mainScrollRef = useRef(null);
     const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
+    const [activeTab, setActiveTab] = useState('ratings');
 
     const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
+
+    // Moved these declarations before the hooks that use them, and made them safe for null `profile`
+    const isViewingOwnProfile = !loggedInUserProfile || profile?.id === loggedInUserProfile?.id;
+    const isDeveloper = loggedInUserProfile?.is_developer;
+    const canViewStats = isViewingOwnProfile || isDeveloper;
 
     // Collapsing header logic for mobile
     useEffect(() => {
@@ -372,6 +417,13 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
     useEffect(() => {
         setProfile(userProfile);
     }, [userProfile]);
+
+    // This hook was being called conditionally, causing the error. Moved before the early return.
+    useEffect(() => {
+        if (!canViewStats && activeTab === 'stats') {
+            setActiveTab('ratings');
+        }
+    }, [canViewStats, activeTab]);
 
     const userStatsForTrophies = useMemo(() => ({
         ratingsCount: userRatings.length,
@@ -464,8 +516,6 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
     
     const rankData = getRankData(level);
     
-    const isViewingOwnProfile = !loggedInUserProfile || profile.id === loggedInUserProfile.id;
-    const isDeveloper = loggedInUserProfile?.is_developer;
     const canModerate = isDeveloper && !isViewingOwnProfile;
     const isActionLoading = isBanning || isUnbanning || isUpdatingRoles || !!deletingRatingId;
     const isOnline = onlineUserIds.has(profile.id);
@@ -706,11 +756,27 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                     <div className="mt-4 p-3 bg-gray-200 dark:bg-gray-900 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 break-all animate-fade-in-down">
                         <p><strong>User ID:</strong> {profile.id}</p>
                         <p><strong>Created:</strong> {new Date(profile.created_at).toLocaleString('en-GB')}</p>
+                        <p><strong>Last Login:</strong> {profile.last_sign_in_at ? new Date(profile.last_sign_in_at).toLocaleString('en-GB') : 'Unknown'}</p>
                         {profile.signup_utm_source && <p><strong>UTM Source:</strong> {profile.signup_utm_source}</p>}
                     </div>
                 )}
             </section>
         )
+    );
+
+    const TabButton = ({ tabId, label, isActive, onClick }) => (
+        <button
+            onClick={onClick}
+            className={`w-1/2 py-3 text-sm font-bold transition-colors border-b-4 ${
+                isActive
+                ? 'border-amber-500 text-amber-500 dark:text-amber-400'
+                : 'border-transparent text-gray-500 hover:border-gray-300 dark:hover:border-gray-600'
+            }`}
+            role="tab"
+            aria-selected={isActive}
+        >
+            {label}
+        </button>
     );
 
     const RatingsList = () => (
@@ -787,6 +853,18 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                 userProfile={profile}
             />
         )}
+        {!isDesktop && canViewStats && (
+            <StatsModal 
+                isOpen={isStatsModalOpen}
+                onClose={() => onSetIsStatsModalOpen(false)}
+                userRatings={userRatings}
+                onViewPub={onViewPub}
+                rankData={rankData}
+                userProfile={profile}
+                levelRequirements={levelRequirements}
+                pubScores={pubScores}
+            />
+        )}
 
         <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900 overflow-hidden">
             {/* STATIC COLLAPSED HEADER (Mobile only) */}
@@ -797,6 +875,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                         <h1 className="text-lg font-bold text-gray-900 dark:text-white">{username}</h1>
                     </div>
                     <div className="flex items-center gap-2">
+                        {canViewStats && <button onClick={() => onSetIsStatsModalOpen(true)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="View stats"><i className="fas fa-chart-bar"></i></button>}
                         {isViewingOwnProfile ? (
                             <>
                                 <button onClick={() => onOpenShareProfileModal(profile)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="Share profile"><i className="fas fa-share-alt"></i></button>
@@ -820,6 +899,9 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                     {/* Buttons over Cover Photo */}
                     <div className="absolute top-4 left-4 z-10">{onBack && <button onClick={onBack} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Back"><i className="fas fa-arrow-left"></i></button>}</div>
                     <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                        {!isDesktop && canViewStats && (
+                            <button onClick={() => onSetIsStatsModalOpen(true)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="View stats"><i className="fas fa-chart-bar"></i></button>
+                        )}
                         {isViewingOwnProfile ? (
                             <>
                                 <button onClick={() => onOpenShareProfileModal(profile)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Share profile"><i className="fas fa-share-alt"></i></button>
@@ -870,7 +952,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                 </div>
                 
                 {/* Main Content Area */}
-                <div className="relative px-4 lg:px-6 z-10">
+                <div className="relative px-4 lg:px-6 z-10 lg:pb-6">
                     {/* AVATAR SECTION */}
                     <section className="flex flex-col items-center text-center -mt-14 lg:-mt-20">
                         <div className={`relative w-32 h-32 rounded-full border-4 ${getProfileBorderColor()}`}>
@@ -909,13 +991,34 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                             </aside>
 
                             <div className="lg:col-span-2 space-y-4">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mt-6 lg:mt-0">Ratings</h2>
-                                <RatingsList />
+                                <div className="mt-6 lg:mt-0">
+                                    {isDesktop ? (
+                                        <>
+                                            <div className="flex bg-white dark:bg-gray-800 rounded-t-xl shadow-md border-b border-gray-200 dark:border-gray-700">
+                                                <TabButton tabId="ratings" label={`Ratings (${userRatings.length})`} isActive={activeTab === 'ratings'} onClick={() => setActiveTab('ratings')} />
+                                                {canViewStats && <TabButton tabId="stats" label="Stats" isActive={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />}
+                                            </div>
+                                            <div className="bg-white dark:bg-gray-800 rounded-b-xl shadow-md">
+                                                {activeTab === 'ratings' && (
+                                                    <div className="p-4">
+                                                        <RatingsList />
+                                                    </div>
+                                                )}
+                                                {activeTab === 'stats' && canViewStats && <ProfileStatsView userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={profile} levelRequirements={levelRequirements} pubScores={pubScores} />}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div>
+                                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Ratings</h2>
+                                            <RatingsList />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div className="pb-safe"></div>
+                <div className="pb-safe lg:pb-6"></div>
             </main>
         </div>
     </>

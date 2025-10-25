@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Avatar from './Avatar.jsx';
 import { formatTimeAgo, getRankData } from '../utils.js';
 import ConfirmationModal from './ConfirmationModal.jsx';
+import useIsDesktop from '../hooks/useIsDesktop.js';
 
 const MAX_COMMENT_LENGTH = 150;
 const MAX_SUBMIT_LENGTH = 500;
@@ -13,6 +14,7 @@ const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, on
     const [expandedComments, setExpandedComments] = useState(new Set());
     const [openMenuId, setOpenMenuId] = useState(null);
     const textareaRef = useRef(null);
+    const isDesktop = useIsDesktop();
 
     useEffect(() => {
         const handleClickOutside = () => setOpenMenuId(null);
@@ -202,7 +204,7 @@ const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, on
                                 value={newComment}
                                 onChange={handleCommentChange}
                                 onKeyDown={handleKeyDown}
-                                placeholder="Add a comment... Shift+Enter to send"
+                                placeholder={isDesktop ? "Add a comment... Shift+Enter to send" : "Add a comment..."}
                                 maxLength={MAX_SUBMIT_LENGTH}
                                 className="w-full px-3 py-1.5 bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
                                 rows="1"

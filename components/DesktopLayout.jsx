@@ -25,7 +25,6 @@ import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
-import ShopPage from './ShopPage.jsx';
 import SocialContentHub from './SocialContentHub.jsx';
 
 const DesktopLayout = (props) => {
@@ -59,6 +58,7 @@ const DesktopLayout = (props) => {
         deleteConfirmationInfo,
         // Stats props
         StatsPage,
+        ShopPage,
         settingsSubView, handleViewAdminPage,
         onOpenScoreExplanation,
         // "Suggest Edit" handlers
@@ -85,6 +85,8 @@ const DesktopLayout = (props) => {
         dbPubs,
         onViewSocialHub,
         isBackfilling, onBackfillCountryData,
+        isPriceByCountryModalOpen,
+        onSetIsPriceByCountryModalOpen,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -100,7 +102,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={() => handleBackFromFriendsList()}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={onFriendAction}
+                    onFriendAction={handleFriendAction}
                 />
             );
         }
@@ -233,7 +235,15 @@ const DesktopLayout = (props) => {
 
         if (activeTab === 'settings') {
             if (settingsSubView === 'stats') {
-                return <StatsPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onViewPub={handleSelectPub} userProfile={userProfile} onAdminDeleteComment={onAdminDeleteComment} />;
+                return <StatsPage 
+                    onBack={() => handleViewAdminPage(null)} 
+                    onViewProfile={handleViewProfile} 
+                    onViewPub={handleSelectPub} 
+                    userProfile={userProfile} 
+                    onAdminDeleteComment={onAdminDeleteComment} 
+                    isPriceByCountryModalOpen={props.isPriceByCountryModalOpen}
+                    onSetIsPriceByCountryModalOpen={props.onSetIsPriceByCountryModalOpen}
+                />;
             }
             if (settingsSubView === 'moderation') {
                 return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
@@ -349,7 +359,30 @@ const DesktopLayout = (props) => {
                         <ShopPage userProfile={userProfile} />
                     </div>
 
-                    {/* Stats, Moderation, Social Hub (now rendered from content panel) */}
+                    {/* Stats Page (when accessed from main nav) */}
+                    <div className={`absolute inset-0 ${activeTab === 'stats' ? '' : 'hidden'}`}>
+                        <StatsPage 
+                            onViewProfile={handleViewProfile} 
+                            onViewPub={handleSelectPub} 
+                            userProfile={userProfile} 
+                            onAdminDeleteComment={onAdminDeleteComment} 
+                            isPriceByCountryModalOpen={props.isPriceByCountryModalOpen}
+                            onSetIsPriceByCountryModalOpen={props.onSetIsPriceByCountryModalOpen}
+                        />
+                    </div>
+                    
+                    {/* Moderation Page (when accessed from main nav) */}
+                    <div className={`absolute inset-0 ${activeTab === 'moderation' ? '' : 'hidden'}`}>
+                        <ModerationPage 
+                            onViewProfile={handleViewProfile} 
+                            onDataRefresh={handleDataRefresh} 
+                            reportedComments={reportedComments} 
+                            onFetchReportedComments={onFetchReportedComments} 
+                            onResolveCommentReport={onResolveCommentReport} 
+                        />
+                    </div>
+
+                    {/* Stats, Moderation, Social Hub (when accessed from settings) */}
                     <div className={`absolute inset-0 ${activeTab === 'settings' && settingsSubView ? '' : 'hidden'}`}>
                         {renderContentPanel()}
                     </div>

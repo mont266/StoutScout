@@ -19,6 +19,8 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [imageToCrop, setImageToCrop] = useState(null);
 
+  const [validationError, setValidationError] = useState(null);
+
 
   // Dynamically create price labels based on the currency symbol
   const priceLabels = useMemo(() => {
@@ -53,7 +55,15 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
     setImageWasRemoved(false);
     setImageToCrop(null);
     setIsCropperOpen(false);
+    setValidationError(null); // Reset validation error on prop change
   }, [existingRating, existingImageUrl, existingIsPrivate]);
+
+  // Clear validation error once the form becomes valid
+  useEffect(() => {
+    if (price > 0 && quality > 0) {
+        setValidationError(null);
+    }
+  }, [price, quality]);
 
   const handlePriceInputChange = (e) => {
     const newPrice = e.target.value;
@@ -100,9 +110,12 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const buttonText = existingRating ? 'Update Rating' : 'Submit Rating';
+  const isFormInvalid = price === 0 || quality === 0;
+
+  const handleSubmit = () => {
     if (price > 0 && quality > 0) {
+      setValidationError(null); // Clear error on successful submit
       onSubmit({ price, quality, exact_price: parseFloat(priceInput) || null, message, imageFile, imageWasRemoved, is_private: isPrivate, guinnessZeroStatus });
       // Don't reset form on update, but do on initial submit
       if (!existingRating) {
@@ -115,11 +128,18 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
         handleRemoveImage();
       }
     } else {
-        alert("Please select a rating for both price and quality.");
+        let message = '';
+        if (price === 0 && quality === 0) {
+            message = "Please provide a rating for both Price and Quality.";
+        } else if (price === 0) {
+            message = "Please provide a Price rating.";
+        } else if (quality === 0) {
+            message = "Please provide a Quality rating.";
+        }
+        setValidationError(message);
     }
   };
 
-  const buttonText = existingRating ? 'Update Rating' : 'Submit Rating';
 
   return (
     <>
@@ -133,7 +153,7 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
             }}
         />
     )}
-    <form onSubmit={handleSubmit} className="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg space-y-4">
+    <form className="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg space-y-4">
       <fieldset>
         <legend className="block text-gray-700 dark:text-gray-300 mb-2">Price Rating: (Higher is cheaper)</legend>
         <StarRating
@@ -253,9 +273,13 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
           How was the pint of Guinness? Honest ratings help keep Stoutly accurate for everyone.
         </p>
         <button
-          type="submit"
-          disabled={price === 0 || quality === 0 || isSubmitting}
-          className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center"
+          type="button"
+          onClick={handleSubmit}
+          className={`w-full font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center ${
+            (isFormInvalid || isSubmitting) 
+              ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
+              : 'bg-amber-500 text-black hover:bg-amber-400'
+          }`}
         >
           {isSubmitting ? (
               <>
@@ -266,6 +290,11 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
               buttonText
           )}
         </button>
+        {validationError && (
+            <p className="text-red-500 text-sm text-center mt-2 animate-fade-in-down" role="alert">
+                {validationError}
+            </p>
+        )}
       </div>
     </form>
     </>

@@ -3,7 +3,7 @@ import { FilterType } from './types.js';
 import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
-import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, extractPostcode, normalizePubNameForComparison, isLondonPub } from './utils.js';
+import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, extractPostcode, normalizePubNameForComparison, isLondonPub, getMobileOS } from './utils.js';
 import { initializeAnalytics, trackEvent } from './analytics.js';
 
 import MobileLayout from './components/MobileLayout.jsx';
@@ -32,10 +32,13 @@ import ShareRatingModal from './components/ShareRatingModal.jsx';
 import ShareModal from './components/ShareModal.jsx';
 import ShareProfileModal from './components/ShareProfileModal.jsx';
 import TrophyUnlockedPopup from './components/TrophyUnlockedPopup.jsx';
+import AndroidBetaModal from './components/AndroidBetaModal.jsx';
+import AndroidWelcomeModal from './components/AndroidWelcomeModal.jsx';
 
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Geolocation } from '@capacitor/geolocation';
 
@@ -115,6 +118,10 @@ const App = () => {
   const [shareModalPub, setShareModalPub] = useState(null);
   const [shareProfileModalUser, setShareProfileModalUser] = useState(null);
   const [shareRatingModalRating, setShareRatingModalRating] = useState(null);
+  const [isAndroidBetaModalOpen, setIsAndroidBetaModalOpen] = useState(false);
+  const [isAndroidWelcomeModalOpen, setIsAndroidWelcomeModalOpen] = useState(false);
+  const [isProfileStatsModalOpen, setIsProfileStatsModalOpen] = useState(false);
+  const [isPriceByCountryModalOpen, setIsPriceByCountryModalOpen] = useState(false);
   
   const [levelRequirements, setLevelRequirements] = useState([]);
   
@@ -207,6 +214,7 @@ const App = () => {
   const initialSettingsLoad = useRef(true);
   const radiusUpdateTimeout = useRef(null);
   const didProcessUrlParams = useRef(false);
+  const watchCallbackRef = useRef();
   
   // --- CORE HANDLERS (Define these early to avoid reference errors) ---
 
@@ -292,11 +300,20 @@ const App = () => {
   // --- ANALYTICS & CONSENT ---
   
   useEffect(() => {
-    const storedConsent = localStorage.getItem('stoutly-cookie-consent');
-    if (storedConsent === 'granted') {
+    const isNative = Capacitor.isNativePlatform();
+    if (isNative) {
+      // On native platforms, analytics are considered first-party and consent
+      // is handled by the app store's terms and the privacy policy. No banner is needed.
       initializeAnalytics();
+      setCookieConsent('granted'); // Set a default state for native to hide the banner
+    } else {
+      // For web, check for explicit consent from localStorage.
+      const storedConsent = localStorage.getItem('stoutly-cookie-consent');
+      if (storedConsent === 'granted') {
+        initializeAnalytics();
+      }
+      setCookieConsent(storedConsent);
     }
-    setCookieConsent(storedConsent);
   }, []);
 
   const handleAcceptCookies = () => {
@@ -368,6 +385,28 @@ const App = () => {
     return () => {
       window.removeEventListener('pwa-install-prompt-ready', handleInstallPrompt);
     };
+  }, []);
+
+  useEffect(() => {
+    const hasSeenPrompt = localStorage.getItem('stoutly-android-beta-prompt-seen');
+    if (getMobileOS() === 'Android' && !Capacitor.isNativePlatform() && !hasSeenPrompt) {
+        trackEvent('view_android_beta_prompt');
+        setIsAndroidBetaModalOpen(true);
+    }
+  }, []);
+
+  // One-time welcome modal for native Android beta users
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+        const platform = Capacitor.getPlatform();
+        if (platform === 'android') {
+            const hasSeenWelcome = localStorage.getItem('stoutly-android-beta-welcome-seen');
+            if (!hasSeenWelcome) {
+                setIsAndroidWelcomeModalOpen(true);
+                trackEvent('view_android_beta_welcome');
+            }
+        }
+    }
   }, []);
 
   // Real-time user presence tracking
@@ -716,6 +755,68 @@ const App = () => {
     };
   }, [selectedPubId, viewedProfile, viewingFriendsOf, legalPageView, settingsSubView, handleBackFromProfileView, handleBackFromFriendsList]);
 
+  // Native Android back button handling
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+
+    let listener;
+    const addListener = async () => {
+      listener = await CapacitorApp.addListener('backButton', () => {
+        if (isPriceByCountryModalOpen) {
+          setIsPriceByCountryModalOpen(false);
+          return;
+        }
+        if (isProfileStatsModalOpen) {
+          setIsProfileStatsModalOpen(false);
+          return;
+        }
+        if (viewingFriendsOf) {
+          handleBackFromFriendsList();
+          return;
+        }
+        if (viewedProfile) {
+          handleBackFromProfileView();
+          return;
+        }
+        if (selectedPubId) {
+          setSelectedPubId(null);
+          return;
+        }
+        if (legalPageView || settingsSubView) {
+          setLegalPageView(null);
+          setSettingsSubView(null);
+          return;
+        }
+        if (activeTab !== 'map') {
+          handleTabChange('map');
+          return;
+        }
+        // If no state was handled, allow the default behavior (exiting the app).
+      });
+    };
+    addListener();
+
+    return () => {
+      if (listener) {
+        listener.remove();
+      }
+    };
+  }, [
+    activeTab,
+    selectedPubId,
+    viewedProfile,
+    viewingFriendsOf,
+    legalPageView,
+    settingsSubView,
+    handleTabChange,
+    handleBackFromProfileView,
+    handleBackFromFriendsList,
+    isProfileStatsModalOpen,
+    isPriceByCountryModalOpen,
+  ]);
+
   const handleSelectPub = useCallback(async (pub, highlightOptions = {}) => {
     const { highlightRatingId: ratingId, highlightCommentId: commentId } = highlightOptions;
     const pubId = pub ? pub.id : null;
@@ -1056,6 +1157,12 @@ const App = () => {
     profile.friends_count = friendCountResult.data || 0;
     if (friendCountResult.error) console.error("Error fetching friend count:", friendCountResult.error);
 
+    // FIX: Merge last_sign_in_at from the session user object.
+    // This property exists on auth.users, not the public profiles table.
+    if (currentSession.user) {
+        profile.last_sign_in_at = currentSession.user.last_sign_in_at;
+    }
+
     setUserProfile(profile);
 
     // If profile exists, fetch ratings.
@@ -1108,6 +1215,18 @@ const App = () => {
 
   // --- CORE APP LOGIC & HANDLERS ---
 
+  const handleJoinAndroidBeta = () => {
+    trackEvent('click_join_android_beta', { source: 'modal' });
+    localStorage.setItem('stoutly-android-beta-prompt-seen', 'true');
+    setIsAndroidBetaModalOpen(false);
+  };
+
+  const handleCloseAndroidBetaModal = () => {
+      trackEvent('dismiss_android_beta_prompt');
+      localStorage.setItem('stoutly-android-beta-prompt-seen', 'true');
+      setIsAndroidBetaModalOpen(false);
+  };
+
   const handleBackfillCountryData = useCallback(async () => {
     if (isBackfilling) return;
     setIsBackfilling(true);
@@ -1137,6 +1256,7 @@ const App = () => {
         setIsBackfilling(false);
     }
   }, [isBackfilling, handleDataRefresh]);
+
 
   const handleDonationSuccess = useCallback(async () => {
     trackEvent('donation_success_client');
@@ -1493,33 +1613,41 @@ const App = () => {
     return total / ratings.length;
   }, []);
 
+  // This effect keeps the callback in the ref up-to-date with the latest state values.
+  useEffect(() => {
+    watchCallbackRef.current = (position, error) => {
+        if (error) {
+            // This now uses the correct, up-to-date `realUserLocation` value from the closure of this effect.
+            if (realUserLocation === DEFAULT_LOCATION || error.code === 1) { // code 1 is PERMISSION_DENIED
+                const message = error.code === 1 ? "Location access was revoked." : "Could not get your location.";
+                setLocationError(message);
+            }
+            
+            if (error.code === 1) { // PERMISSION_DENIED
+                setLocationPermissionStatus('denied');
+            }
+            return;
+        }
+        if (position) {
+             if (!locationPermissionTracked.current) {
+                trackEvent('location_permission_result', { status: 'granted' });
+                locationPermissionTracked.current = true;
+            }
+            const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+            setRealUserLocation(newLocation);
+            setLocationError(null);
+        }
+    };
+  }); // No dependency array, runs on every render to keep callback fresh.
+
   useEffect(() => {
     let watcherId = null;
 
     if (locationPermissionStatus === 'granted') {
+        // The callback now just calls the function stored in the ref.
         const watchCallback = (position, error) => {
-            if (error) {
-                // Only show a generic "could not get location" error if we never successfully found the user.
-                // This prevents the error banner from flashing if watchPosition times out after an initial success.
-                // Always show an error if permission is explicitly revoked.
-                if (realUserLocation === DEFAULT_LOCATION || error.code === 1) { // code 1 is PERMISSION_DENIED
-                    const message = error.code === 1 ? "Location access was revoked." : "Could not get your location.";
-                    setLocationError(message);
-                }
-                
-                if (error.code === 1) { // PERMISSION_DENIED
-                    setLocationPermissionStatus('denied');
-                }
-                return;
-            }
-            if (position) {
-                 if (!locationPermissionTracked.current) {
-                    trackEvent('location_permission_result', { status: 'granted' });
-                    locationPermissionTracked.current = true;
-                }
-                const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-                setRealUserLocation(newLocation);
-                setLocationError(null);
+            if (watchCallbackRef.current) {
+                watchCallbackRef.current(position, error);
             }
         };
 
@@ -1537,7 +1665,7 @@ const App = () => {
             Geolocation.clearWatch({ id: watcherId });
         }
     };
-  }, [locationPermissionStatus, realUserLocation]);
+  }, [locationPermissionStatus]); // Correct dependency array. No more loop.
 
   useEffect(() => {
     // The user's location is always their real location now.
@@ -1861,7 +1989,7 @@ const App = () => {
 
     // 3. Decrement review count in profile
     setUserProfile(prev => ({ ...prev, reviews: Math.max(0, (prev.reviews || 1) - 1) }));
-    // --- End Optimistic Updates ---
+    // --- End optimistic updates ---
 
     try {
         // Perform the actual deletions in the background.
@@ -2231,13 +2359,17 @@ const App = () => {
               onDeleteRating={handleDeleteRating}
               onOpenShareProfileModal={(user) => setShareProfileModalUser(user)}
               onNavigateToSettings={handleTabChange}
+              pubScores={pubScores}
+              isStatsModalOpen={isProfileStatsModalOpen}
+              onSetIsStatsModalOpen={setIsProfileStatsModalOpen}
           />
       );
   }, [
       viewedProfile, userProfile, viewedRatings, userRatings, userTrophies, allTrophies,
       handleBackFromProfileView, handleSelectPub, levelRequirements, 
       handleProfileUpdate, friendships, handleFriendRequest, 
-      handleFriendAction, handleViewFriends, handleDeleteRating, handleTabChange
+      handleFriendAction, handleViewFriends, handleDeleteRating, handleTabChange,
+      pubScores, isProfileStatsModalOpen,
   ]);
   
   const handleAddPubClick = () => {
@@ -2829,10 +2961,33 @@ const App = () => {
       onDonationSuccess: handleDonationSuccess,
       isBackfilling,
       onBackfillCountryData: handleBackfillCountryData,
+      isPriceByCountryModalOpen,
+      onSetIsPriceByCountryModalOpen: setIsPriceByCountryModalOpen,
   };
 
   const renderModals = () => (
     <>
+        {isAndroidWelcomeModalOpen && (
+            <AndroidWelcomeModal
+                onClose={() => {
+                    localStorage.setItem('stoutly-android-beta-welcome-seen', 'true');
+                    setIsAndroidWelcomeModalOpen(false);
+                    trackEvent('dismiss_android_beta_welcome');
+                }}
+                onGoToFeedback={() => {
+                    localStorage.setItem('stoutly-android-beta-welcome-seen', 'true');
+                    setIsAndroidWelcomeModalOpen(false);
+                    handleTabChange('settings', 'feedback');
+                    trackEvent('click_go_to_feedback_from_welcome');
+                }}
+            />
+        )}
+        {isAndroidBetaModalOpen && (
+            <AndroidBetaModal 
+                onJoin={handleJoinAndroidBeta} 
+                onClose={handleCloseAndroidBetaModal} 
+            />
+        )}
         {isCoasterWelcomeModalOpen && <CoasterWelcomeModal onClose={() => setIsCoasterWelcomeModalOpen(false)} />}
         {shareModalPub && <ShareModal pub={shareModalPub} onClose={() => setShareModalPub(null)} />}
         {shareProfileModalUser && <ShareProfileModal user={shareProfileModalUser} onClose={() => setShareProfileModalUser(null)} />}
@@ -2922,7 +3077,7 @@ const App = () => {
         )}
         {renderModals()}
         {AppContent}
-        {cookieConsent === null && (
+        {cookieConsent === null && !Capacitor.isNativePlatform() && (
           <CookieConsentBanner
             onAccept={handleAcceptCookies}
             onDecline={handleDeclineCookies}

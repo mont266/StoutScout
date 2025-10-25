@@ -88,7 +88,7 @@ const MobileLayout = (props) => {
         locationPermissionStatus, onRequestPermission,
         mapTileRefreshKey,
         // Community props
-        CommunityPage, friendships, userLikes, onToggleLike, onFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
+        CommunityPage, friendships, userLikes, onToggleLike, onFriendRequest, onFriendAction,
         // Friends List props
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
         deleteConfirmationInfo,
@@ -120,13 +120,16 @@ const MobileLayout = (props) => {
         dbPubs,
         onViewSocialHub,
         isDesktop,
+        isPriceByCountryModalOpen,
+        onSetIsPriceByCountryModalOpen,
+        allRatings, communitySubTab, setCommunitySubTab
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
     const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
     return (
-        <div className="w-full max-w-md mx-auto h-dvh flex flex-col overflow-hidden">
+        <div className="mobile-layout-container w-full max-w-md mx-auto h-full flex flex-col overflow-hidden">
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
             {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(false)} />}
@@ -158,7 +161,7 @@ const MobileLayout = (props) => {
                             onViewProfile={handleViewProfile}
                             friendships={friendships}
                             onFriendRequest={onFriendRequest}
-                            onFriendAction={handleFriendAction}
+                            onFriendAction={onFriendAction}
                             userLikes={userLikes}
                             onToggleLike={onToggleLike}
                             onLoginRequest={() => setIsAuthOpen(true)}
@@ -183,7 +186,15 @@ const MobileLayout = (props) => {
                     )}
                     {activeTab === 'settings' && (() => {
                         if (settingsSubView === 'stats') {
-                            return <StatsPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onViewPub={handleSelectPub} userProfile={userProfile} onAdminDeleteComment={onAdminDeleteComment} />;
+                            return <StatsPage 
+                                onBack={() => handleViewAdminPage(null)} 
+                                onViewProfile={handleViewProfile} 
+                                onViewPub={handleSelectPub} 
+                                userProfile={userProfile} 
+                                onAdminDeleteComment={onAdminDeleteComment} 
+                                isPriceByCountryModalOpen={props.isPriceByCountryModalOpen}
+                                onSetIsPriceByCountryModalOpen={props.onSetIsPriceByCountryModalOpen}
+                            />;
                         }
                         if (settingsSubView === 'moderation') {
                             return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
@@ -361,7 +372,7 @@ const MobileLayout = (props) => {
                             isLoading={isFetchingFriendsList}
                             onBack={() => handleBackFromFriendsList()}
                             onViewProfile={handleViewProfile}
-                            onFriendAction={handleFriendAction}
+                            onFriendAction={onFriendAction}
                         />
                     )}
                 </div>

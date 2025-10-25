@@ -10,6 +10,7 @@ import useIsDesktop from '../hooks/useIsDesktop.js';
 import ContactModal from './ContactModal.jsx';
 import FeedbackModal from './FeedbackModal.jsx';
 import DonationForm from './DonationForm.jsx';
+import { Capacitor } from '@capacitor/core';
 
 
 // This component is no longer a modal, but a full page for settings
@@ -199,6 +200,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   const displayUnit = isKm ? 'km' : 'mi';
   
   const mobileOS = getMobileOS();
+  const isAndroidWebApp = mobileOS === 'Android' && !Capacitor.isNativePlatform();
 
   const renderInstallButton = () => {
     const isDesktop = useIsDesktop();
@@ -208,10 +210,10 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
       return (
         <button
           onClick={handleInstallClick}
-          className="w-full flex items-center justify-center space-x-2 bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
+          className="w-full flex items-center justify-center space-x-2 bg-black dark:bg-white text-white dark:text-black font-bold py-3 px-4 rounded-lg hover:opacity-80 transition-opacity"
         >
           <i className="fas fa-download"></i>
-          <span>Install App</span>
+          <span>Install PWA</span>
         </button>
       );
     }
@@ -231,15 +233,28 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   };
   
   const installButton = renderInstallButton();
+  const androidBetaButton = isAndroidWebApp ? (
+    <a
+      href="https://play.google.com/apps/internaltest/4700428345964627145"
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => trackEvent('click_join_android_beta', { source: 'settings' })}
+      className="w-full flex items-center justify-center space-x-2 bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
+    >
+      <i className="fab fa-android"></i>
+      <span>Join Android Beta</span>
+    </a>
+  ) : null;
 
   return (
     <>
       {isContactModalOpen && <ContactModal userProfile={userProfile} session={session} onClose={() => setIsContactModalOpen(false)} />}
       {isFeedbackModalOpen && <FeedbackModal userProfile={userProfile} onClose={() => setIsFeedbackModalOpen(false)} />}
       <div className="p-4 sm:p-6 space-y-8">
-          {installButton && (
-            <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
+          {(installButton || androidBetaButton) && (
+            <div className="border-b border-gray-200 dark:border-gray-700 pb-6 space-y-3">
               {installButton}
+              {androidBetaButton}
             </div>
           )}
 
@@ -494,36 +509,30 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white px-2">Support Stoutly</h3>
               <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                      If you enjoy using Stoutly, please consider supporting its development. Every contribution helps keep the app running and ad-free, and you'll earn an exclusive trophy!
+                      If you enjoy using Stoutly, please consider supporting its development. Every contribution helps keep the app running and ad-free. Logged-in users will earn an exclusive trophy!
                   </p>
-                  {userProfile ? (
-                    <DonationForm 
-                        userProfile={userProfile}
-                        setAlertInfo={setAlertInfo}
-                        onSuccess={() => {
-                            onDataRefresh();
-                            setConfettiState({
-                                active: true,
-                                recycle: true,
-                                opacity: 1,
-                                key: crypto.randomUUID(),
-                                numberOfPieces: 300,
-                            });
-                        }}
-                        userTrophies={userTrophies}
-                        allTrophies={allTrophies}
-                    />
-                  ) : (
-                    <div className="text-center p-4 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-gray-600 dark:text-gray-400 mb-3">Please sign in to support Stoutly and earn your trophy.</p>
-                      <button onClick={onLoginRequest} className="bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors">Sign In</button>
-                    </div>
-                  )}
+                  <DonationForm 
+                      userProfile={userProfile}
+                      setAlertInfo={setAlertInfo}
+                      onSuccess={() => {
+                          onDataRefresh();
+                          setConfettiState({
+                              active: true,
+                              recycle: true,
+                              opacity: 1,
+                              key: crypto.randomUUID(),
+                              numberOfPieces: 300,
+                          });
+                      }}
+                      userTrophies={userTrophies}
+                      allTrophies={allTrophies}
+                      onLoginRequest={onLoginRequest}
+                  />
               </div>
           </div>
 
           {/* Support & Feedback Section */}
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-2">
+          <div id="feedback-section" className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-2">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white px-2">Support &amp; Feedback</h3>
               <button
                 onClick={() => setIsContactModalOpen(true)}
@@ -624,6 +633,11 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                   </button>
                 </div>
               )}
+          </div>
+          
+          {/* Version Number */}
+          <div className="text-center text-xs text-gray-400 dark:text-gray-500 pt-4">
+            Version V1.32
           </div>
       </div>
     </>

@@ -30,7 +30,6 @@ const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFrien
         setLocalActionUserId(targetUser.action_user_id);
     }, [targetUser]);
     
-    // Optimistic updates
     const handleAddFriend = async () => {
         await onFriendRequest(targetUser.id);
         setStatus('pending');
@@ -64,7 +63,6 @@ const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFrien
         }
     }
     
-    // Default: no friendship, or a declined one
     return <button onClick={handleAddFriend} className="bg-blue-500 text-white font-bold py-2 px-3 rounded-lg hover:bg-blue-600 transition-colors text-xs"><i className="fas fa-user-plus"></i> Add</button>;
 };
 
@@ -94,7 +92,7 @@ const UserSearch = ({ onBack, onViewProfile, userProfile, onFriendRequest, onFri
                 setResults(data);
             }
             setIsSearching(false);
-        }, 300); // 300ms debounce
+        }, 300);
 
         return () => clearTimeout(handler);
     }, [searchTerm]);
@@ -152,8 +150,8 @@ const UserSearch = ({ onBack, onViewProfile, userProfile, onFriendRequest, onFri
 };
 
 
-const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, userProfile, friendships, onFriendRequest, onFriendAction, allRatings, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs }) => {
-    const [view, setView] = useState('feed'); // 'feed' or 'search'
+const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, userProfile, friendships, onFriendRequest, onFriendAction, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs }) => {
+    const [view, setView] = useState('feed');
     const [ratings, setRatings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -163,7 +161,6 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
     const loaderRef = useRef(null);
     const filterMenuRef = useRef(null);
     
-    // State for pull-to-refresh
     const [pullPosition, setPullPosition] = useState(0);
     const [isPulling, setIsPulling] = useState(false);
     const touchStartRef = useRef(0);
@@ -195,8 +192,35 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
             });
 
             if (rpcError) throw rpcError;
+            
+            let finalRatingsData = [];
+            if (data && data.length > 0) {
+                const ratingIds = data.map(r => r.rating_id);
+                
+                const { data: commentsData, error: commentsError } = await supabase
+                    .from('comments')
+                    .select('rating_id', { count: 'exact', head: false })
+                    .in('rating_id', ratingIds);
 
-            const formattedData = data.map(r => ({
+                if (commentsError) {
+                    console.warn("Could not fetch comment counts for friends feed, using potentially stale data.", commentsError);
+                    finalRatingsData = data;
+                } else {
+                    const countsMap = new Map();
+                    for (const comment of commentsData) {
+                        countsMap.set(comment.rating_id, (countsMap.get(comment.rating_id) || 0) + 1);
+                    }
+                    
+                    finalRatingsData = data.map(r => ({
+                        ...r,
+                        comment_count: countsMap.get(r.rating_id) || 0,
+                    }));
+                }
+            } else {
+                finalRatingsData = data || [];
+            }
+
+            const formattedData = finalRatingsData.map(r => ({
                 id: r.rating_id, created_at: r.created_at, quality: r.quality, price: r.price,
                 exact_price: r.exact_price, image_url: r.image_url, like_count: r.like_count,
                 comment_count: r.comment_count,
@@ -210,7 +234,6 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                 user: { id: r.uploader_id, username: r.uploader_username, avatar_id: r.uploader_avatar_id, level: r.uploader_level }
             }));
             
-            // Filter out the current user's own ratings from the feed.
             const ratingsFromFriendsOnly = formattedData.filter(r => r.user.id !== userProfile.id);
 
             setRatings(prev => {
@@ -228,7 +251,6 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         }
     }, [hasFriends, filter, userProfile]);
     
-    // Optimistically update the feed's local state for likes
     const handleFeedToggleLike = (ratingToToggle) => {
         setRatings(currentRatings => 
             currentRatings.map(rating => {
@@ -245,14 +267,13 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         onToggleLike(ratingToToggle);
     };
 
-    // Update comment count based on the reliable list from the parent
     const handleFeedAddComment = async (ratingId, content) => {
         const newCommentsList = await onAddComment(ratingId, content);
         if (newCommentsList) {
             setRatings(currentRatings =>
                 currentRatings.map(rating => {
                     if (rating.id === ratingId) {
-                        return { ...rating, comment_count: newCommentsList.length };
+                        return { ...rating, comment_count: (rating.comment_count || 0) + 1 };
                     }
                     return rating;
                 })
@@ -260,14 +281,13 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         }
     };
 
-    // Update comment count based on the reliable list from the parent
     const handleFeedDeleteComment = async (commentId, ratingId) => {
         const newCommentsList = await onDeleteComment(commentId, ratingId);
         if (newCommentsList !== null) {
             setRatings(currentRatings =>
                 currentRatings.map(rating => {
                     if (rating.id === ratingId) {
-                        return { ...rating, comment_count: newCommentsList.length };
+                        return { ...rating, comment_count: Math.max(0, (rating.comment_count || 1) - 1) };
                     }
                     return rating;
                 })
@@ -283,7 +303,6 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         fetchRatings(1);
     }, [fetchRatings, loading]);
 
-    // Re-fetch from page 1 when the filter changes
     useEffect(() => {
         setPage(1);
         setHasMore(true);
@@ -291,8 +310,6 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         fetchRatings(1);
     }, [fetchRatings]);
 
-
-    // Infinite scroll observer
     useEffect(() => {
         if (!hasFriends) return;
         const observer = new IntersectionObserver(
@@ -310,12 +327,10 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         };
     }, [loading, hasMore, hasFriends]);
 
-    // Fetch more data when page changes
     useEffect(() => {
         if (page > 1) fetchRatings(page);
     }, [page, fetchRatings]);
     
-    // Close filter menu on outside click
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
@@ -331,7 +346,6 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         setIsFilterMenuOpen(false);
     };
 
-     // Pull-to-refresh handlers
     const handleTouchStart = (e) => {
         if (containerRef.current && containerRef.current.scrollTop === 0) {
             setIsPulling(true);

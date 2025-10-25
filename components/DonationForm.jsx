@@ -22,7 +22,7 @@ const CARD_ELEMENT_OPTIONS = {
     },
 };
 
-const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allTrophies }) => {
+const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allTrophies, onLoginRequest }) => {
     const stripe = useStripe();
     const elements = useElements();
     
@@ -34,7 +34,8 @@ const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allT
     const [showPaymentDetails, setShowPaymentDetails] = useState(false);
     const hasTrackedCustomInput = useRef(false);
 
-    const currencyInfo = getCurrencyInfo(userProfile) || { symbol: '£', code: 'GBP' };
+    // Fix: Pass an empty object if userProfile is null to prevent errors.
+    const currencyInfo = getCurrencyInfo(userProfile || {}) || { symbol: '£', code: 'GBP' };
     const presetAmounts = currencyInfo.code === 'EUR' ? [100, 300, 500] : [100, 300, 500];
 
     const handleAmountChange = (newAmount) => {
@@ -80,20 +81,23 @@ const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allT
 
         setIsLoading(true);
         setError(null);
-        trackEvent('begin_checkout', { value: amount / 100, currency: currencyInfo.code });
+        trackEvent('begin_checkout', { value: amount / 100, currency: currencyInfo.code, is_anonymous: !userProfile });
 
         try {
-            // Manually get the session to ensure the Authorization header is set.
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                throw new Error('You must be signed in to make a donation.');
+            let session = null;
+            if (userProfile) {
+                const { data } = await supabase.auth.getSession();
+                session = data.session;
+                if (!session) {
+                    throw new Error('You appear to be logged out. Please sign in again to make an authenticated donation.');
+                }
             }
 
-            const functionOptions = {
+            const functionOptions = userProfile && session ? {
                 headers: {
                     Authorization: `Bearer ${session.access_token}`,
                 },
-            };
+            } : {};
 
             // 1. Create a Payment Intent on the server
             const { data, error: intentError } = await supabase.functions.invoke('create-payment-intent', {
@@ -101,7 +105,6 @@ const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allT
                 body: {
                     amount,
                     currency: currencyInfo.code.toLowerCase(),
-                    userId: userProfile.id
                 },
             });
 
@@ -113,52 +116,62 @@ const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allT
                 payment_method: {
                     card: elements.getElement(CardElement),
                     billing_details: {
-                        name: userProfile.username,
+                        name: userProfile?.username || 'Anonymous Supporter',
                     },
                 },
             });
             
             if (paymentError) {
-                // Check for specific decline codes if needed
                 if (paymentError.code === 'card_declined') {
                      throw new Error(`Your card was declined. Reason: ${paymentError.decline_code}`);
                 }
                 throw new Error(paymentError.message);
             }
 
-            // 3. Verify on the server and award the trophy
-            const { error: verifyError } = await supabase.functions.invoke('verify-donation-and-award-trophy', {
-                ...functionOptions,
-                body: { 
-                    paymentIntentId: paymentIntent.id
-                }
-            });
+            // 3. Verify on the server and award the trophy (ONLY IF LOGGED IN)
+            if (userProfile && session) {
+                const { error: verifyError } = await supabase.functions.invoke('verify-donation-and-award-trophy', {
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                    body: { 
+                        paymentIntentId: paymentIntent.id
+                    }
+                });
 
-            if (verifyError) throw new Error(verifyError.message);
+                if (verifyError) throw new Error(verifyError.message);
+            }
 
             // 4. Success!
             setSucceeded(true);
-            trackEvent('purchase', { transaction_id: paymentIntent.id, value: amount / 100, currency: currencyInfo.code });
-            
-            const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
-            const alreadyHasPatronTrophy = userTrophies && userTrophies.some(t => t.trophy_id === PATRON_TROPHY_ID);
+            trackEvent('purchase', { transaction_id: paymentIntent.id, value: amount / 100, currency: currencyInfo.code, is_anonymous: !userProfile });
             
             onSuccess(); // Trigger confetti and data refresh
 
-            if (alreadyHasPatronTrophy) {
-                setAlertInfo({
+            if (userProfile) {
+                const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
+                const alreadyHasPatronTrophy = userTrophies && userTrophies.some(t => t.trophy_id === PATRON_TROPHY_ID);
+                
+                if (alreadyHasPatronTrophy) {
+                    setAlertInfo({
+                        isOpen: true,
+                        title: 'Thank You!',
+                        message: "Your continued support means the world. Thank you for your donation and for helping us keep Stoutly running and ad-free. Cheers!",
+                        theme: 'success',
+                    });
+                } else {
+                    setAlertInfo({
+                        isOpen: true,
+                        title: 'Trophy Unlocked!',
+                        message: "You've unlocked the 'Stoutly Patron' trophy! Thank you so much for your donation and for supporting the development of Stoutly.",
+                        theme: 'success',
+                        customIcon: 'fa-hand-holding-heart',
+                    });
+                }
+            } else {
+                 setAlertInfo({
                     isOpen: true,
                     title: 'Thank You!',
-                    message: "Your continued support means the world. Thank you for your donation and for helping us keep Stoutly running and ad-free. Cheers!",
+                    message: "Your generous support helps keep Stoutly running and ad-free. Cheers!",
                     theme: 'success',
-                });
-            } else {
-                setAlertInfo({
-                    isOpen: true,
-                    title: 'Trophy Unlocked!',
-                    message: "You've unlocked the 'Stoutly Patron' trophy! Thank you so much for your donation and for supporting the development of Stoutly.",
-                    theme: 'success',
-                    customIcon: 'fa-hand-holding-heart',
                 });
             }
 
@@ -179,6 +192,16 @@ const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allT
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
+            {!userProfile && (
+                <div className="p-3 mb-4 text-center bg-amber-100 dark:bg-amber-900/50 border border-amber-200 dark:border-amber-800/60 rounded-lg">
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                        <i className="fas fa-info-circle mr-2"></i>
+                        You are donating anonymously. To earn the 'Stoutly Patron' trophy, please{' '}
+                        <button type="button" onClick={onLoginRequest} className="font-bold underline hover:text-amber-600 dark:hover:text-amber-100">sign in or create an account</button>
+                        {' '}first.
+                    </p>
+                </div>
+            )}
             <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Choose an amount

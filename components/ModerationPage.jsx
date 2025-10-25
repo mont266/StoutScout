@@ -21,15 +21,18 @@ const TabButton = ({ label, count, isActive, onClick }) => (
 );
 
 const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments, onFetchReportedComments, onResolveCommentReport }) => {
-    const [activeTab, setActiveTab] = useState('users'); // 'users', 'images', 'comments', 'edits'
+    const [activeTab, setActiveTab] = useState('users'); // 'users', 'reports', 'ai'
     const [flaggedUsers, setFlaggedUsers] = useState([]);
     const [reportedImages, setReportedImages] = useState([]);
     const [suggestedEdits, setSuggestedEdits] = useState([]);
-    const [loading, setLoading] = useState({ users: true, images: true, comments: true, edits: true });
-    const [error, setError] = useState({ users: null, images: null, comments: null, edits: null });
-    const [processingActionId, setProcessingActionId] = useState(null); // stores user or report ID being processed
+    const [aiFlags, setAiFlags] = useState([]);
+    const [loading, setLoading] = useState({ users: true, images: true, comments: true, edits: true, ai: true });
+    const [error, setError] = useState({ users: null, images: null, comments: null, edits: null, ai: null });
+    const [processingActionId, setProcessingActionId] = useState(null);
     const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [alertInfo, setAlertInfo] = useState({ isOpen: false });
+    const [aiLastRun, setAiLastRun] = useState(null);
+
 
     const fetchFlaggedUsers = useCallback(async () => {
         setLoading(p => ({ ...p, users: true }));
@@ -98,35 +101,164 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments
         setLoading(p => ({ ...p, edits: false }));
     }, []);
 
+    const fetchAiFlags = useCallback(async () => {
+        setLoading(p => ({ ...p, ai: true }));
+        setError(p => ({ ...p, ai: null }));
+        trackEvent('refresh_moderation_list', { type: 'ai_flags' });
+    
+        try {
+            // Fetch the timestamp of the most recently created flag (pending or resolved)
+            const { data: lastFlag, error: lastFlagError } = await supabase
+                .from('ai_moderation_flags')
+                .select('created_at')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (lastFlagError && lastFlagError.code !== 'PGRST116') { // Ignore "no rows found" error
+                console.error('Error fetching last AI flag timestamp:', lastFlagError);
+            } else if (lastFlag) {
+                setAiLastRun(lastFlag.created_at);
+            }
+
+            // 1. Fetch all pending flags from the base table
+            const { data: flags, error: flagsError } = await supabase
+                .from('ai_moderation_flags')
+                .select('*')
+                .eq('status', 'pending')
+                .order('created_at', { ascending: true });
+    
+            if (flagsError) throw flagsError;
+    
+            if (!flags || flags.length === 0) {
+                setAiFlags([]);
+                setLoading(p => ({ ...p, ai: false }));
+                return;
+            }
+    
+            // 2. Separate flags by content type to fetch related data
+            const commentFlagContentIds = flags.filter(f => f.content_type === 'comment').map(f => f.content_id);
+            const imageFlagContentIds = flags.filter(f => f.content_type === 'image').map(f => f.content_id);
+    
+            const promises = [];
+    
+            // 3. Fetch all related comments if any exist
+            if (commentFlagContentIds.length > 0) {
+                promises.push(
+                    supabase
+                        .from('comments')
+                        .select('id, content, user:user_id(id, username, avatar_id)')
+                        .in('id', commentFlagContentIds)
+                );
+            } else {
+                promises.push(Promise.resolve({ data: [], error: null }));
+            }
+    
+            // 4. Fetch all related ratings if any exist
+            if (imageFlagContentIds.length > 0) {
+                promises.push(
+                    supabase
+                        .from('ratings')
+                        .select('id, image_url, user:user_id(id, username, avatar_id)')
+                        .in('id', imageFlagContentIds)
+                );
+            } else {
+                promises.push(Promise.resolve({ data: [], error: null }));
+            }
+    
+            const [commentsResult, ratingsResult] = await Promise.all(promises);
+    
+            if (commentsResult.error) throw commentsResult.error;
+            if (ratingsResult.error) throw ratingsResult.error;
+    
+            // 5. Create lookup maps for efficient data merging
+            const commentsMap = new Map((commentsResult.data || []).map(c => [c.id, c]));
+            const ratingsMap = new Map((ratingsResult.data || []).map(r => [r.id, r]));
+    
+            // 6. Merge the fetched data into the final flag objects
+            const enrichedFlags = flags.map(flag => {
+                if (flag.content_type === 'comment') {
+                    const comment = commentsMap.get(flag.content_id);
+                    return {
+                        ...flag,
+                        comment_content: comment?.content,
+                        author: comment?.user,
+                    };
+                }
+                if (flag.content_type === 'image') {
+                    const rating = ratingsMap.get(flag.content_id);
+                    return {
+                        ...flag,
+                        image_url: rating?.image_url,
+                        author: rating?.user,
+                    };
+                }
+                return flag; // Fallback for any other type
+            }).filter(f => f.author); // Filter out any flags where the original content was deleted
+    
+            setAiFlags(enrichedFlags);
+    
+        } catch (err) {
+            console.error('Error fetching AI flags:', err);
+            setError(p => ({ ...p, ai: 'Could not load AI-flagged content. ' + err.message }));
+            setAiFlags([]);
+        } finally {
+            setLoading(p => ({ ...p, ai: false }));
+        }
+    }, []);
 
     useEffect(() => {
-        if (activeTab === 'users') fetchFlaggedUsers();
-        if (activeTab === 'images') fetchReportedImages();
-        if (activeTab === 'edits') fetchSuggestedEdits();
-        if (activeTab === 'comments') {
+        if (activeTab === 'users') {
+            fetchFlaggedUsers();
+        }
+        if (activeTab === 'reports') {
+            fetchReportedImages();
             setLoading(p => ({ ...p, comments: true }));
             onFetchReportedComments().finally(() => setLoading(p => ({ ...p, comments: false })));
+            fetchSuggestedEdits();
         }
-    }, [activeTab, fetchFlaggedUsers, fetchReportedImages, fetchSuggestedEdits, onFetchReportedComments]);
+        if (activeTab === 'ai') {
+            fetchAiFlags();
+        }
+    }, [activeTab, fetchFlaggedUsers, fetchReportedImages, fetchSuggestedEdits, onFetchReportedComments, fetchAiFlags]);
 
     const handleRefresh = () => {
         if (activeTab === 'users') fetchFlaggedUsers();
-        if (activeTab === 'images') fetchReportedImages();
-        if (activeTab === 'edits') fetchSuggestedEdits();
-        if (activeTab === 'comments') onFetchReportedComments();
+        if (activeTab === 'reports') {
+            fetchReportedImages();
+            onFetchReportedComments();
+            fetchSuggestedEdits();
+        }
+        if (activeTab === 'ai') fetchAiFlags();
     };
     
+    const handleResolveAiFlag = async (flag, action) => {
+        setProcessingActionId(flag.id);
+        trackEvent('resolve_ai_flag', { flag_id: flag.id, action });
+
+        const { error: functionError } = await supabase.functions.invoke('resolve-ai-flag', {
+            body: { flag_id: flag.id, action }
+        });
+
+        if (functionError) {
+            setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Failed to resolve AI flag: ${functionError.context?.responseJson?.error || functionError.message}`, theme: 'error'});
+        } else {
+            setAiFlags(current => current.filter(f => f.id !== flag.id));
+            if (action === 'remove' && onDataRefresh) {
+                onDataRefresh();
+            }
+        }
+        setProcessingActionId(null);
+    };
+
     const handleApproveEdit = async (suggestionId) => {
         setProcessingActionId(suggestionId);
         try {
-            const { error } = await supabase.rpc('approve_suggestion', {
-                p_suggestion_id: suggestionId,
-            });
+            const { error } = await supabase.rpc('approve_suggestion', { p_suggestion_id: suggestionId });
             if (error) throw new Error(error.message);
-
             setAlertInfo({ isOpen: true, title: 'Success', message: 'Pub edit approved and applied successfully.', theme: 'success' });
             setSuggestedEdits(prev => prev.filter(s => s.id !== suggestionId));
-            onDataRefresh(); // Refresh all app data to reflect changes
+            onDataRefresh();
         } catch (error) {
             console.error('Failed to approve edit:', error);
             setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Failed to approve edit: ${error.message}`, theme: 'error' });
@@ -138,11 +270,8 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments
     const handleRejectEdit = async (suggestionId) => {
         setProcessingActionId(suggestionId);
         try {
-            const { error } = await supabase.rpc('reject_suggestion', {
-                p_suggestion_id: suggestionId,
-            });
+            const { error } = await supabase.rpc('reject_suggestion', { p_suggestion_id: suggestionId });
             if (error) throw new Error(error.message);
-
             setAlertInfo({ isOpen: true, title: 'Success', message: 'Suggestion has been rejected.', theme: 'success' });
             setSuggestedEdits(prev => prev.filter(s => s.id !== suggestionId));
         } catch (error) {
@@ -439,29 +568,79 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments
         );
     };
 
-    const isLoading = loading[activeTab];
+    const renderAiFlags = () => {
+        if (loading.ai) return <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-400 mx-auto mt-8"></div>;
+        if (error.ai) return <div className="text-center text-red-500 p-6 bg-red-500/10 rounded-lg">{error.ai}</div>;
+        if (aiFlags.length === 0) return (
+            <>
+                {aiLastRun && (
+                    <div className="text-center text-xs text-gray-500 dark:text-gray-400 mb-4 p-2 bg-gray-100 dark:bg-gray-900/50 rounded-md">
+                        <i className="fas fa-robot mr-2"></i>
+                        Last flagged content was found: {formatTimeAgo(new Date(aiLastRun).getTime())}
+                    </div>
+                )}
+                <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <i className="fas fa-robot fa-2x mb-2 text-green-500"></i>
+                    <p className="font-semibold">All clear!</p>
+                    <p className="text-sm">The AI has not flagged any new content.</p>
+                </div>
+            </>
+        );
+
+        return (
+            <>
+                {aiLastRun && (
+                    <div className="text-center text-xs text-gray-500 dark:text-gray-400 mb-4 p-2 bg-gray-100 dark:bg-gray-900/50 rounded-md">
+                        <i className="fas fa-robot mr-2"></i>
+                        Last flagged content was found: {formatTimeAgo(new Date(aiLastRun).getTime())}
+                    </div>
+                )}
+                <ul className="space-y-4">
+                    {aiFlags.map(flag => (
+                        <li key={flag.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg shadow-md border-l-4 border-red-500 flex flex-col sm:flex-row">
+                            {flag.content_type === 'image' && flag.image_url && (
+                                <img src={flag.image_url} alt="Flagged content" className="w-full sm:w-32 h-32 object-cover flex-shrink-0 rounded-t-lg sm:rounded-l-lg sm:rounded-t-none" />
+                            )}
+                            <div className="p-3 flex-grow">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Flagged {formatTimeAgo(new Date(flag.created_at).getTime())}</p>
+                                <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/50 rounded-md">
+                                    <p className="font-bold text-red-600 dark:text-red-400">AI Reason: {flag.reason} ({Math.round(flag.confidence_score * 100)}%)</p>
+                                    <p className="text-sm italic text-red-700 dark:text-red-300 mt-1">"{flag.detailed_explanation}"</p>
+                                </div>
+                                <div className="mt-2 text-sm">
+                                    <p>Author: <button onClick={() => onViewProfile(flag.author.id, 'moderation_ai')} className="font-semibold hover:underline text-amber-600 dark:text-amber-400">{flag.author.username}</button></p>
+                                    {flag.content_type === 'comment' && (
+                                        <p className="font-mono text-sm text-gray-700 dark:text-gray-200 mt-1 break-words bg-gray-100 dark:bg-gray-700 p-2 rounded">"{flag.comment_content}"</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex-shrink-0 p-3 flex sm:flex-col items-center justify-around sm:justify-center gap-2 border-t sm:border-t-0 sm:border-l border-gray-200 dark:border-gray-700">
+                                <button 
+                                    onClick={() => handleResolveAiFlag(flag, 'approve')}
+                                    disabled={processingActionId === flag.id}
+                                    className="w-full sm:w-auto bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-300 font-bold py-2 px-4 rounded-lg hover:bg-green-200 dark:hover:bg-green-700/50 transition-colors text-sm disabled:opacity-50"
+                                >
+                                    {processingActionId === flag.id ? '...' : 'Approve'}
+                                </button>
+                                <button 
+                                    onClick={() => handleResolveAiFlag(flag, 'remove')}
+                                    disabled={processingActionId === flag.id}
+                                    className="w-full sm:w-auto bg-red-100 text-red-800 dark:bg-red-800/50 dark:text-red-300 font-bold py-2 px-4 rounded-lg hover:bg-red-200 dark:hover:bg-red-700/50 transition-colors text-sm disabled:opacity-50"
+                                >
+                                    {processingActionId === flag.id ? '...' : 'Remove'}
+                                </button>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            </>
+        );
+    };
 
     return (
         <>
-            {alertInfo.isOpen && (
-                <AlertModal 
-                    onClose={() => setAlertInfo({ isOpen: false })}
-                    title={alertInfo.title}
-                    message={alertInfo.message}
-                    theme={alertInfo.theme}
-                />
-            )}
-            {confirmation.isOpen && (
-                <ConfirmationModal
-                    onClose={() => setConfirmation({ isOpen: false })}
-                    onConfirm={confirmation.onConfirm}
-                    isLoading={!!processingActionId}
-                    title={confirmation.title}
-                    message={confirmation.message}
-                    confirmText={confirmation.confirmText}
-                    theme={confirmation.theme}
-                />
-            )}
+            {alertInfo.isOpen && <AlertModal {...alertInfo} onClose={() => setAlertInfo({ isOpen: false })} />}
+            {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={!!processingActionId} onClose={() => setConfirmation({ isOpen: false })} />}
             <div className="flex flex-col h-full">
                 {onBack && (
                   <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -476,29 +655,42 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reportedComments
                         <h3 className="text-xl font-bold text-red-500 dark:text-red-400">Moderation Center</h3>
                         <button
                             onClick={handleRefresh}
-                            disabled={isLoading}
+                            disabled={loading[activeTab]}
                             className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-wait"
                             aria-label="Refresh list"
                             title="Refresh list"
                         >
-                            <i className={`fas fa-sync-alt ${isLoading ? 'animate-spin' : ''}`}></i>
+                            <i className={`fas fa-sync-alt ${loading[activeTab] ? 'animate-spin' : ''}`}></i>
                         </button>
                     </div>
                     <div className="mt-2 border-b border-gray-200 dark:border-gray-700">
                         <div className="flex">
                             <TabButton label="Flagged Users" count={flaggedUsers.length} isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />
-                            <TabButton label="Reported Images" count={reportedImages.length} isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
-                            <TabButton label="Reported Comments" count={reportedComments.length} isActive={activeTab === 'comments'} onClick={() => setActiveTab('comments')} />
-                            <TabButton label="Suggested Edits" count={suggestedEdits.length} isActive={activeTab === 'edits'} onClick={() => setActiveTab('edits')} />
+                            <TabButton label="User Submitted Reports" count={reportedImages.length + reportedComments.length + suggestedEdits.length} isActive={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
+                            <TabButton label="AI Moderator" count={aiFlags.length} isActive={activeTab === 'ai'} onClick={() => setActiveTab('ai')} />
                         </div>
                     </div>
                 </div>
 
                 <div className="flex-grow p-4 overflow-y-auto">
                     {activeTab === 'users' && renderFlaggedUsers()}
-                    {activeTab === 'images' && renderReportedImages()}
-                    {activeTab === 'comments' && renderReportedComments()}
-                    {activeTab === 'edits' && renderSuggestedEdits()}
+                    {activeTab === 'reports' && (
+                        <div className="space-y-6">
+                            <div>
+                                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">Suggested Edits ({suggestedEdits.length})</h4>
+                                {renderSuggestedEdits()}
+                            </div>
+                            <div>
+                                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">Reported Images ({reportedImages.length})</h4>
+                                {renderReportedImages()}
+                            </div>
+                            <div>
+                                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">Reported Comments ({reportedComments.length})</h4>
+                                {renderReportedComments()}
+                            </div>
+                        </div>
+                    )}
+                     {activeTab === 'ai' && renderAiFlags()}
                 </div>
             </div>
         </>

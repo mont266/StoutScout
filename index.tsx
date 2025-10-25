@@ -10,8 +10,20 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 // Capacitor-specific initialization for native platforms
 if (Capacitor.isNativePlatform()) {
   try {
+    // Add a class to the HTML root element if we're on native Android.
+    // This allows for platform-specific CSS fixes.
+    (async () => {
+      const platform = Capacitor.getPlatform();
+      if (platform === 'android') {
+        document.documentElement.classList.add('native-android');
+      }
+    })();
+
     // Set StatusBar style. The app defaults to dark mode, so this is appropriate.
     StatusBar.setStyle({ style: Style.Dark });
+    // Set the status bar background color to match the app's dark theme.
+    // This is necessary now that the webview does not overlay the status bar.
+    StatusBar.setBackgroundColor({ color: '#111827' });
     // Hide the native splash screen once the web view is ready.
     SplashScreen.hide();
   } catch (e) {

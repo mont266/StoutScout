@@ -10,9 +10,9 @@ import TimeSeriesChart from './TimeSeriesChart.jsx';
 import { OnlineStatusContext } from '../contexts/OnlineStatusContext.jsx';
 import OnlineUsersPage from './OnlineUsersPage.jsx';
 import AllCommentsPage from './AllCommentsPage.jsx';
-import ForecastsPage from './ForecastsPage.jsx';
 import UtmStatsPage from './UtmStatsPage.jsx';
 import FinancialStatsPage from './FinancialStatsPage.jsx';
+import PriceByCountryModal from './PriceByCountryModal.jsx';
 
 const StatCard = ({ label, value, icon, customIcon, format = (v) => v.toLocaleString(), onClick, className = '', subValue = null }) => (
     <div
@@ -69,7 +69,7 @@ const formatPercent = (numerator, denominator) => {
     return `(${percentage.toFixed(1)}%)`;
 }
 
-const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDeleteComment }) => {
+const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDeleteComment, isPriceByCountryModalOpen, onSetIsPriceByCountryModalOpen }) => {
     const [stats, setStats] = useState({});
     const [countryStats, setCountryStats] = useState([]);
     const [timeSeriesData, setTimeSeriesData] = useState([]);
@@ -81,6 +81,10 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     const isDesktop = useIsDesktop();
     const { onlineUserIds } = useContext(OnlineStatusContext);
     const onlineUsersCount = onlineUserIds.size;
+    
+    // State for mobile collapsible graphs
+    const [isUsersGraphOpen, setIsUsersGraphOpen] = useState(false);
+    const [isRatingsGraphOpen, setIsRatingsGraphOpen] = useState(false);
 
     useEffect(() => {
         const startDate = new Date('2025-07-25T00:00:00Z');
@@ -193,10 +197,6 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
         return <UtmStatsPage onBack={handleBackFromSubView} />;
     }
 
-    if (currentView === 'forecasts') {
-        return <ForecastsPage onBack={handleBackFromSubView} />;
-    }
-
     if (currentView === 'online_users') {
         return <OnlineUsersPage onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
     }
@@ -250,6 +250,33 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     
         return (
             <div className="space-y-6">
+                <div className="flex gap-4">
+                    {userProfile?.is_developer && (
+                        <button
+                            onClick={() => handleViewChange('financial_stats')}
+                            className="flex-1 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex flex-col items-center justify-center space-y-2 transition-all hover:shadow-lg hover:scale-105"
+                            aria-label="View Financials"
+                        >
+                            <i className="fas fa-hand-holding-usd text-2xl text-green-500 dark:text-green-400"></i>
+                        </button>
+                    )}
+                    <button
+                        onClick={() => handleViewChange('utm_stats')}
+                        className="flex-1 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex flex-col items-center justify-center space-y-2 transition-all hover:shadow-lg hover:scale-105"
+                        aria-label="View UTM Stats"
+                    >
+                        <i className="fas fa-bullhorn text-2xl text-purple-500 dark:text-purple-400"></i>
+                    </button>
+                </div>
+
+                <StatCard 
+                    label="Price by Country" 
+                    value="View Averages" 
+                    icon="fa-globe-europe" 
+                    onClick={() => onSetIsPriceByCountryModalOpen(true)} 
+                    format={(v) => v}
+                />
+
                 <section>
                     <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">{timePeriodLabel}</h4>
                     <div className="grid grid-cols-2 gap-4">
@@ -261,52 +288,57 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                     </div>
                 </section>
     
-                <section>
-                    <TimeSeriesChart data={timeSeriesData} dataKey="new_users" title="New Users" loading={loading} error={error} timePeriod={timePeriod} lineColor="#F59E0B" tooltipLabel="users" />
-                </section>
-                <section>
-                    <TimeSeriesChart data={timeSeriesData} dataKey="new_ratings" title="New Ratings" loading={loading} error={error} timePeriod={timePeriod} lineColor="#10B981" tooltipLabel="ratings" />
-                </section>
-    
-                <section>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md h-full flex flex-col max-h-[500px]">
-                        <h5 className="text-md font-semibold text-gray-700 dark:text-gray-300 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">Pint Price by Country</h5>
-                        <div className="overflow-y-auto">
-                            {countryStats.length > 0 ? (
-                                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                                    {countryStats.map((stat) => {
-                                        const currency = getCurrencyInfo({ country_name: stat.country_display_name });
-                                        return (
-                                            <li key={stat.country_display_name} className="flex items-center justify-between p-3">
-                                                <span className="font-semibold text-gray-900 dark:text-white">{stat.country_display_name}</span>
-                                                <div className="text-right">
-                                                    <div className="font-bold text-base text-green-600 dark:text-green-400">
-                                                        {stat.avg_price != null ? `${currency.symbol}${parseFloat(stat.avg_price).toFixed(2)}` : <span className="text-sm text-gray-500">No data</span>}
-                                                    </div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{Number(stat.rating_count).toLocaleString()} ratings</div>
-                                                </div>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            ) : (
-                                <p className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">No price data available.</p>
-                            )}
+                <section className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+                    <button
+                        onClick={() => setIsUsersGraphOpen(prev => !prev)}
+                        className="w-full flex justify-between items-center p-4 text-left"
+                        aria-expanded={isUsersGraphOpen}
+                        aria-controls="users-chart-container"
+                    >
+                        <div className="flex items-center space-x-3">
+                            <i className="fas fa-user-plus text-amber-500"></i>
+                            <h4 className="font-semibold text-gray-700 dark:text-gray-300">New Users</h4>
                         </div>
-                    </div>
+                        <i className={`fas fa-chevron-down text-gray-500 transition-transform ${isUsersGraphOpen ? 'rotate-180' : ''}`}></i>
+                    </button>
+                    {isUsersGraphOpen && (
+                        <div id="users-chart-container" className="animate-fade-in-down h-96">
+                            <TimeSeriesChart containerClassName="p-4 h-full" data={timeSeriesData} dataKey="new_users" title="" loading={loading} error={error} timePeriod={timePeriod} lineColor="#F59E0B" tooltipLabel="users" />
+                        </div>
+                    )}
+                </section>
+
+                <section className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+                     <button
+                        onClick={() => setIsRatingsGraphOpen(prev => !prev)}
+                        className="w-full flex justify-between items-center p-4 text-left"
+                        aria-expanded={isRatingsGraphOpen}
+                        aria-controls="ratings-chart-container"
+                    >
+                         <div className="flex items-center space-x-3">
+                            <i className="fas fa-star text-green-500"></i>
+                            <h4 className="font-semibold text-gray-700 dark:text-gray-300">New Ratings</h4>
+                        </div>
+                        <i className={`fas fa-chevron-down text-gray-500 transition-transform ${isRatingsGraphOpen ? 'rotate-180' : ''}`}></i>
+                    </button>
+                    {isRatingsGraphOpen && (
+                        <div id="ratings-chart-container" className="animate-fade-in-down h-96">
+                            <TimeSeriesChart containerClassName="p-4 h-full" data={timeSeriesData} dataKey="new_ratings" title="" loading={loading} error={error} timePeriod={timePeriod} lineColor="#10B981" tooltipLabel="ratings" />
+                        </div>
+                    )}
                 </section>
     
                 <section>
                     <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">Global Stats</h4>
                     <div className="grid grid-cols-2 gap-4">
-                        <StatCard label="Live For" value={liveForDuration} icon="fa-clock" format={(v) => v} />
+                        <StatCard label="Live For" value={liveForDuration} icon="fa-clock" format={(v) => v} className="col-span-2" />
                         <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
+                        <StatCard label="Ratings per User" value={stats.total_users > 0 ? (stats.total_ratings / stats.total_users) : 0} format={(v) => v.toFixed(1)} icon="fa-balance-scale" />
                         <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />
                         <StatCard label="Guinness 0.0 Pubs" value={stats.total_guinness_zero_pubs} customIcon={<span className="text-base font-bold text-amber-500 dark:text-amber-400 w-7 h-7 flex items-center justify-center tracking-tighter">0.0</span>} />
                         <StatCard label="Total Comments" value={stats.total_comments} icon="fa-comments" onClick={() => handleViewChange('all_comments')} />
                         <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
                         <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
-                        <StatCard label="Avatar Adoption" value={stats.users_with_avatars} icon="fa-user-circle" subValue={formatPercent(stats.users_with_avatars, stats.total_users)} className="col-span-2" />
                         <StatCard label="1st Rating Conversion" value={stats.users_who_rated_once} icon="fa-user-check" subValue={formatPercent(stats.users_who_rated_once, stats.total_users)} className="col-span-2" />
                     </div>
                 </section>
@@ -368,103 +400,91 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                 <StatCard label="Total Comments" value={stats.total_comments} icon="fa-comments" onClick={() => handleViewChange('all_comments')} />
                 <StatCard label="Images Uploaded" value={stats.total_uploaded_images} icon="fa-images" onClick={() => handleViewChange('image_gallery')} />
                 <StatCard label="Banned Users" value={stats.total_banned_users} icon="fa-user-slash" />
-                <StatCard label="Avatar Adoption Rate" value={stats.users_with_avatars} icon="fa-user-circle" subValue={formatPercent(stats.users_with_avatars, stats.total_users)} />
+                <StatCard label="Ratings per User" value={stats.total_users > 0 ? (stats.total_ratings / stats.total_users) : 0} format={(v) => v.toFixed(1)} icon="fa-balance-scale" />
                 <StatCard label="First Rating Conversion" value={stats.users_who_rated_once} icon="fa-user-check" subValue={formatPercent(stats.users_who_rated_once, stats.total_users)} />
             </div>
         </div>
     );
 
-    const navButtonCount = [
-        userProfile?.is_developer, // Financials
-        true, // Forecasts
-        true, // UTM
-    ].filter(Boolean).length;
-    
-    const gridColsClass = navButtonCount === 2 ? 'md:grid-cols-2' : navButtonCount === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3';
-
     return (
-        <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800/50">
-           {onBack && (
-                 <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                    <button onClick={onBack} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg transition-colors">
-                        <i className="fas fa-arrow-left"></i>
-                        <span className="font-semibold">Back to Settings</span>
-                    </button>
-                </div>
+        <>
+            {isPriceByCountryModalOpen && !isDesktop && (
+                <PriceByCountryModal 
+                    isOpen={isPriceByCountryModalOpen}
+                    onClose={() => onSetIsPriceByCountryModalOpen(false)}
+                    countryStats={countryStats}
+                />
             )}
-            <header className="p-4 md:p-6 flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-                    <div>
-                        <h3 className="text-xl md:text-2xl font-bold text-amber-500 dark:text-amber-400">
-                            Analytics Dashboard
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">A high-level overview of app usage and data.</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <TimePeriodFilter activePeriod={timePeriod} onPeriodChange={setTimePeriod} />
-                        <button
-                            onClick={handleRefresh} disabled={loading}
-                            className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
-                            aria-label="Refresh statistics" title="Refresh statistics"
-                        >
-                            <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
+            <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800/50">
+               {onBack && (
+                     <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                        <button onClick={onBack} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg transition-colors">
+                            <i className="fas fa-arrow-left"></i>
+                            <span className="font-semibold">Back to Settings</span>
                         </button>
                     </div>
-                </div>
-            </header>
-            <main className="flex-grow overflow-y-auto p-4 md:p-6">
-                <div className={`grid grid-cols-1 ${gridColsClass} gap-6 mb-6`}>
-                    {userProfile?.is_developer && (
-                        <button
-                            onClick={() => handleViewChange('financial_stats')}
-                            className="w-full bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center justify-between transition-all hover:shadow-lg hover:scale-[1.02] hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                        >
-                            <div className="flex items-center space-x-4">
-                                <div className="bg-green-100 dark:bg-green-900/50 p-3 rounded-full">
-                                    <i className="fas fa-hand-holding-usd text-xl text-green-500 dark:text-green-400 w-7 h-7 flex items-center justify-center"></i>
+                )}
+                <header className="p-4 md:p-6 flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                        <div>
+                            <h3 className="text-xl md:text-2xl font-bold text-amber-500 dark:text-amber-400">
+                                Analytics Dashboard
+                            </h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">A high-level overview of app usage and data.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <TimePeriodFilter activePeriod={timePeriod} onPeriodChange={setTimePeriod} />
+                            <button
+                                onClick={handleRefresh} disabled={loading}
+                                className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
+                                aria-label="Refresh statistics" title="Refresh statistics"
+                            >
+                                <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
+                            </button>
+                        </div>
+                    </div>
+                </header>
+                <main className="flex-grow overflow-y-auto p-4 md:p-6">
+                    {isDesktop && (
+                        <div className={`grid grid-cols-1 ${userProfile?.is_developer ? 'md:grid-cols-2' : ''} gap-6 mb-6`}>
+                            {userProfile?.is_developer && (
+                                <button
+                                    onClick={() => handleViewChange('financial_stats')}
+                                    className="w-full bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center justify-between transition-all hover:shadow-lg hover:scale-[1.02] hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                >
+                                    <div className="flex items-center space-x-4">
+                                        <div className="bg-green-100 dark:bg-green-900/50 p-3 rounded-full">
+                                            <i className="fas fa-hand-holding-usd text-xl text-green-500 dark:text-green-400 w-7 h-7 flex items-center justify-center"></i>
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="font-bold text-lg">Financials</div>
+                                            <div className="text-sm text-gray-500 dark:text-gray-400">View donation metrics</div>
+                                        </div>
+                                    </div>
+                                    <i className="fas fa-arrow-right text-xl text-gray-400 dark:text-gray-500 opacity-70"></i>
+                                </button>
+                            )}
+                             <button
+                                onClick={() => handleViewChange('utm_stats')}
+                                className="w-full bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center justify-between transition-all hover:shadow-lg hover:scale-[1.02] hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                            >
+                                <div className="flex items-center space-x-4">
+                                     <div className="bg-purple-100 dark:bg-purple-900/50 p-3 rounded-full">
+                                        <i className="fas fa-bullhorn text-xl text-purple-500 dark:text-purple-400 w-7 h-7 flex items-center justify-center"></i>
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="font-bold text-lg">UTM Stats</div>
+                                        <div className="text-sm text-gray-500 dark:text-gray-400">View signups by source</div>
+                                    </div>
                                 </div>
-                                <div className="text-left">
-                                    <div className="font-bold text-lg">Financials</div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">View donation metrics</div>
-                                </div>
-                            </div>
-                            <i className="fas fa-arrow-right text-xl text-gray-400 dark:text-gray-500 opacity-70"></i>
-                        </button>
+                                <i className="fas fa-arrow-right text-xl text-gray-400 dark:text-gray-500 opacity-70"></i>
+                            </button>
+                        </div>
                     )}
-                    <button
-                        onClick={() => handleViewChange('forecasts')}
-                        className="w-full bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center justify-between transition-all hover:shadow-lg hover:scale-[1.02] hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                    >
-                        <div className="flex items-center space-x-4">
-                             <div className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-full">
-                                <i className="fas fa-chart-line text-xl text-blue-500 dark:text-blue-400 w-7 h-7 flex items-center justify-center"></i>
-                            </div>
-                            <div className="text-left">
-                                <div className="font-bold text-lg">Growth Forecasts</div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">View projected app milestones</div>
-                            </div>
-                        </div>
-                        <i className="fas fa-arrow-right text-xl text-gray-400 dark:text-gray-500 opacity-70"></i>
-                    </button>
-                     <button
-                        onClick={() => handleViewChange('utm_stats')}
-                        className="w-full bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md flex items-center justify-between transition-all hover:shadow-lg hover:scale-[1.02] hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                    >
-                        <div className="flex items-center space-x-4">
-                             <div className="bg-purple-100 dark:bg-purple-900/50 p-3 rounded-full">
-                                <i className="fas fa-bullhorn text-xl text-purple-500 dark:text-purple-400 w-7 h-7 flex items-center justify-center"></i>
-                            </div>
-                            <div className="text-left">
-                                <div className="font-bold text-lg">UTM Stats</div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">View signups by source</div>
-                            </div>
-                        </div>
-                        <i className="fas fa-arrow-right text-xl text-gray-400 dark:text-gray-500 opacity-70"></i>
-                    </button>
-                </div>
-                {loading ? renderLoading() : error ? renderError() : (isDesktop ? renderDesktopDashboard() : renderMobileDashboard())}
-            </main>
-        </div>
+                    {loading ? renderLoading() : error ? renderError() : (isDesktop ? renderDesktopDashboard() : renderMobileDashboard())}
+                </main>
+            </div>
+        </>
     );
 };
 

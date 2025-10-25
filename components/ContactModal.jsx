@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { trackEvent } from '../analytics.js';
+import { Capacitor } from '@capacitor/core';
 
 const ContactModal = ({ userProfile, session, onClose }) => {
     const [name, setName] = useState('');
@@ -33,7 +34,11 @@ const ContactModal = ({ userProfile, session, onClose }) => {
         formData.append('message', message);
         
         try {
-            const response = await fetch('/', {
+            const postUrl = Capacitor.isNativePlatform() 
+              ? 'https://www.stoutly.co.uk/.netlify/functions/submit-form' 
+              : '/';
+              
+            const response = await fetch(postUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams(formData).toString(),
@@ -43,7 +48,8 @@ const ContactModal = ({ userProfile, session, onClose }) => {
                 setFormState({ loading: false, success: true, error: null });
                 trackEvent('contact_form_success');
             } else {
-                throw new Error('Form submission failed. Please try again later.');
+                const errorText = await response.text();
+                throw new Error(`Form submission failed: ${response.status} ${response.statusText}. ${errorText}`);
             }
         } catch (error) {
             setFormState({ loading: false, success: false, error: error.message });

@@ -13,7 +13,7 @@ export const RANK_DETAILS = [
   { name: "Stout Sprout",       icon: "fa-seedling",       minLevel: 1 },
   { name: "Pint Pilgrim",       icon: "fa-map-signs",      minLevel: 3 },
   { name: "Draught Discoverer", icon: "fa-binoculars",     minLevel: 6 },
-  { name: "Froth Finder",       icon: "fa-search",         minLevel: 9 },
+  { name: "Dome Detective",     icon: "fa-search",         minLevel: 9 },
   { name: "Cask Captain",       icon: "fa-anchor",         minLevel: 12 },
   { name: "Black Stuff Baron",  icon: "fa-crown",          minLevel: 15 },
   { name: "Creamflow Commander",icon: "fa-shield-alt",     minLevel: 18 },

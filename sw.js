@@ -23,6 +23,7 @@ const urlsToCache = [
   '/components/Logo.jsx',
   '/components/SettingsModal.jsx',
   '/components/ProfilePage.jsx',
+  '/components/ProfileStatsView.jsx',
   '/components/LeaderboardPage.jsx',
   '/components/XPPopup.jsx',
   '/components/LevelUpPopup.jsx',
@@ -79,11 +80,9 @@ const urlsToCache = [
   '/components/NotificationToast.jsx',
   '/components/CommentContent.jsx',
   '/components/SuggestEditModal.jsx',
-  '/components/ForecastsPage.jsx',
   '/components/ShopPage.jsx',
   '/components/ShopItemCard.jsx',
   '/components/CoasterWelcomeModal.jsx',
-  '/components/UtmStatsPage.jsx',
   '/components/ShareModal.jsx',
   '/components/ShareProfileModal.jsx',
   '/components/FinancialStatsPage.jsx',
@@ -91,6 +90,7 @@ const urlsToCache = [
   '/components/GuinnessFactCard.jsx',
   '/components/PintPulseReportCard.jsx',
   '/components/PintOfTheWeekCard.jsx',
+  '/components/AndroidBetaModal.jsx',
 ];
 
 self.addEventListener('install', event => {

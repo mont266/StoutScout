@@ -3,6 +3,7 @@
 # Dependencies
 # Ignore the node_modules directory where all your project's dependencies are installed.
 /node_modules
+/supabase
 
 # Build artifacts
 # Ignore the output directories from Vite's build process.

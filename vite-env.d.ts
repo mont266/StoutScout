@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_GA_MEASUREMENT_ID: string;
   readonly VITE_STRIPE_PUBLISHABLE_KEY: string;
   readonly VITE_GEMINI_API_KEY: string;
+  readonly VITE_EXCHANGE_RATE_API_KEY: string;
 }
 
 interface ImportMeta {

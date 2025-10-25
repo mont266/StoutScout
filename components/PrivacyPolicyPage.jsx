@@ -21,7 +21,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const PrivacyPolicyPage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Privacy Policy" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: September 3, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 25, 2025</p>
             <p>Your privacy is important to us. This Privacy Policy explains how Stoutly ("we," "us," or "our") collects, uses, and shares information about you when you use our Service.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Information We Collect</h2>
