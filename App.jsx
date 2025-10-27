@@ -59,6 +59,7 @@ const App = () => {
   // App state
   const [nominatimResults, setNominatimResults] = useState([]);
   const [pubs, setPubs] = useState([]);
+  const [enrichingPubIds, setEnrichingPubIds] = useState(new Set());
   const [allRatings, setAllRatings] = useState(new Map());
   const [pubScores, setPubScores] = useState(new Map());
   const [selectedPubId, setSelectedPubId] = useState(null);
@@ -183,7 +184,6 @@ const App = () => {
 
   // Developer state
   const [showAllDbPubs, setShowAllDbPubs] = useState(false);
-  const [isBackfilling, setIsBackfilling] = useState(false);
 
   // Trophy State
   const [allTrophies, setAllTrophies] = useState([]);
@@ -687,7 +687,6 @@ const App = () => {
       .eq('user_id', userId);
     if (likesError) console.error("Error fetching user likes:", likesError);
     else setUserLikes(new Set((likesData || []).map(l => l.rating_id)));
-
     // Fetch user's friendships
     const { data: friendsData, error: friendsError } = await supabase
       .from('friendships')
@@ -928,6 +927,17 @@ const App = () => {
         if (friendCountError) console.error("Error fetching friend count for viewed profile:", friendCountError);
         // Correctly assign the direct result of the RPC call.
         profile.friends_count = friendCount || 0;
+
+        // Fetch auth details to get last_sign_in_at
+        const { data: authDetails, error: authError } = await supabase
+            .rpc('get_user_auth_details', { user_id_param: userId })
+            .single();
+
+        if (authError) {
+            console.warn(`Could not fetch auth details for user ${userId}: ${authError.message}. This is expected if the RPC function doesn't exist yet.`);
+        } else if (authDetails) {
+            profile.last_sign_in_at = authDetails.last_sign_in_at;
+        }
 
         setViewedProfile(profile);
 
@@ -1221,36 +1231,6 @@ const App = () => {
       setIsAndroidBetaModalOpen(false);
   };
 
-  const handleBackfillCountryData = useCallback(async () => {
-    if (isBackfilling) return;
-    setIsBackfilling(true);
-    trackEvent('dev_backfill_country_data_start');
-    try {
-        const { data, error } = await supabase.functions.invoke('backfill-country-data');
-        if (error) throw new Error(error.message);
-
-        setAlertInfo({
-            isOpen: true,
-            title: 'Backfill Complete',
-            message: data.message || 'The backfill process completed successfully.',
-            theme: 'success',
-        });
-        trackEvent('dev_backfill_country_data_success', { result_message: data.message });
-        await handleDataRefresh();
-    } catch (err) {
-        console.error("Backfill error:", err);
-        setAlertInfo({
-            isOpen: true,
-            title: 'Backfill Failed',
-            message: `An error occurred: ${err.message}`,
-            theme: 'error',
-        });
-        trackEvent('dev_backfill_country_data_failed', { error_message: err.message });
-    } finally {
-        setIsBackfilling(false);
-    }
-  }, [isBackfilling, handleDataRefresh]);
-
 
   const handleDonationSuccess = useCallback(async () => {
     trackEvent('donation_success_client');
@@ -1512,85 +1492,176 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    // Wait until all foundational data from our DB is loaded before attempting to merge.
     if (!isDbPubsLoaded || !isClosedOsmPubsLoaded || !isOsmOverridesLoaded) {
-      return; // Exit early if data isn't ready
+      return;
     }
+    
+    const dbPubIds = new Set(dbPubs.map(p => p.id));
 
-    let pubsToFilter;
-
-    if (showAllDbPubs) {
-      // DEV MODE: Unfiltered list of all pubs from our DB for debugging.
-      pubsToFilter = dbPubs.map(pub => ({
-        ...pub,
-        is_closed: !!pub.is_closed || closedOsmPubIds.has(pub.id),
-      }));
-    } else {
-      // NORMAL MODE: Combine sources for a comprehensive list, prioritizing our DB.
-      const processedPubs = new Map();
-
-      // 1. Add all pubs from our DB first. This is the source of truth for existence, name, address, and closed status.
-      dbPubs.forEach(dbPub => {
-        const override = osmPubOverrides.get(dbPub.id);
-        processedPubs.set(dbPub.id, {
-          ...dbPub,
-          name: override?.name || dbPub.name,
-          is_closed: !!dbPub.is_closed || closedOsmPubIds.has(dbPub.id),
-        });
-      });
-
-      // 2. Merge with Nominatim results. This adds new pubs and updates locations for existing ones.
-      nominatimResults.forEach(nominatimPub => {
-        const override = osmPubOverrides.get(nominatimPub.id);
-        const finalNominatimName = override?.name || nominatimPub.name;
+    const processAndSetPubs = () => {
+        let pubsToFilter;
         
-        if (processedPubs.has(nominatimPub.id)) {
-          // If pub exists in our DB, update its location from the live map data, but keep our data as primary.
-          const dbVersion = processedPubs.get(nominatimPub.id);
-          processedPubs.set(nominatimPub.id, {
-            ...dbVersion, // Keep DB name, address, closed status etc.
-            location: nominatimPub.location, // But use the more current location from Nominatim.
-          });
+        if (showAllDbPubs) {
+          pubsToFilter = dbPubs.map(pub => ({
+            ...pub,
+            is_closed: !!pub.is_closed || closedOsmPubIds.has(pub.id),
+          }));
         } else {
-          // This is a new pub from OSM not in our DB. Check for spatial duplicates before adding.
-          const isSpatialDuplicate = Array.from(processedPubs.values()).some(processedPub => {
-            if (!nominatimPub.location || !processedPub.location) return false;
-            const dist = getDistance(nominatimPub.location, processedPub.location);
-            if (dist > 50) return false; // 50 meters
-            
-            const normOsmName = normalizePubNameForComparison(finalNominatimName);
-            const normDbName = normalizePubNameForComparison(processedPub.name);
-            return normOsmName && normDbName && normOsmName === normDbName;
+          // 1. Combine dbPubs and nominatimResults into a single map, merging by ID.
+          // This prioritizes DB data but takes fresher location/address from OSM.
+          const combinedPubsMap = new Map();
+          dbPubs.forEach(dbPub => {
+            const override = osmPubOverrides.get(dbPub.id);
+            combinedPubsMap.set(dbPub.id, {
+              ...dbPub,
+              name: override?.name || dbPub.name,
+              is_from_db: true, // Mark origin
+            });
           });
 
-          if (!isSpatialDuplicate) {
-            processedPubs.set(nominatimPub.id, {
-              ...nominatimPub,
-              name: finalNominatimName,
-              is_closed: closedOsmPubIds.has(nominatimPub.id),
-            });
+          nominatimResults.forEach(nominatimPub => {
+            const override = osmPubOverrides.get(nominatimPub.id);
+            const finalNominatimName = override?.name || nominatimPub.name;
+
+            if (combinedPubsMap.has(nominatimPub.id)) {
+              const dbVersion = combinedPubsMap.get(nominatimPub.id);
+              combinedPubsMap.set(nominatimPub.id, {
+                ...dbVersion,
+                name: dbVersion.name, // Keep DB name
+                location: nominatimPub.location,
+                address: (dbVersion.address && dbVersion.address !== 'Address unknown') ? dbVersion.address : nominatimPub.address,
+                country_code: dbVersion.country_code || nominatimPub.country_code,
+                country_name: dbVersion.country_name || nominatimPub.country_name,
+              });
+            } else {
+              combinedPubsMap.set(nominatimPub.id, {
+                ...nominatimPub,
+                name: finalNominatimName,
+                is_from_db: false,
+              });
+            }
+          });
+          
+          // 2. De-dupe the combined list based on spatial and name similarity.
+          const dedupedPubs = [];
+          for (const pub of Array.from(combinedPubsMap.values())) {
+              const duplicateIndex = dedupedPubs.findIndex(existingPub => {
+                if (!pub.location || !existingPub.location) return false;
+                const dist = getDistance(pub.location, existingPub.location);
+                if (dist > 50) return false;
+
+                const normNewName = normalizePubNameForComparison(pub.name);
+                const normExistingName = normalizePubNameForComparison(existingPub.name);
+                const minLength = 6;
+                if (!normNewName || !normExistingName) return false;
+
+                return normNewName === normExistingName ||
+                       (normNewName.includes(normExistingName) && normExistingName.length >= minLength) ||
+                       (normExistingName.includes(normNewName) && normNewName.length >= minLength);
+              });
+              
+              if (duplicateIndex === -1) {
+                  // Not a duplicate, add it to the list.
+                  dedupedPubs.push(pub);
+              } else {
+                  // It's a duplicate. Decide which one to keep.
+                  const originalPub = dedupedPubs[duplicateIndex];
+                  
+                  // Prioritization logic:
+                  // 1. Prefer pub from our DB over a raw OSM pub.
+                  // 2. Prefer pub with a pub_score.
+                  // 3. Prefer pub with more ratings.
+                  const newIsBetter = 
+                      (!originalPub.is_from_db && pub.is_from_db) ||
+                      (pubScores.has(pub.id) && !pubScores.has(originalPub.id)) ||
+                      ((allRatings.get(pub.id) || []).length > (allRatings.get(originalPub.id) || []).length);
+                      
+                  if (newIsBetter) {
+                      // Replace the original with the new, better version.
+                      dedupedPubs[duplicateIndex] = pub;
+                  }
+                  // Otherwise, discard the new pub and keep the original.
+              }
           }
+
+          // 3. Final processing for all known pubs
+          const allKnownPubs = dedupedPubs.map(pub => ({
+            ...pub,
+            is_closed: !!pub.is_closed || closedOsmPubIds.has(pub.id),
+          }));
+
+          pubsToFilter = allKnownPubs.filter(pub => {
+            if (!pub.location) return false;
+            const distance = getDistance(pub.location, searchOrigin);
+            return distance <= settings.radius;
+          });
         }
-      });
-      
-      const allKnownPubs = Array.from(processedPubs.values());
 
-      // 3. Filter the combined list by the user's search radius.
-      pubsToFilter = allKnownPubs.filter(pub => {
-        if (!pub.location) return false;
-        const distance = getDistance(pub.location, searchOrigin);
-        return distance <= settings.radius;
-      });
-    }
+        const initialPubsList = pubsToFilter.map(pub => ({
+          ...pub,
+          ratings: allRatings.get(pub.id) || [],
+          pub_score: pubScores.get(pub.id) ?? null,
+        }));
+        
+        setPubs(initialPubsList);
 
-    // 4. Attach ratings and scores to the final list of pubs to be displayed.
-    const finalPubsList = pubsToFilter.map(pub => ({
-      ...pub,
-      ratings: allRatings.get(pub.id) || [],
-      pub_score: pubScores.get(pub.id) ?? null,
-    }));
+        // --- START: Background Enrichment ---
+        (async () => {
+            const pubsToEnrich = initialPubsList.filter(pub =>
+                !dbPubIds.has(pub.id) && // Only enrich pubs that are NOT in the Stoutly DB
+                (pub.address === 'Address unknown' || !pub.country_code) && pub.location
+            );
 
-    setPubs(finalPubsList);
+            if (pubsToEnrich.length > 0) {
+                setEnrichingPubIds(new Set(pubsToEnrich.map(p => p.id)));
+            }
+
+            for (const pub of pubsToEnrich) {
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 1100));
+
+                    const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
+                    const reverseUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pub.location.lat}&lon=${pub.location.lng}&addressdetails=1`;
+                    const reverseResponse = await fetch(reverseUrl, { 
+                        headers: { 'User-Agent': userAgent, 'Accept-Language': 'en' } 
+                    });
+
+                    if (!reverseResponse.ok) {
+                        console.warn(`Nominatim reverse geocode failed for ${pub.id}: ${reverseResponse.status}`);
+                        continue;
+                    }
+
+                    const reverseData = await reverseResponse.json();
+        
+                    if (reverseData && reverseData.address) {
+                        const newAddress = normalizeReverseGeocodeResult(reverseData);
+                        const enrichedData = {
+                            address: newAddress !== 'Address unknown' ? newAddress : pub.address,
+                            country_code: reverseData.address.country_code || pub.country_code,
+                            country_name: reverseData.address.country || pub.country_name,
+                            postcode: reverseData.address.postcode ? reverseData.address.postcode.toUpperCase().replace(/\s+/g, '') : pub.postcode,
+                        };
+
+                        setPubs(currentPubs =>
+                            currentPubs.map(p =>
+                                p.id === pub.id ? { ...p, ...enrichedData } : p
+                            )
+                        );
+                    }
+                } catch (geocodeError) {
+                    console.warn(`Error during reverse geocode for ${pub.id}:`, geocodeError);
+                } finally {
+                    setEnrichingPubIds(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(pub.id);
+                        return newSet;
+                    });
+                }
+            }
+        })();
+    };
+
+    processAndSetPubs();
 
   }, [showAllDbPubs, nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance, closedOsmPubIds, osmPubOverrides, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded]);
 
@@ -1715,7 +1786,7 @@ const App = () => {
   }, [getAverageRating]);
 
   const sortedPubs = useMemo(() => {
-    let pubsToProcess = [...pubs];
+    let pubsToProcess = pubs.filter(pub => !pub.is_closed);
 
     if (filterGuinnessZero) {
         pubsToProcess = pubsToProcess.filter(pub => 
@@ -1724,8 +1795,6 @@ const App = () => {
     }
 
     return pubsToProcess.sort((a, b) => {
-      if (a.is_closed && !b.is_closed) return 1;
-      if (!a.is_closed && b.is_closed) return -1;
       switch (filter) {
         case FilterType.PubScore:
           return (b.pub_score ?? -1) - (a.pub_score ?? -1);
@@ -1785,15 +1854,46 @@ const App = () => {
     try {
         const { imageFile, imageWasRemoved, guinnessZeroStatus, is_private, price, quality, exact_price, message } = ratingData;
         
+        let enrichedPubData = { ...selectedPub };
+        const needsEnrichment = !enrichedPubData.country_code || enrichedPubData.address === 'Address unknown';
+
+        if (needsEnrichment && enrichedPubData.location) {
+            try {
+                const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
+                const reverseUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${enrichedPubData.location.lat}&lon=${enrichedPubData.location.lng}&addressdetails=1`;
+                const reverseResponse = await fetch(reverseUrl, { 
+                    headers: { 
+                        'User-Agent': userAgent,
+                        'Accept-Language': 'en'
+                    } 
+                });
+                if (!reverseResponse.ok) {
+                    throw new Error(`Nominatim API failed with status ${reverseResponse.status}`);
+                }
+                const reverseData = await reverseResponse.json();
+
+                if (reverseData && reverseData.address) {
+                    const newAddress = normalizeReverseGeocodeResult(reverseData);
+                    if (newAddress !== 'Address unknown') {
+                        enrichedPubData.address = newAddress;
+                    }
+                    enrichedPubData.country_code = reverseData.address.country_code;
+                    enrichedPubData.country_name = reverseData.address.country;
+                }
+            } catch (geocodeError) {
+                console.warn("Failed to enrich pub data via reverse geocode, proceeding with existing data.", geocodeError);
+            }
+        }
+        
         await supabase.from('pubs').upsert({
-          id: pubId, name: pubName, address: pubAddress,
-          lat: selectedPub.location.lat, lng: selectedPub.location.lng,
-          country_code: selectedPub.country_code, country_name: selectedPub.country_name,
+          id: pubId, name: enrichedPubData.name, address: enrichedPubData.address,
+          lat: enrichedPubData.location.lat, lng: enrichedPubData.location.lng,
+          country_code: enrichedPubData.country_code, country_name: enrichedPubData.country_name,
         });
 
         const existingRating = userRatings.find(r => r.pubId === pubId);
         const isUpdating = !!existingRating;
-        const currencyInfo = getCurrencyInfo(selectedPub);
+        const currencyInfo = getCurrencyInfo(enrichedPubData);
 
         trackEvent('rate_pub', {
             pub_id: pubId, is_update: isUpdating, quality: quality, price_rating: price,
@@ -2045,61 +2145,64 @@ const App = () => {
     }
 
     const ratingId = rating.id;
-    const pubId = rating.pub_id;
-    const userId = session.user.id;
     const isLiked = userLikes.has(ratingId);
     
     trackEvent('toggle_like', { rating_id: ratingId, action: isLiked ? 'unlike' : 'like' });
 
-    // --- Start optimistic updates ---
+    // Store original state for potential rollback
     const originalUserLikes = userLikes;
     const originalAllRatings = allRatings;
 
-    // 1. Optimistic update for button color
-    const newUserLikes = new Set(originalUserLikes);
-    if (isLiked) {
-      newUserLikes.delete(ratingId);
-    } else {
-      newUserLikes.add(ratingId);
-    }
-    setUserLikes(newUserLikes);
+    // --- OPTIMISTIC UI UPDATES ---
+    // 1. Update userLikes (global state for liked status)
+    const optimisticUserLikes = new Set(userLikes);
+    isLiked ? optimisticUserLikes.delete(ratingId) : optimisticUserLikes.add(ratingId);
+    setUserLikes(optimisticUserLikes);
 
-    // 2. Optimistic update for like count
-    const newAllRatings = new Map(originalAllRatings);
-    const pubRatings = newAllRatings.get(pubId);
-
-    if (pubRatings) {
-        const ratingIndex = pubRatings.findIndex(r => r.id === ratingId);
-        if (ratingIndex !== -1) {
-            const updatedRatings = [...pubRatings];
-            const originalRating = updatedRatings[ratingIndex];
-            const newCount = isLiked ? (originalRating.like_count || 0) - 1 : (originalRating.like_count || 0) + 1;
-            updatedRatings[ratingIndex] = { ...originalRating, like_count: Math.max(0, newCount) };
-            newAllRatings.set(pubId, updatedRatings);
-            setAllRatings(newAllRatings);
+    // 2. Update allRatings (for like counts in PubDetails)
+    const optimisticAllRatings = new Map(allRatings);
+    let wasFound = false;
+    for (const [pubId, ratings] of optimisticAllRatings.entries()) {
+        const ratingIndex = ratings.findIndex(r => r.id === ratingId);
+        if (ratingIndex > -1) {
+            const originalRating = ratings[ratingIndex];
+            const newLikeCount = isLiked ? (originalRating.like_count || 1) - 1 : (originalRating.like_count || 0) + 1;
+            const updatedRatingsForPub = [...ratings];
+            updatedRatingsForPub[ratingIndex] = { ...originalRating, like_count: newLikeCount };
+            optimisticAllRatings.set(pubId, updatedRatingsForPub);
+            wasFound = true;
+            break;
         }
     }
-    // --- End optimistic updates ---
+    if (wasFound) {
+        setAllRatings(optimisticAllRatings);
+    }
+    // End optimistic updates
 
     try {
-      // 3. Database call
-      if (isLiked) {
-        const { error } = await supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: userId });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: userId });
-        if (error) throw error;
-      }
+      const dbCall = isLiked
+        ? supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: session.user.id })
+        : supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: session.user.id });
+
+      const { error } = await dbCall;
+      if (error) throw error;
       
-      // 4. Re-fetch from server to ensure consistency.
-      await fetchAllRatings();
+      // On success, the optimistic update persists. No immediate re-fetch needed.
+
     } catch (error) {
         console.error("Error toggling like:", error);
-        // 5. Revert on error
+        setAlertInfo({
+            isOpen: true,
+            title: 'Action Failed',
+            message: 'Your like could not be saved. Please check your connection.',
+            theme: 'error',
+        });
+        
+        // --- ROLLBACK ON ERROR ---
         setUserLikes(originalUserLikes);
         setAllRatings(originalAllRatings);
     }
-  }, [session, userLikes, allRatings, fetchAllRatings]);
+  }, [session, userLikes, allRatings, setAlertInfo]);
   
   const handleViewLegal = (page) => {
     trackEvent('view_legal_page', { page_name: page });
@@ -2414,7 +2517,7 @@ const App = () => {
       // Reverse geocode to get country info
       const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
       const reverseUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${finalPlacementLocation.lat}&lon=${finalPlacementLocation.lng}&addressdetails=1`;
-      const reverseResponse = await fetch(reverseUrl, { headers: { 'User-Agent': userAgent } });
+      const reverseResponse = await fetch(reverseUrl, { headers: { 'User-Agent': userAgent, 'Accept-Language': 'en' } });
       const reverseData = await reverseResponse.json();
       const country_code = reverseData?.address?.country_code || null;
       const country_name = reverseData?.address?.country || null;
@@ -2880,6 +2983,7 @@ const App = () => {
       onScrollComplete: () => setScrollToSection(null),
       userTrophies,
       allTrophies,
+      enrichingPubIds,
       
       // Implemented handlers
       handleViewProfile,
@@ -2953,8 +3057,6 @@ const App = () => {
       SocialContentHub,
       onViewSocialHub: () => handleViewAdminPage('social'),
       onDonationSuccess: handleDonationSuccess,
-      isBackfilling,
-      onBackfillCountryData: handleBackfillCountryData,
       isPriceByCountryModalOpen,
       onSetIsPriceByCountryModalOpen: setIsPriceByCountryModalOpen,
       onOpenAndroidBetaModal: () => {

@@ -108,22 +108,26 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
             setLoading(false);
         }
     }, [filter]);
-    
-    const handleFeedToggleLike = (ratingToToggle) => {
-        setRatings(currentRatings => 
-            currentRatings.map(rating => {
+
+    const handleFeedToggleLike = useCallback((ratingToToggle) => {
+        // Optimistically update the local `ratings` state.
+        setRatings(currentRatings => {
+            return currentRatings.map(rating => {
                 if (rating.id === ratingToToggle.id) {
-                    const isLiked = userLikes.has(ratingToToggle.id);
-                    const newLikeCount = isLiked 
-                        ? (rating.like_count || 1) - 1 
+                    const isLiked = userLikes.has(rating.id);
+                    // Determine the new like count based on the current state.
+                    const newLikeCount = isLiked
+                        ? (rating.like_count || 1) - 1
                         : (rating.like_count || 0) + 1;
                     return { ...rating, like_count: newLikeCount };
                 }
                 return rating;
-            })
-        );
+            });
+        });
+    
+        // Call the main handler from App.jsx to update global state and the database.
         onToggleLike(ratingToToggle);
-    };
+    }, [onToggleLike, userLikes]);
 
     const handleFeedAddComment = async (ratingId, content) => {
         const newCommentsList = await onAddComment(ratingId, content);

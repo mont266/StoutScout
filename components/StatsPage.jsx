@@ -13,6 +13,7 @@ import AllCommentsPage from './AllCommentsPage.jsx';
 import UtmStatsPage from './UtmStatsPage.jsx';
 import FinancialStatsPage from './FinancialStatsPage.jsx';
 import PriceByCountryModal from './PriceByCountryModal.jsx';
+import UsersLoggedInTodayPage from './UsersLoggedInTodayPage.jsx';
 
 const StatCard = ({ label, value, icon, customIcon, format = (v) => v.toLocaleString(), onClick, className = '', subValue = null }) => (
     <div
@@ -204,6 +205,10 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     if (currentView === 'user_list') {
         return <UserListPage totalUsers={stats?.total_users || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
     }
+
+    if (currentView === 'users_logged_in_today') {
+        return <UsersLoggedInTodayPage onBack={handleBackFromSubView} onViewProfile={onViewProfile} total={stats?.users_logged_in_today} />;
+    }
     
     if (currentView === 'all_ratings') {
         return <AllRatingsPage totalRatings={stats?.total_ratings || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
@@ -281,10 +286,11 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                     <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3 px-1">{timePeriodLabel}</h4>
                     <div className="grid grid-cols-2 gap-4">
                         <StatCard label="Users Online" value={onlineUsersCount} icon="fa-wifi" onClick={() => handleViewChange('online_users')} />
+                        <StatCard label="Users Logged In Today" value={stats.users_logged_in_today} icon="fa-sign-in-alt" onClick={() => handleViewChange('users_logged_in_today')} />
                         <StatCard label="New Users" value={stats.new_users_in_period} icon="fa-user-plus" />
                         <StatCard label="New Ratings" value={stats.new_ratings_in_period} icon="fa-star" />
                         <StatCard label="Active Users" value={stats.active_users_in_period} icon="fa-user-clock" />
-                        <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} className="col-span-2" />
+                        <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} />
                     </div>
                 </section>
     
@@ -347,24 +353,25 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     };
     
     const renderDesktopDashboard = () => (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Row 1: KPIs */}
             <StatCard label="Users Online" value={onlineUsersCount} icon="fa-wifi" onClick={() => handleViewChange('online_users')} />
             <StatCard label={`New Users (${timePeriod})`} value={stats.new_users_in_period} icon="fa-user-plus" />
             <StatCard label={`Active Users (${timePeriod})`} value={stats.active_users_in_period} icon="fa-user-clock" />
             <StatCard label={`New Ratings (${timePeriod})`} value={stats.new_ratings_in_period} icon="fa-star" />
-            <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} className="md:col-span-2 lg:col-span-1" />
+            <StatCard label="Users Logged In Today" value={stats.users_logged_in_today} icon="fa-sign-in-alt" onClick={() => handleViewChange('users_logged_in_today')} />
+            <StatCard label="Total Users" value={stats.total_users} icon="fa-users" onClick={() => handleViewChange('user_list')} />
     
             {/* Row 2: Charts */}
-            <div className="md:col-span-2 lg:col-span-3">
+            <div className="lg:col-span-3">
                 <TimeSeriesChart data={timeSeriesData} dataKey="new_users" title="New Users" loading={loading} error={error} timePeriod={timePeriod} lineColor="#F59E0B" tooltipLabel="users" />
             </div>
-            <div className="md:col-span-2 lg:col-span-2">
+            <div className="lg:col-span-3">
                 <TimeSeriesChart data={timeSeriesData} dataKey="new_ratings" title="New Ratings" loading={loading} error={error} timePeriod={timePeriod} lineColor="#10B981" tooltipLabel="ratings" />
             </div>
     
             {/* Row 3: Table and Secondary Stats */}
-            <div className="md:col-span-2 lg:col-span-2">
+            <div className="lg:col-span-1">
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md h-full flex flex-col max-h-[500px]">
                     <h5 className="text-md font-semibold text-gray-700 dark:text-gray-300 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">Pint Price by Country (All Time)</h5>
                     <div className="overflow-y-auto">
@@ -392,7 +399,7 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
                 </div>
             </div>
             
-            <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
+            <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
                 <StatCard label="Live For" value={liveForDuration} icon="fa-clock" format={(v) => v} />
                 <StatCard label="Total Ratings" value={stats.total_ratings} icon="fa-star-half-alt" onClick={() => handleViewChange('all_ratings')} />
                 <StatCard label="Unique Pubs" value={stats.total_pubs} icon="fa-beer" />

@@ -53,6 +53,7 @@ const urlsToCache = [
   '/components/PlacementConfirmationBar.jsx',
   '/components/DesktopPlacementConfirmation.jsx',
   '/components/UserListPage.jsx',
+  '/components/UsersLoggedInTodayPage.jsx',
   '/components/AllRatingsPage.jsx',
   '/components/CommunityPage.jsx',
   '/components/CommunityFeed.jsx',

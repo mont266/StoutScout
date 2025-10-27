@@ -105,38 +105,41 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   const isDeveloper = loggedInUserProfile?.is_developer;
 
   useEffect(() => {
-    // This effect ensures we always have the most complete pub data available.
-    // It handles two cases for missing country info: rated pubs (in our DB)
-    // and unrated pubs (new from OSM).
-    setLocalPub(pub); // Optimistically set the local pub first
+    // Optimistically set the local pub state to what we received in props.
+    // This ensures the UI updates immediately.
+    setLocalPub(pub);
 
-    const hasCountryInfo = pub.country_code || pub.country_name;
-    const isRated = pub.ratings?.length > 0 || pub.pub_score != null;
+    const fetchAuthoritativePubData = async () => {
+        if (!pub || !pub.id) return;
 
-    if (!hasCountryInfo && pub.id && pub.location) {
-        // Pub is missing country info, we need to fetch it.
-        if (isRated) {
-            // It's a rated pub, so it must exist in our DB. Fetch full record.
-            const fetchFullPubData = async () => {
-                const { data, error } = await supabase
-                    .from('pubs')
-                    .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since')
-                    .eq('id', pub.id)
-                    .single();
+        // Fetch the pub record from our database. This is the source of truth
+        // for properties like `is_closed`, official name, certification, etc.
+        const { data: dbData, error } = await supabase
+            .from('pubs')
+            .select('id, name, address, lat, lng, country_code, country_name, is_closed, certification_status, certified_since')
+            .eq('id', pub.id)
+            .single();
 
-                if (data && !error) {
-                    setLocalPub(prevPub => ({
-                        ...prevPub, // Keep live data like ratings from the prop
-                        ...data, // Overwrite with the full data from DB
-                        location: { lat: data.lat, lng: data.lng }
-                    }));
-                }
-            };
-            fetchFullPubData();
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found, which is not an error here
+            console.error(`Error fetching authoritative data for pub ${pub.id}:`, error);
+            return;
+        }
+
+        if (dbData) {
+            // If data was found in our DB, merge it with the prop data.
+            // Data from our DB is considered more authoritative for core fields.
+            setLocalPub(prevPub => ({
+                ...prevPub, // Keep live data from props (like ratings, pub_score)
+                ...dbData,  // Overwrite with authoritative data from DB
+                is_closed: !!dbData.is_closed, // Ensure it's a boolean
+                location: { lat: dbData.lat, lng: dbData.lng }, // Re-structure location
+            }));
         } else {
-            // It's unrated, likely a new pub from OSM. Reverse geocode to get country.
-            const reverseGeocodeForCountry = async () => {
-                try {
+            // The pub is not in our database (e.g., a fresh OSM result).
+            // We can still try to enrich it if it's missing info.
+            const needsEnrichment = (!pub.country_code || !pub.country_name) && pub.location;
+            if (needsEnrichment) {
+                 try {
                     const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
                     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pub.location.lat}&lon=${pub.location.lng}&addressdetails=1`;
                     const response = await fetch(url, { headers: { 'User-Agent': userAgent } });
@@ -152,10 +155,11 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                 } catch (error) {
                     console.error("Reverse geocoding for country failed:", error);
                 }
-            };
-            reverseGeocodeForCountry();
+            }
         }
-    }
+    };
+
+    fetchAuthoritativePubData();
   }, [pub]);
 
   useEffect(() => {
@@ -421,7 +425,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                             existingRating={existingUserRating.rating}
                             existingImageUrl={existingUserRating.image_url}
                             existingIsPrivate={existingUserRating.is_private}
-                            currencySymbol={currencyInfo.symbol}
+                            currencyInfo={currencyInfo}
                             isSubmitting={isSubmittingRating}
                             userZeroVote={userZeroVotes.get(localPub.id)}
                             isLondon={isLondonNonDynamic}
@@ -451,7 +455,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                  {isRatingFormExpanded && (
                     <RatingForm
                         onSubmit={handleRatingSubmit}
-                        currencySymbol={currencyInfo.symbol}
+                        currencyInfo={currencyInfo}
                         isSubmitting={isSubmittingRating}
                         userZeroVote={userZeroVotes.get(localPub.id)}
                         isLondon={isLondonNonDynamic}

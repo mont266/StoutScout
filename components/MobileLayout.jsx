@@ -124,6 +124,7 @@ const MobileLayout = (props) => {
         onSetIsPriceByCountryModalOpen,
         allRatings, communitySubTab, setCommunitySubTab,
         onOpenAndroidBetaModal,
+        enrichingPubIds,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -324,6 +325,7 @@ const MobileLayout = (props) => {
                             searchRadius={settings.radius}
                             isLoading={isInitialDataLoading || isRefreshing}
                             onOpenScoreExplanation={onOpenScoreExplanation}
+                            enrichingPubIds={enrichingPubIds}
                         />
                     </div>
                 </div>

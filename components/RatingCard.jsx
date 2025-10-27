@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Avatar from './Avatar.jsx';
 import StarRating from './StarRating.jsx';
 import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
@@ -9,7 +9,18 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
     const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng, comment_count, message, pub_country_code, pub_country_name } = rating;
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
 
-    const isLiked = userLikes && userLikes.has(id);
+    const isLiked = useMemo(() => userLikes?.has(id) || false, [userLikes, id]);
+    const displayedLikeCount = like_count || 0;
+    
+    const handleLikeClick = () => {
+        if (!onToggleLike) {
+            onLoginRequest();
+            return;
+        }
+        // Immediately call the parent handler. The parent will optimistically
+        // update its state and send new props down, causing this component to re-render.
+        onToggleLike(rating);
+    };
     
     // Prioritize the rating's specific location data, but use the pub's data as a fallback.
     const effectiveLocationData = {
@@ -137,17 +148,17 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
              {/* Action Bar */}
             <div className="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-around">
                  <button
-                    onClick={() => onToggleLike ? onToggleLike(rating) : onLoginRequest()}
+                    onClick={handleLikeClick}
                     className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center ${
                         isLiked
                         ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'
                         : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                     }`}
                     aria-pressed={isLiked}
-                    aria-label={isLiked ? `Unlike rating, currently ${like_count} likes` : `Like rating, currently ${like_count} likes`}
+                    aria-label={isLiked ? `Unlike rating, currently ${displayedLikeCount} likes` : `Like rating, currently ${displayedLikeCount} likes`}
                   >
                       <i className={`${isLiked ? 'fas' : 'far'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
-                      <span>{like_count || 0}</span>
+                      <span>{displayedLikeCount}</span>
                 </button>
                  <button
                     onClick={() => setIsCommentsVisible(prev => !prev)}

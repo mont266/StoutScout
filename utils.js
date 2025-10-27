@@ -75,30 +75,42 @@ export const normalizePubNameForComparison = (name) => {
 
 /**
  * Creates a clean, formatted address string from a Nominatim address object.
- * Example: "123 Dame Street, Dublin, Ireland"
- * @param {object} addressObj The 'address' object from a Nominatim API response.
+ * @param {object} addressObj The 'address' object from a Nominatim or Overpass API response.
  * @returns {string} A formatted address string.
  */
 export const formatNominatimAddress = (addressObj) => {
     if (!addressObj) return 'Address unknown';
 
-    // Combine house number and road for a more complete street address.
-    const streetAddress = [addressObj.house_number, addressObj.road].filter(Boolean).join(' ');
-
-    // Prioritize specific keys, then build up from most local to most broad
+    const street = [addressObj.house_number, addressObj.road || addressObj.street].filter(Boolean).join(' ');
+    
+    // Build address from most specific to least specific, avoiding duplicates.
     const parts = [
-        streetAddress,
-        addressObj.neighbourhood,
-        addressObj.suburb,
-        addressObj.village,
+        street,
+        addressObj.suburb || addressObj.neighbourhood || addressObj.village,
         addressObj.town || addressObj.city_district || addressObj.city,
-        addressObj.county,
-        addressObj.state,
+        addressObj.county || addressObj.state,
+        addressObj.postcode,
         addressObj.country
     ];
-    // Filter out undefined/null/empty parts, remove duplicates, and join them.
-    const uniqueParts = [...new Set(parts.filter(p => p && p.trim() !== ''))];
+    
+    // Filter out undefined/null/empty parts, then remove duplicates.
+    const uniqueParts = [...new Set(parts.filter(p => p && String(p).trim() !== ''))];
+    
     if (uniqueParts.length === 0) return 'Address unknown';
+
+    // Special handling to avoid ", Country" if it's the only other part.
+    if (uniqueParts.length === 2 && uniqueParts[1] === addressObj.country) {
+        return uniqueParts.join(', ');
+    }
+    
+    // Remove country if there are plenty of other details, which is common for local results.
+    if (uniqueParts.length > 3) {
+        const countryIndex = uniqueParts.indexOf(addressObj.country);
+        if (countryIndex > -1) {
+            uniqueParts.splice(countryIndex, 1);
+        }
+    }
+
     return uniqueParts.join(', ');
 };
 
@@ -207,28 +219,41 @@ export const normalizeOverpassResult = (element) => {
  * @returns {string} A formatted address string.
  */
 export const normalizeReverseGeocodeResult = (reverseGeocodeResult) => {
-    if (!reverseGeocodeResult) return 'Address unknown';
-    // The /reverse endpoint often returns the full address in display_name
-    if (reverseGeocodeResult.display_name) {
-        return reverseGeocodeResult.display_name;
-    }
-    // Fallback to building it from parts if display_name is not present
-    if (reverseGeocodeResult.address) {
-        return formatNominatimAddress(reverseGeocodeResult.address);
-    }
-    return 'Could not determine address';
+    if (!reverseGeocodeResult?.address) return 'Address unknown';
+    // Use the existing robust address formatter
+    return formatNominatimAddress(reverseGeocodeResult.address);
 };
 
 /**
- * Determines if a pub is in London based on its address.
- * @param {object} pub The pub object.
- * @returns {boolean} True if the pub is likely in London.
+ * Defines the approximate geographical bounding box for Greater London.
+ */
+const LONDON_BOUNDS = {
+  north: 51.691874, // North (e.g., Enfield)
+  south: 51.28676,  // South (e.g., Coulsdon)
+  west: -0.510375, // West (e.g., Hillingdon)
+  east: 0.334015,   // East (e.g., Havering)
+};
+
+/**
+ * Determines if a pub is within the geographical boundaries of London
+ * based on its latitude and longitude. This is more reliable than
+ * checking the address string.
+ * @param {object} pub The pub object, which must have a `location` property with `lat` and `lng`.
+ * @returns {boolean} True if the pub's coordinates are within the London bounding box.
  */
 export const isLondonPub = (pub) => {
-    if (!pub || !pub.address) return false;
-    // Simple check for "London" in the address, but not "Londonderry".
-    const lowerAddress = pub.address.toLowerCase();
-    return lowerAddress.includes('london') && !lowerAddress.includes('londonderry');
+  // A pub must have location data to be checked.
+  if (!pub || !pub.location || pub.location.lat === undefined || pub.location.lng === undefined) {
+    return false;
+  }
+
+  const { lat, lng } = pub.location;
+
+  // Check if the coordinates fall within the defined London bounding box.
+  const isWithinLatitude = lat >= LONDON_BOUNDS.south && lat <= LONDON_BOUNDS.north;
+  const isWithinLongitude = lng >= LONDON_BOUNDS.west && lng <= LONDON_BOUNDS.east;
+
+  return isWithinLatitude && isWithinLongitude;
 };
 
 
@@ -269,87 +294,57 @@ const EUROZONE_COUNTRY_CODES = new Set([
     'it', 'lv', 'lt', 'lu', 'mt', 'nl', 'pt', 'sk', 'si', 'es'
 ]);
 
-// New mapping from country names to 2-letter codes.
-const COUNTRY_NAME_TO_CODE = {
-    'ireland': 'ie',
-    'portugal': 'pt',
-    'israel': 'il',
-    'poland': 'pl',
-    'united states': 'us',
-    'italy': 'it',
-    'spain': 'es',
-    'germany': 'de',
-    'france': 'fr',
-    'austria': 'at',
-    'belgium': 'be',
-    'croatia': 'hr',
-    'cyprus': 'cy',
-    'estonia': 'ee',
-    'finland': 'fi',
-    'greece': 'gr',
-    'latvia': 'lv',
-    'lithuania': 'lt',
-    'luxembourg': 'lu',
-    'malta': 'mt',
-    'netherlands': 'nl',
-    'slovakia': 'sk',
-    'slovenia': 'si',
-    'united kingdom': 'gb',
-    'england': 'gb',
-    'scotland': 'gb',
-    'wales': 'gb',
-    'northern ireland': 'gb',
-    'australia': 'au',
-    'canada': 'ca',
-    'turkey': 'tr',
+// A more comprehensive map for direct lookups.
+const CURRENCY_MAP = {
+    'us': { symbol: '$', code: 'USD' },
+    'ca': { symbol: '$', code: 'CAD' },
+    'gb': { symbol: '£', code: 'GBP' },
+    'uk': { symbol: '£', code: 'GBP' }, // Alias for Great Britain
+    'au': { symbol: '$', code: 'AUD' },
+    'nz': { symbol: 'NZ$', code: 'NZD' },
+    'jp': { symbol: '¥', code: 'JPY' },
+    'sg': { symbol: 'S$', code: 'SGD' },
+    'ae': { symbol: 'د.إ', code: 'AED' },
+    'pl': { symbol: 'zł', code: 'PLN' },
+    'ch': { symbol: 'CHF', code: 'CHF' },
+    'se': { symbol: 'kr', code: 'SEK' },
+    'no': { symbol: 'kr', code: 'NOK' },
+    'dk': { symbol: 'kr', code: 'DKK' },
+    'tr': { symbol: '₺', code: 'TRY' },
+    'il': { symbol: '₪', code: 'ILS' },
+    'za': { symbol: 'R', code: 'ZAR' },
+    'ma': { symbol: 'د.م.', code: 'MAD' }, // Moroccan Dirham
+    'br': { symbol: 'R$', code: 'BRL' },
+    'cn': { symbol: '¥', code: 'CNY' },
+    'in': { symbol: '₹', code: 'INR' },
+    'mx': { symbol: 'Mex$', code: 'MXN' },
+    'ru': { symbol: '₽', code: 'RUB' },
+    'cz': { symbol: 'Kč', code: 'CZK' },
 };
 
 /**
- * Infers currency information based on a pub's country code or country name.
+ * Infers currency information based solely on a pub's country code.
  * Defaults to GBP (£) for UK or any unidentified/missing country codes.
- * @param {{country_code?: string, country_name?: string}} pubLocationData The pub's location data.
+ * @param {{country_code?: string}} pubLocationData The pub's location data.
  * @returns {{symbol: string, code: string}} The currency symbol and code.
  */
 export const getCurrencyInfo = (pubLocationData = {}) => {
-    let { country_code, country_name } = pubLocationData;
+    const { country_code } = pubLocationData;
 
-    // 1. If country_code is missing, try to derive it from country_name.
-    if (!country_code && country_name) {
-        country_code = COUNTRY_NAME_TO_CODE[country_name.toLowerCase().trim()];
-    }
-
-    // 2. Check if country_code exists.
     if (country_code) {
         const code = country_code.toLowerCase().trim();
 
-        // 3. Match against a strict list of known codes.
         if (EUROZONE_COUNTRY_CODES.has(code)) {
             return { symbol: '€', code: 'EUR' };
         }
-        if (code === 'us') {
-            return { symbol: '$', code: 'USD' };
-        }
-        if (code === 'gb' || code === 'uk') {
-            return { symbol: '£', code: 'GBP' };
-        }
-        if (code === 'au') {
-            return { symbol: '$', code: 'AUD' };
-        }
-        if (code === 'ca') {
-            return { symbol: '$', code: 'CAD' };
-        }
-        if (code === 'tr') {
-            return { symbol: '₺', code: 'TRY' };
-        }
-        if (code === 'pl') {
-            return { symbol: 'zł', code: 'PLN' };
-        }
-        if (code === 'il') {
-            return { symbol: '₪', code: 'ILS' };
+        
+        const currency = CURRENCY_MAP[code];
+        if (currency) {
+            return currency;
         }
     }
 
-    // 4. If country_code is null, empty, or not in the list above, default to GBP.
+    // Fallback to GBP if country_code is null or not matched.
     return { symbol: '£', code: 'GBP' };
 };
 

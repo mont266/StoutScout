@@ -22,8 +22,6 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   const [refreshStatsSuccess, setRefreshStatsSuccess] = useState(false);
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [rebuildSuccess, setRebuildSuccess] = useState(false);
-  const [isBackfilling, setIsBackfilling] = useState(false);
-  const [backfillSuccess, setBackfillSuccess] = useState(false);
   const isDesktop = useIsDesktop();
   
   const handleUnitChange = (unit) => onSettingsChange({ ...settings, unit });
@@ -115,43 +113,6 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
         alert(`Could not rebuild dynamic pricing: ${error.message}`);
     } finally {
         setIsRebuilding(false);
-    }
-  };
-
-  const handleBackfillPubData = async () => {
-    if (!window.confirm("This will process up to 50 uncategorized pubs to add their country data. This may take a minute. Continue?")) {
-      return;
-    }
-    setIsBackfilling(true);
-    setBackfillSuccess(false);
-    trackEvent('manual_backfill_pub_data');
-    try {
-        const { data, error } = await supabase.functions.invoke('backfill-country-data');
-        if (error) throw new Error(error.message);
-        
-        setBackfillSuccess(true);
-        setTimeout(() => setBackfillSuccess(false), 3000);
-        
-        setAlertInfo({
-            isOpen: true,
-            title: 'Backfill Complete',
-            message: data.message,
-            theme: 'success',
-        });
-        
-        // Refresh app data to see changes
-        await onDataRefresh();
-
-    } catch (error) {
-        console.error("Error backfilling pub data:", error);
-        setAlertInfo({
-            isOpen: true,
-            title: 'Backfill Failed',
-            message: error.details || error.message,
-            theme: 'error',
-        });
-    } finally {
-        setIsBackfilling(false);
     }
   };
 
@@ -443,27 +404,6 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                                               : 'Refresh Area Prices'}
                                   </span>
                               </button>
-                          </div>
-                          <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                              <button
-                                  onClick={handleBackfillPubData}
-                                  disabled={isBackfilling}
-                                  className="w-full flex items-center justify-center space-x-2 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold py-3 px-4 rounded-lg hover:bg-purple-500/20 transition-colors disabled:opacity-50"
-                              >
-                                  {isBackfilling 
-                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
-                                      : backfillSuccess 
-                                          ? <i className="fas fa-check"></i> 
-                                          : <i className="fas fa-globe-europe"></i>}
-                                  <span>
-                                      {isBackfilling 
-                                          ? 'Processing Batch...' 
-                                          : backfillSuccess 
-                                              ? 'Batch Done!' 
-                                              : 'Backfill Pub Country Data'}
-                                  </span>
-                              </button>
-                              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">Processes a batch of up to 50 pubs missing country data. This may take up to a minute.</p>
                           </div>
                       </div>
                       <div className="pt-4 border-t border-gray-200 dark:border-gray-700">

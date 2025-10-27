@@ -84,10 +84,10 @@ const DesktopLayout = (props) => {
         allTrophies,
         dbPubs,
         onViewSocialHub,
-        isBackfilling, onBackfillCountryData,
         isPriceByCountryModalOpen,
         onSetIsPriceByCountryModalOpen,
         onOpenAndroidBetaModal,
+        enrichingPubIds,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -103,7 +103,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={() => handleBackFromFriendsList()}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={handleFriendAction}
+                    onFriendAction={onFriendAction}
                 />
             );
         }
@@ -196,6 +196,7 @@ const DesktopLayout = (props) => {
                             searchRadius={settings.radius}
                             isLoading={isInitialDataLoading || isRefreshing}
                             onOpenScoreExplanation={onOpenScoreExplanation}
+                            enrichingPubIds={enrichingPubIds}
                         />
                     </div>
                 </div>
@@ -287,8 +288,6 @@ const DesktopLayout = (props) => {
                             onScrollComplete={onScrollComplete}
                             userTrophies={userTrophies}
                             allTrophies={allTrophies}
-                            isBackfilling={isBackfilling}
-                            onBackfillCountryData={onBackfillCountryData}
                             onOpenAndroidBetaModal={onOpenAndroidBetaModal}
                         />
                     </div>

@@ -3,7 +3,7 @@ import StarRating from './StarRating.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import { getStarRatingFromPrice } from '../utils.js';
 
-const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote, isLondon = false }) => {
+const RatingForm = ({ onSubmit, existingRating, currencyInfo = { symbol: '£', code: 'GBP' }, existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote, isLondon = false }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
   const [priceInput, setPriceInput] = useState('');
@@ -20,6 +20,40 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
   const [imageToCrop, setImageToCrop] = useState(null);
 
   const [validationError, setValidationError] = useState(null);
+
+  const { symbol: currencySymbol, code: currencyCode } = currencyInfo;
+
+  const paddingClass = useMemo(() => {
+    const len = currencySymbol.length;
+    if (len > 2) return 'pl-10'; // e.g., 'Mex$', 'د.م.'
+    if (len === 2) return 'pl-8';  // e.g., 'Kč', 'R$'
+    return 'pl-7';                // e.g., '£', '$'
+  }, [currencySymbol]);
+
+  const placeholder = useMemo(() => {
+    switch (currencyCode) {
+        case 'JPY':
+            return 'e.g., 700';
+        case 'CNY':
+            return 'e.g., 70';
+        case 'MAD':
+            return 'e.g., 30';
+        case 'PLN':
+            return 'e.g., 15';
+        case 'ILS':
+            return 'e.g., 25';
+        case 'TRY':
+            return 'e.g., 120';
+        case 'INR':
+            return 'e.g., 150';
+        case 'RUB':
+            return 'e.g., 250';
+        case 'CZK':
+            return 'e.g., 55';
+        default:
+            return 'e.g., 5.70';
+    }
+  }, [currencyCode]);
 
 
   // Dynamically create price labels based on the currency symbol
@@ -179,8 +213,8 @@ const RatingForm = ({ onSubmit, existingRating, currencySymbol = '£', existingI
             min="0"
             value={priceInput}
             onChange={handlePriceInputChange}
-            placeholder="e.g., 5.70"
-            className="w-full pl-7 pr-3 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+            placeholder={placeholder}
+            className={`w-full ${paddingClass} pr-3 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500`}
           />
         </div>
       </div>

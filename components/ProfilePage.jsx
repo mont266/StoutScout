@@ -369,7 +369,6 @@ const hasMetConditions = (trophy, stats) => {
 
 const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen }) => {
     const isDesktop = useIsDesktop();
-    const [profile, setProfile] = useState(userProfile);
     const [isBanning, setIsBanning] = useState(false);
     const [isUnbanning, setIsUnbanning] = useState(false);
     const [isUpdatingRoles, setIsUpdatingRoles] = useState(false);
@@ -391,8 +390,8 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
 
     const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
 
-    // Moved these declarations before the hooks that use them, and made them safe for null `profile`
-    const isViewingOwnProfile = !loggedInUserProfile || profile?.id === loggedInUserProfile?.id;
+    // Moved these declarations before the hooks that use them, and made them safe for null `userProfile`
+    const isViewingOwnProfile = !loggedInUserProfile || userProfile?.id === loggedInUserProfile?.id;
     const isDeveloper = loggedInUserProfile?.is_developer;
     const canViewStats = isViewingOwnProfile || isDeveloper;
 
@@ -413,12 +412,6 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         return () => scrollContainer.removeEventListener('scroll', handleScroll);
     }, [isDesktop]);
 
-
-    useEffect(() => {
-        setProfile(userProfile);
-    }, [userProfile]);
-
-    // This hook was being called conditionally, causing the error. Moved before the early return.
     useEffect(() => {
         if (!canViewStats && activeTab === 'stats') {
             setActiveTab('ratings');
@@ -429,11 +422,11 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         ratingsCount: userRatings.length,
         uniquePubsCount: new Set(userRatings.map(r => r.pubId)).size,
         uniqueCountriesCount: new Set(userRatings.map(r => r.pubCountryCode).filter(Boolean)).size,
-        pubsAddedCount: profile?.pubs_added_count || 0,
+        pubsAddedCount: userProfile?.pubs_added_count || 0,
         ratingsWithPhotoCount: userRatings.filter(r => r.image_url).length,
         has_perfect_quality_rating: userRatings.some(r => r.rating.quality === 5),
         has_perfect_price_rating: userRatings.some(r => r.rating.price === 5),
-    }), [userRatings, profile]);
+    }), [userRatings, userProfile]);
     
     const trophiesForCabinet = useMemo(() => {
         const CABINET_SIZE = 4;
@@ -445,12 +438,12 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
 
             // The "Stoutly Patron" trophy is unlocked ONLY if the user has donated.
             if (trophy.id === PATRON_TROPHY_ID) {
-                isUnlocked = !!profile?.has_donated;
+                isUnlocked = !!userProfile?.has_donated;
             } else {
                 // For all other trophies, check the DB record first.
                 let isUnlockedInDb = (userTrophies || []).some(ut => ut.trophy_id === trophy.id);
                 const isStatBased = trophy.trigger_conditions && Object.keys(trophy.trigger_conditions).length > 0;
-
+                
                 if (isUnlockedInDb && isStatBased) {
                     // If it's unlocked in the DB and is stat-based, re-validate against current stats.
                     isUnlocked = hasMetConditions(trophy, userStats);
@@ -495,10 +488,10 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         
         return [...unlockedForCabinet, ...lockedForCabinet];
 
-    }, [userTrophies, allTrophies, userStatsForTrophies, profile]);
+    }, [userTrophies, allTrophies, userStatsForTrophies, userProfile]);
 
 
-    if (!profile) {
+    if (!userProfile) {
         return (
              <div className="flex items-center justify-center h-full">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-400"></div>
@@ -511,30 +504,29 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         if (modalOpener) modalOpener();
     };
 
-    const { username, level, is_beta_tester, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, friends_count, bio } = profile;
-    const reviews = profile.reviews || 0;
+    const { username, level, is_beta_tester, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, friends_count, bio } = userProfile;
+    const reviews = userProfile.reviews || 0;
     
     const rankData = getRankData(level);
     
     const canModerate = isDeveloper && !isViewingOwnProfile;
     const isActionLoading = isBanning || isUnbanning || isUpdatingRoles || !!deletingRatingId;
-    const isOnline = onlineUserIds.has(profile.id);
+    const isOnline = onlineUserIds.has(userProfile.id);
 
     const handleBanUser = async (reason) => {
         setIsBanning(true);
         setIsBanModalOpen(false);
         const { error } = await supabase.functions.invoke('ban-user', {
-            body: { user_id: profile.id, reason },
+            body: { user_id: userProfile.id, reason },
         });
 
         if (error) {
             setAlertInfo({ isOpen: true, title: 'Ban Failed', message: error.context?.responseJson?.error || error.message, theme: 'error' });
-            trackEvent('ban_user_failed', { banned_user_id: profile.id, error: error.message });
+            trackEvent('ban_user_failed', { banned_user_id: userProfile.id, error: error.message });
         } else {
-            setProfile(p => ({ ...p, is_banned: true, ban_reason: reason }));
-            trackEvent('ban_user_success', { banned_user_id: profile.id, reason });
+            trackEvent('ban_user_success', { banned_user_id: userProfile.id, reason });
              if (onProfileUpdate) {
-                onProfileUpdate(profile.id);
+                onProfileUpdate(userProfile.id);
             }
         }
         setIsBanning(false);
@@ -557,17 +549,16 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
     const handleUnbanUser = async () => {
         setIsUnbanning(true);
         const { error } = await supabase.functions.invoke('unban-user', {
-            body: { user_id: profile.id },
+            body: { user_id: userProfile.id },
         });
 
         if (error) {
             setAlertInfo({ isOpen: true, title: 'Unban Failed', message: error.context?.responseJson?.error || error.message, theme: 'error' });
-            trackEvent('unban_user_failed', { unbanned_user_id: profile.id, error: error.message });
+            trackEvent('unban_user_failed', { unbanned_user_id: userProfile.id, error: error.message });
         } else {
-            setProfile(p => ({ ...p, is_banned: false, ban_reason: null, banned_at: null }));
-            trackEvent('unban_user_success', { unbanned_user_id: profile.id });
+            trackEvent('unban_user_success', { unbanned_user_id: userProfile.id });
             if (onProfileUpdate) {
-                onProfileUpdate(profile.id);
+                onProfileUpdate(userProfile.id);
             }
         }
         setIsUnbanning(false);
@@ -592,7 +583,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         
         const { error } = await supabase.functions.invoke('set-user-role', {
             body: { 
-                user_id: profile.id,
+                user_id: userProfile.id,
                 roleName: roleName,
                 roleValue: roleValue
             },
@@ -600,10 +591,12 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
 
         if (error) {
             setAlertInfo({ isOpen: true, title: 'Failed to Update Role', message: error.context?.responseJson?.error || error.message, theme: 'error' });
-            trackEvent('set_role_failed', { target_user_id: profile.id, role_name: roleName, error: error.message });
+            trackEvent('set_role_failed', { target_user_id: userProfile.id, role_name: roleName, error: error.message });
         } else {
-            setProfile(p => ({ ...p, [roleName]: roleValue }));
-            trackEvent('set_role_success', { target_user_id: profile.id, role_name: roleName, role_value: roleValue });
+            trackEvent('set_role_success', { target_user_id: userProfile.id, role_name: roleName, role_value: roleValue });
+            if (onProfileUpdate) {
+                onProfileUpdate(userProfile.id);
+            }
         }
         setIsUpdatingRoles(false);
     };
@@ -657,7 +650,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
     };
 
     const getProfileBorderColor = () => {
-        if (profile.is_developer) return 'border-amber-500';
+        if (userProfile.is_developer) return 'border-amber-500';
         if (is_beta_tester) return 'border-blue-500';
         if (is_team_member) return 'border-purple-500';
         if (is_early_bird) return 'border-green-500';
@@ -692,13 +685,13 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                         <div className="text-sm">
                             <h4 className="font-bold mb-2">Roles</h4>
                             <div className="space-y-2">
-                                <label className="flex items-center justify-between"><span className="font-semibold text-amber-600 dark:text-amber-400">Developer</span><input type="checkbox" checked={profile.is_developer} onChange={(e) => confirmSetRole('is_developer', e.target.checked)} disabled={isUpdatingRoles} className="w-5 h-5 rounded text-amber-500 focus:ring-amber-500" /></label>
+                                <label className="flex items-center justify-between"><span className="font-semibold text-amber-600 dark:text-amber-400">Developer</span><input type="checkbox" checked={userProfile.is_developer} onChange={(e) => confirmSetRole('is_developer', e.target.checked)} disabled={isUpdatingRoles} className="w-5 h-5 rounded text-amber-500 focus:ring-amber-500" /></label>
                                 <label className="flex items-center justify-between"><span className="font-semibold text-purple-600 dark:text-purple-400">Team Member</span><input type="checkbox" checked={is_team_member} onChange={(e) => confirmSetRole('is_team_member', e.target.checked)} disabled={isUpdatingRoles} className="w-5 h-5 rounded text-purple-500 focus:ring-purple-500" /></label>
                             </div>
                         </div>
-                        {is_banned && profile.ban_reason && (
+                        {is_banned && userProfile.ban_reason && (
                              <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-md">
-                                <p className="text-xs text-red-800 dark:text-red-300"><strong className="block">Ban Reason:</strong> {profile.ban_reason}</p>
+                                <p className="text-xs text-red-800 dark:text-red-300"><strong className="block">Ban Reason:</strong> {userProfile.ban_reason}</p>
                             </div>
                         )}
                         <p className="text-xs text-gray-500 dark:text-gray-400">Removed images: {removed_image_count || 0}</p>
@@ -754,10 +747,10 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                 </button>
                 {isDevInfoVisible && (
                     <div className="mt-4 p-3 bg-gray-200 dark:bg-gray-900 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 break-all animate-fade-in-down">
-                        <p><strong>User ID:</strong> {profile.id}</p>
-                        <p><strong>Created:</strong> {new Date(profile.created_at).toLocaleString('en-GB')}</p>
-                        <p><strong>Last Login:</strong> {profile.last_sign_in_at ? new Date(profile.last_sign_in_at).toLocaleString('en-GB') : 'Unknown'}</p>
-                        {profile.signup_utm_source && <p><strong>UTM Source:</strong> {profile.signup_utm_source}</p>}
+                        <p><strong>User ID:</strong> {userProfile.id}</p>
+                        <p><strong>Created:</strong> {new Date(userProfile.created_at).toLocaleString('en-GB')}</p>
+                        <p><strong>Last Login:</strong> {userProfile.last_sign_in_at ? new Date(userProfile.last_sign_in_at).toLocaleString('en-GB') : 'Unknown'}</p>
+                        {userProfile.signup_utm_source && <p><strong>UTM Source:</strong> {userProfile.signup_utm_source}</p>}
                     </div>
                 )}
             </section>
@@ -818,7 +811,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                  )}
                                 {r.image_url && (
                                     <div className="mt-2">
-                                        <button onClick={() => setImageToView({ ...r, user: profile, uploaderName: username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
+                                        <button onClick={() => setImageToView({ ...r, user: userProfile, uploaderName: username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
                                             <img src={r.image_url} alt="Pint of Guinness" className="w-24 h-24 object-cover" />
                                         </button>
                                     </div>
@@ -841,7 +834,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
         {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={isActionLoading} onClose={() => setConfirmation({ isOpen: false })} />}
         {alertInfo.isOpen && <AlertModal {...alertInfo} onClose={() => setAlertInfo({ isOpen: false })} />}
-        {isViewingOwnProfile && <EditProfileActionsModal isOpen={isEditActionsModalOpen} onClose={() => setIsEditActionsModalOpen(false)} onEditAvatar={() => handleOpenModal(onAvatarChangeClick)} onEditUsername={() => handleOpenModal(onEditUsernameClick)} onEditBio={() => handleOpenModal(onEditBioClick)} onEditSocials={() => handleOpenModal(onEditSocialsClick)} onOpenUpdateDetailsModal={() => handleOpenModal(onOpenUpdateDetailsModal)} userProfile={profile} />}
+        {isViewingOwnProfile && <EditProfileActionsModal isOpen={isEditActionsModalOpen} onClose={() => setIsEditActionsModalOpen(false)} onEditAvatar={() => handleOpenModal(onAvatarChangeClick)} onEditUsername={() => handleOpenModal(onEditUsernameClick)} onEditBio={() => handleOpenModal(onEditBioClick)} onEditSocials={() => handleOpenModal(onEditSocialsClick)} onOpenUpdateDetailsModal={() => handleOpenModal(onOpenUpdateDetailsModal)} userProfile={userProfile} />}
         {isTrophyModalOpen && (
             <TrophyModal
                 isOpen={isTrophyModalOpen}
@@ -850,7 +843,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                 unlockedTrophyIds={new Set(userTrophies.map(t => t.trophy_id))}
                 userStats={userStatsForTrophies}
                 onNavigateToSettings={onNavigateToSettings}
-                userProfile={profile}
+                userProfile={userProfile}
             />
         )}
         {!isDesktop && canViewStats && (
@@ -860,7 +853,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                 userRatings={userRatings}
                 onViewPub={onViewPub}
                 rankData={rankData}
-                userProfile={profile}
+                userProfile={userProfile}
                 levelRequirements={levelRequirements}
                 pubScores={pubScores}
             />
@@ -871,18 +864,18 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
             {!isDesktop && (
                 <header className={`sticky top-0 z-20 flex items-center justify-between px-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-md transition-all duration-300 ease-in-out ${isHeaderCollapsed ? 'h-16 opacity-100' : 'h-0 opacity-0 pointer-events-none'}`}>
                     <div className="flex items-center gap-3">
-                        <ProfileAvatar userProfile={profile} size={32} />
+                        <ProfileAvatar userProfile={userProfile} size={32} />
                         <h1 className="text-lg font-bold text-gray-900 dark:text-white">{username}</h1>
                     </div>
                     <div className="flex items-center gap-2">
                         {canViewStats && <button onClick={() => onSetIsStatsModalOpen(true)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="View stats"><i className="fas fa-chart-bar"></i></button>}
                         {isViewingOwnProfile ? (
                             <>
-                                <button onClick={() => onOpenShareProfileModal(profile)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="Share profile"><i className="fas fa-share-alt"></i></button>
+                                <button onClick={() => onOpenShareProfileModal(userProfile)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="Share profile"><i className="fas fa-share-alt"></i></button>
                                 <button onClick={() => setIsEditActionsModalOpen(true)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="Profile settings"><i className="fas fa-cog"></i></button>
                             </>
                         ) : (
-                            <button onClick={() => onOpenShareProfileModal(profile)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="Share this profile"><i className="fas fa-share-alt"></i></button>
+                            <button onClick={() => onOpenShareProfileModal(userProfile)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="Share this profile"><i className="fas fa-share-alt"></i></button>
                         )}
                     </div>
                 </header>
@@ -904,11 +897,11 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                         )}
                         {isViewingOwnProfile ? (
                             <>
-                                <button onClick={() => onOpenShareProfileModal(profile)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Share profile"><i className="fas fa-share-alt"></i></button>
+                                <button onClick={() => onOpenShareProfileModal(userProfile)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Share profile"><i className="fas fa-share-alt"></i></button>
                                 <button onClick={() => setIsEditActionsModalOpen(true)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Profile settings"><i className="fas fa-cog"></i></button>
                             </>
                         ) : (
-                            <button onClick={() => onOpenShareProfileModal(profile)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Share this profile"><i className="fas fa-share-alt"></i></button>
+                            <button onClick={() => onOpenShareProfileModal(userProfile)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Share this profile"><i className="fas fa-share-alt"></i></button>
                         )}
                     </div>
                     
@@ -938,7 +931,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                         <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trophies</p>
                                     </button>
                                     <button
-                                        onClick={() => onViewFriends(profile)}
+                                        onClick={() => onViewFriends(userProfile)}
                                         className="text-center disabled:cursor-default transition-colors group"
                                         disabled={!onViewFriends}
                                     >
@@ -956,7 +949,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                     {/* AVATAR SECTION */}
                     <section className="flex flex-col items-center text-center -mt-14 lg:-mt-20">
                         <div className={`relative w-32 h-32 rounded-full border-4 ${getProfileBorderColor()}`}>
-                            <ProfileAvatar userProfile={profile} levelRequirements={levelRequirements} size={120} onClick={isViewingOwnProfile ? onAvatarChangeClick : undefined} />
+                            <ProfileAvatar userProfile={userProfile} levelRequirements={levelRequirements} size={120} onClick={isViewingOwnProfile ? onAvatarChangeClick : undefined} />
                             {isOnline && <div className="absolute bottom-1 right-1 w-6 h-6 bg-green-500 rounded-full border-4 border-white dark:border-gray-900" title="Online"></div>}
                         </div>
                         <div className="mt-4">
@@ -965,8 +958,8 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                 <i className={`fas ${rankData.icon} text-xl lg:text-2xl`}></i>
                                 <span className="text-lg lg:text-xl font-semibold">{rankData.name}</span>
                             </div>
-                            <UserBadges profile={profile} className="mt-4" />
-                            <SocialLinks handles={profile} className="mt-4 justify-center" />
+                            <UserBadges profile={userProfile} className="mt-4" />
+                            <SocialLinks handles={userProfile} className="mt-4 justify-center" />
                         </div>
                     </section>
                     
@@ -978,11 +971,11 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                         <div className="flex justify-around text-center p-3 bg-white dark:bg-gray-800 rounded-xl shadow-md">
                                             <div><p className="text-2xl font-bold text-gray-900 dark:text-white">{level}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Level</p></div>
                                             <div><p className="text-2xl font-bold text-gray-900 dark:text-white">{reviews}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ratings</p></div>
-                                            <div><button onClick={() => onViewFriends(profile)} className="disabled:cursor-default" disabled={!onViewFriends}><p className="text-2xl font-bold text-gray-900 dark:text-white">{friends_count}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Friends</p></button></div>
+                                            <div><button onClick={() => onViewFriends(userProfile)} className="disabled:cursor-default" disabled={!onViewFriends}><p className="text-2xl font-bold text-gray-900 dark:text-white">{friends_count}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Friends</p></button></div>
                                         </div>
                                     </section>
                                 )}
-                                {!isViewingOwnProfile && loggedInUserProfile && <section><FriendshipButton loggedInUser={loggedInUserProfile} targetUser={profile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} /></section>}
+                                {!isViewingOwnProfile && loggedInUserProfile && <section><FriendshipButton loggedInUser={loggedInUserProfile} targetUser={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} /></section>}
                                 {bio && <section className="bg-white dark:bg-gray-800 p-4 lg:p-6 rounded-xl shadow-md text-center lg:text-left"><h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3 hidden lg:block">Bio</h2><BioRenderer text={bio} /></section>}
                                 <TrophyCabinet trophies={trophiesForCabinet} onOpenTrophyModal={() => setIsTrophyModalOpen(true)} onNavigateToSettings={onNavigateToSettings} />
                                 <ModerationTools />
@@ -1004,7 +997,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                                         <RatingsList />
                                                     </div>
                                                 )}
-                                                {activeTab === 'stats' && canViewStats && <ProfileStatsView userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={profile} levelRequirements={levelRequirements} pubScores={pubScores} />}
+                                                {activeTab === 'stats' && canViewStats && <ProfileStatsView userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />}
                                             </div>
                                         </>
                                     ) : (

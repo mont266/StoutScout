@@ -250,22 +250,25 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
             setLoading(false);
         }
     }, [hasFriends, filter, userProfile]);
-    
-    const handleFeedToggleLike = (ratingToToggle) => {
-        setRatings(currentRatings => 
-            currentRatings.map(rating => {
+
+    const handleFeedToggleLike = useCallback((ratingToToggle) => {
+        // Optimistically update the local `ratings` state.
+        setRatings(currentRatings => {
+            return currentRatings.map(rating => {
                 if (rating.id === ratingToToggle.id) {
-                    const isLiked = userLikes.has(ratingToToggle.id);
-                    const newLikeCount = isLiked 
-                        ? (rating.like_count || 1) - 1 
+                    const isLiked = userLikes.has(rating.id);
+                    const newLikeCount = isLiked
+                        ? (rating.like_count || 1) - 1
                         : (rating.like_count || 0) + 1;
                     return { ...rating, like_count: newLikeCount };
                 }
                 return rating;
-            })
-        );
+            });
+        });
+    
+        // Call the main handler from App.jsx to update global state and the database.
         onToggleLike(ratingToToggle);
-    };
+    }, [onToggleLike, userLikes]);
 
     const handleFeedAddComment = async (ratingId, content) => {
         const newCommentsList = await onAddComment(ratingId, content);
@@ -512,7 +515,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Friends Feed</h2>
                         <div className="flex items-center gap-2">
                             <div ref={filterMenuRef} className="relative">
-                                <button 
+                                <button
                                     onClick={() => setIsFilterMenuOpen(p => !p)}
                                     className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 px-3 py-1.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-700"
                                     aria-haspopup="true"
@@ -538,15 +541,6 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                                     </div>
                                 )}
                             </div>
-                            <button
-                                onClick={() => handleRefresh('button')}
-                                disabled={loading && page === 1}
-                                className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
-                                aria-label="Refresh feed"
-                                title="Refresh feed"
-                            >
-                                <i className={`fas fa-sync-alt ${loading && page === 1 ? 'animate-spin' : ''}`}></i>
-                            </button>
                             <button
                                 onClick={() => setView('search')}
                                 className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500"

@@ -5,7 +5,7 @@ import { getCurrencyInfo, getPriceRangeFromStars, isLondonPub } from '../utils.j
 import CoachMark from './CoachMark.jsx';
 import CertifiedBadge from './CertifiedBadge.jsx';
 
-const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading, showToggleHeader = true, onOpenScoreExplanation }) => {
+const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, isExpanded, onToggle, resultsAreCapped, searchRadius, isLoading, showToggleHeader = true, onOpenScoreExplanation, enrichingPubIds }) => {
   const selectedItemRef = useRef(null);
   const listRef = useRef(null);
   const [showCoachMark, setShowCoachMark] = useState(false);
@@ -109,6 +109,8 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
   const displayRadius = distanceUnit === 'mi'
     ? (searchRadius / 1609.34).toFixed(1)
     : (searchRadius / 1000).toFixed(1);
+  
+  const displayUnit = distanceUnit;
 
   return (
     <div className="bg-white dark:bg-gray-800 h-full flex flex-col shadow-lg rounded-t-2xl">
@@ -122,7 +124,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
         <div className="overflow-y-auto flex-grow">
            <div className="p-2 text-center text-xs bg-gray-100 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
               <i className="fas fa-search-location mr-1.5"></i>
-              Searching within <strong className="text-gray-800 dark:text-gray-200">{displayRadius} {distanceUnit}</strong>
+              Searching within <strong className="text-gray-800 dark:text-gray-200">{displayRadius} {displayUnit}</strong>
             </div>
           {resultsAreCapped && (
             <div className="p-2 text-center text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-b border-gray-200 dark:border-gray-700">
@@ -163,7 +165,12 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
                                   <p className={`font-semibold text-gray-900 dark:text-white truncate ${isClosed ? 'line-through' : ''}`}>{pub.name}</p>
                                   {isClosed && <span className="flex-shrink-0 text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 px-2 py-0.5 rounded-full">CLOSED</span>}
                                 </div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{pub.address}</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 truncate flex items-center gap-2">
+                                    <span>{pub.address}</span>
+                                    {pub.address === 'Address unknown' && enrichingPubIds.has(pub.id) && (
+                                        <span className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-amber-500 flex-shrink-0"></span>
+                                    )}
+                                </p>
                             </div>
                         </div>
                         <div className="flex-shrink-0">
