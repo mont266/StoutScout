@@ -1,13 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from './Icon.jsx';
 import StarRating from './StarRating.jsx';
 import Avatar from './Avatar.jsx';
 import { trackEvent } from '../analytics.js';
 import { getCurrencyInfo } from '../utils.js';
+import { Capacitor } from '@capacitor/core';
+import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 
-const ShareRatingModal = ({ rating, onClose }) => {
+const ShareRatingModal = ({ rating, onClose, loggedInUserProfile }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy Link');
+    const { rates: exchangeRates } = useContext(ExchangeRatesContext);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -17,7 +20,9 @@ const ShareRatingModal = ({ rating, onClose }) => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
 
-    const baseUrl = `${window.location.origin}/?pub_id=${rating.pub_id}&rating_id=${rating.id}`;
+    const productionUrl = 'https://www.stoutly.co.uk';
+    const origin = Capacitor.isNativePlatform() ? productionUrl : window.location.origin;
+    const baseUrl = `${origin}/?pub_id=${rating.pub_id}&rating_id=${rating.id}`;
     const shareUrl = `${baseUrl}&utm_source=stoutly_app&utm_medium=share&utm_campaign=rating_share`;
     
     const currencyInfo = getCurrencyInfo({
@@ -53,6 +58,22 @@ const ShareRatingModal = ({ rating, onClose }) => {
             handleCopy();
         }
     };
+    
+    const userHomeCurrency = getCurrencyInfo(loggedInUserProfile || { country_code: 'gb' });
+    let convertedPriceText = null;
+    if (
+        rating.exact_price > 0 && 
+        exchangeRates &&
+        currencyInfo.code !== userHomeCurrency.code &&
+        exchangeRates[currencyInfo.code] &&
+        exchangeRates[userHomeCurrency.code]
+    ) {
+        // Convert the pint's price to the base currency (GBP)
+        const priceInGbp = rating.exact_price / exchangeRates[currencyInfo.code];
+        // Convert from the base currency to the user's home currency
+        const convertedPrice = priceInGbp * exchangeRates[userHomeCurrency.code];
+        convertedPriceText = `${userHomeCurrency.symbol}${convertedPrice.toFixed(2)}`;
+    }
 
     const modalContent = (
         <div
@@ -90,10 +111,11 @@ const ShareRatingModal = ({ rating, onClose }) => {
                             {/* Price Overlay (Top Right) */}
                             {rating.exact_price > 0 && (
                                 <div
-                                    className="absolute top-3 right-3 text-white font-bold text-2xl"
+                                    className="absolute top-3 right-3 text-right"
                                     style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.7)' }}
                                 >
-                                    {currencyInfo.symbol}{rating.exact_price.toFixed(2)}
+                                    <p className="text-white font-bold text-2xl" title={currencyInfo.code}>{currencyInfo.symbol}{rating.exact_price.toFixed(2)}</p>
+                                    {convertedPriceText && <p className="text-white font-semibold text-sm" title={userHomeCurrency.code}>{convertedPriceText}</p>}
                                 </div>
                             )}
 
@@ -135,12 +157,15 @@ const ShareRatingModal = ({ rating, onClose }) => {
                             
                             {rating.exact_price > 0 && (
                                 <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700/50">
-                                    <p className="text-sm text-gray-600 dark:text-gray-400 flex justify-between items-center">
-                                        <span>Price Paid:</span>
-                                        <span className="font-bold text-lg text-gray-800 dark:text-white bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded">
-                                            {currencyInfo.symbol}{rating.exact_price.toFixed(2)}
-                                        </span>
-                                    </p>
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400 mt-1">Price Paid:</span>
+                                        <div className="text-right">
+                                            <span className="font-bold text-lg text-gray-800 dark:text-white bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded" title={currencyInfo.code}>
+                                                {currencyInfo.symbol}{rating.exact_price.toFixed(2)}
+                                            </span>
+                                            {convertedPriceText && <div className="text-xs font-normal text-gray-500 dark:text-gray-400 mt-1" title={userHomeCurrency.code}>{convertedPriceText}</div>}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 

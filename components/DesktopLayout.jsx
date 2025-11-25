@@ -15,7 +15,6 @@ import LevelUpPopup from './LevelUpPopup.jsx';
 import RankUpPopup from './RankUpPopup.jsx';
 import AvatarSelectionModal from './AvatarSelectionModal.jsx';
 import ModerationPage from './ModerationPage.jsx';
-import StatsPage from './StatsPage.jsx';
 import TermsOfUsePage from './TermsOfUsePage.jsx';
 import PrivacyPolicyPage from './PrivacyPolicyPage.jsx';
 import DesktopPlacementConfirmation from './DesktopPlacementConfirmation.jsx';
@@ -52,12 +51,11 @@ const DesktopLayout = (props) => {
         locationPermissionStatus, onRequestPermission,
         mapTileRefreshKey,
         // Community props
-        CommunityPage, friendships, userLikes, onToggleLike, handleFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
+        CommunityPage, friendships, userLikes, onToggleLike, onFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
         // Friends List props
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
         deleteConfirmationInfo,
         // Stats props
-        StatsPage,
         ShopPage,
         settingsSubView, handleViewAdminPage,
         onOpenScoreExplanation,
@@ -84,10 +82,11 @@ const DesktopLayout = (props) => {
         allTrophies,
         dbPubs,
         onViewSocialHub,
-        isPriceByCountryModalOpen,
-        onSetIsPriceByCountryModalOpen,
+        isBackfilling, onBackfillCountryData,
         onOpenAndroidBetaModal,
-        enrichingPubIds,
+        geocodingPubIds,
+        isDesktopSidebarCollapsed,
+        setIsDesktopSidebarCollapsed,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -103,7 +102,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={() => handleBackFromFriendsList()}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={onFriendAction}
+                    onFriendAction={handleFriendAction}
                 />
             );
         }
@@ -151,6 +150,7 @@ const DesktopLayout = (props) => {
                         onClearGuinnessZeroVote={onClearGuinnessZeroVote}
                         onOpenShareModal={onOpenShareModal}
                         onOpenShareRatingModal={onOpenShareRatingModal}
+                        setAlertInfo={setAlertInfo}
                     />
                 );
             }
@@ -196,7 +196,7 @@ const DesktopLayout = (props) => {
                             searchRadius={settings.radius}
                             isLoading={isInitialDataLoading || isRefreshing}
                             onOpenScoreExplanation={onOpenScoreExplanation}
-                            enrichingPubIds={enrichingPubIds}
+                            geocodingPubIds={geocodingPubIds}
                         />
                     </div>
                 </div>
@@ -209,7 +209,7 @@ const DesktopLayout = (props) => {
                     userProfile={userProfile}
                     onViewProfile={handleViewProfile}
                     friendships={friendships}
-                    onFriendRequest={handleFriendRequest}
+                    onFriendRequest={onFriendRequest}
                     onFriendAction={handleFriendAction}
                     userLikes={userLikes}
                     onToggleLike={onToggleLike}
@@ -231,22 +231,12 @@ const DesktopLayout = (props) => {
                     onReportComment={onReportComment}
                     onOpenShareRatingModal={onOpenShareRatingModal}
                     dbPubs={dbPubs}
+                    setAlertInfo={setAlertInfo}
                 />
             );
         }
 
         if (activeTab === 'settings') {
-            if (settingsSubView === 'stats') {
-                return <StatsPage 
-                    onBack={() => handleViewAdminPage(null)} 
-                    onViewProfile={handleViewProfile} 
-                    onViewPub={handleSelectPub} 
-                    userProfile={userProfile} 
-                    onAdminDeleteComment={onAdminDeleteComment} 
-                    isPriceByCountryModalOpen={props.isPriceByCountryModalOpen}
-                    onSetIsPriceByCountryModalOpen={props.onSetIsPriceByCountryModalOpen}
-                />;
-            }
             if (settingsSubView === 'moderation') {
                 return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
             }
@@ -269,7 +259,6 @@ const DesktopLayout = (props) => {
                             onViewProfile={handleViewProfile}
                             onLogout={handleLogout}
                             onViewLegal={handleViewLegal}
-                            onViewStats={() => handleViewAdminPage('stats')}
                             onViewModeration={() => handleViewAdminPage('moderation')}
                             onViewSocialHub={onViewSocialHub}
                             onDataRefresh={handleDataRefresh}
@@ -288,6 +277,8 @@ const DesktopLayout = (props) => {
                             onScrollComplete={onScrollComplete}
                             userTrophies={userTrophies}
                             allTrophies={allTrophies}
+                            isBackfilling={isBackfilling}
+                            onBackfillCountryData={onBackfillCountryData}
                             onOpenAndroidBetaModal={onOpenAndroidBetaModal}
                         />
                     </div>
@@ -298,7 +289,7 @@ const DesktopLayout = (props) => {
         return null;
     };
     
-    const isFullScreenTab = ['stats', 'moderation', 'profile', 'shop'].includes(activeTab) || (activeTab === 'settings' && !!settingsSubView);
+    const isFullScreenTab = ['moderation', 'profile', 'shop'].includes(activeTab) || (activeTab === 'settings' && !!settingsSubView);
 
     return (
         <div className="w-full h-dvh flex">
@@ -318,10 +309,21 @@ const DesktopLayout = (props) => {
                 <div className="flex-grow min-h-0 relative">
                     {/* Map & Aside Layout */}
                     <div className={`absolute inset-0 flex ${!isFullScreenTab ? '' : 'hidden'}`}>
-                        <aside className="w-[380px] lg:w-[420px] xl:w-[480px] flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-10">
+                        <aside className={`
+                            ${isDesktopSidebarCollapsed ? 'w-0' : 'w-[380px] lg:w-[420px] xl:w-[480px]'}
+                            transition-all duration-300 ease-in-out
+                            flex-shrink-0 h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-10 overflow-hidden
+                        `}>
                             {renderContentPanel()}
                         </aside>
                         <main className="flex-grow h-full relative bg-gray-200 dark:bg-gray-900">
+                            <button
+                                onClick={() => setIsDesktopSidebarCollapsed(prev => !prev)}
+                                className="absolute top-1/2 -translate-y-1/2 -left-px z-[1000] bg-white dark:bg-gray-800 w-6 h-24 rounded-r-lg shadow-lg flex items-center justify-center border-y border-r border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                aria-label={isDesktopSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                            >
+                                <i className={`fas ${isDesktopSidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'} text-gray-600 dark:text-gray-300`}></i>
+                            </button>
                             <MapComponent
                                 pubs={sortedPubs} userLocation={userLocation}
                                 center={mapCenter}
@@ -340,6 +342,7 @@ const DesktopLayout = (props) => {
                                 mapTileRefreshKey={mapTileRefreshKey}
                                 searchOrigin={searchOrigin}
                                 radius={settings.radius}
+                                isSidebarCollapsed={isDesktopSidebarCollapsed}
                             />
                             {(locationError && locationPermissionStatus !== 'denied') && 
                                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
@@ -360,17 +363,6 @@ const DesktopLayout = (props) => {
                         <ShopPage userProfile={userProfile} />
                     </div>
 
-                    {/* Stats Page (when accessed from main nav) */}
-                    <div className={`absolute inset-0 ${activeTab === 'stats' ? '' : 'hidden'}`}>
-                        <StatsPage 
-                            onViewProfile={handleViewProfile} 
-                            onViewPub={handleSelectPub} 
-                            userProfile={userProfile} 
-                            onAdminDeleteComment={onAdminDeleteComment} 
-                            isPriceByCountryModalOpen={props.isPriceByCountryModalOpen}
-                            onSetIsPriceByCountryModalOpen={props.onSetIsPriceByCountryModalOpen}
-                        />
-                    </div>
                     
                     {/* Moderation Page (when accessed from main nav) */}
                     <div className={`absolute inset-0 ${activeTab === 'moderation' ? '' : 'hidden'}`}>
@@ -383,7 +375,7 @@ const DesktopLayout = (props) => {
                         />
                     </div>
 
-                    {/* Stats, Moderation, Social Hub (when accessed from settings) */}
+                    {/* Moderation, Social Hub (when accessed from settings) */}
                     <div className={`absolute inset-0 ${activeTab === 'settings' && settingsSubView ? '' : 'hidden'}`}>
                         {renderContentPanel()}
                     </div>

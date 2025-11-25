@@ -5,10 +5,40 @@ import CommunityFeed from './CommunityFeed.jsx';
 import FriendsFeed from './FriendsFeed.jsx';
 import NotificationsPage from './NotificationsPage.jsx';
 import ImageModal from './ImageModal.jsx';
+import useIsDesktop from '../hooks/useIsDesktop.js';
+import ReportImageModal from './ReportImageModal.jsx';
+import { supabase } from '../supabase.js';
 
-const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onDeleteNotification, onOpenShareRatingModal, dbPubs }) => {
+const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onDeleteNotification, onOpenShareRatingModal, dbPubs, onSetAppHeaderVisible, setAlertInfo }) => {
     const [imageToView, setImageToView] = useState(null);
     const [feedFilter, setFeedFilter] = useState({ sortBy: 'created_at', timePeriod: 'all' });
+    const [isTabBarVisible, setIsTabBarVisible] = useState(true);
+    const isDesktop = useIsDesktop();
+    const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
+
+    const handleInitiateReport = (ratingToReport) => {
+        setImageToView(null);
+        setReportModalInfo({ isOpen: true, rating: ratingToReport });
+    };
+
+    const handleReportImage = async (rating, reason) => {
+        if (!userProfile) {
+            setAlertInfo({ isOpen: true, title: 'Login Required', message: 'You must be logged in to report an image.', theme: 'info' });
+            return;
+        }
+        trackEvent('report_image', { rating_id: rating.id, reason });
+        try {
+            const { error } = await supabase.functions.invoke('report-image', {
+                body: { rating_id: rating.id, reason },
+            });
+            if (error) throw error;
+            setAlertInfo({ isOpen: true, title: 'Report Submitted', message: 'Thank you. The image has been reported and will be reviewed.', theme: 'success' });
+        } catch (error) {
+            console.error("Failed to report image:", error);
+            setAlertInfo({ isOpen: true, title: 'Report Failed', message: `Could not report image: ${error.context?.responseJson?.error || error.message}`, theme: 'error' });
+        }
+        setReportModalInfo({ isOpen: false, rating: null });
+    };
 
     const handleTabChange = (tab) => {
         // Reset filter when switching tabs to ensure a fresh start
@@ -26,12 +56,22 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
         }
     }, [activeSubTab, unreadNotificationsCount, onMarkNotificationsAsRead]);
 
-    const subTabs = [
-        { id: 'community', label: 'Community', icon: 'fa-globe-europe' },
-        { id: 'friends', label: 'Friends', icon: 'fa-user-friends' },
-        { id: 'leaderboard', label: 'Leaderboard', icon: 'fa-trophy' },
-        { id: 'notifications', label: 'Notifications', icon: 'fa-bell', notificationCount: unreadNotificationsCount },
+    // If the user logs out while on a protected tab, switch to the community feed.
+    useEffect(() => {
+        if (!userProfile && (activeSubTab === 'friends' || activeSubTab === 'notifications')) {
+            onSubTabChange('community');
+        }
+    }, [userProfile, activeSubTab, onSubTabChange]);
+
+    const allSubTabs = [
+        { id: 'community', label: 'Community', icon: 'fa-globe-europe', requiresAuth: false },
+        { id: 'friends', label: 'Friends', icon: 'fa-user-friends', requiresAuth: true },
+        { id: 'leaderboard', label: 'Leaderboard', icon: 'fa-trophy', requiresAuth: false },
+        { id: 'notifications', label: 'Notifications', icon: 'fa-bell', notificationCount: unreadNotificationsCount, requiresAuth: true },
     ];
+
+    const subTabs = allSubTabs.filter(tab => !tab.requiresAuth || !!userProfile);
+
 
     const handleViewImage = (rating) => {
         const ratingForModal = { ...rating, uploaderName: rating.user.username };
@@ -45,11 +85,13 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                     rating={imageToView}
                     onClose={() => setImageToView(null)}
                     canReport={userProfile && userProfile.id !== imageToView.user.id}
+                    onReport={() => handleInitiateReport(imageToView)}
                 />
             )}
+            {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
             <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
                 {/* Responsive Tab Bar */}
-                <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <div className={`community-tabs-container flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${(!isTabBarVisible && !isDesktop) ? 'hide' : ''}`}>
                     <nav className="flex justify-around -mb-px">
                         {subTabs.map(tab => {
                             const isActive = tab.id === activeSubTab;
@@ -84,8 +126,8 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
 
                 {/* Content Area */}
                 <main className="flex-grow overflow-hidden">
-                    {activeSubTab === 'community' && <CommunityFeed onViewProfile={(id) => onViewProfile(id, 'community')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} onOpenShareRatingModal={onOpenShareRatingModal} dbPubs={dbPubs} />}
-                    {activeSubTab === 'friends' && <FriendsFeed onViewProfile={(id) => onViewProfile(id, 'friends')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} onOpenShareRatingModal={onOpenShareRatingModal} dbPubs={dbPubs} />}
+                    {activeSubTab === 'community' && <CommunityFeed onViewProfile={(id) => onViewProfile(id, 'community')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} onOpenShareRatingModal={onOpenShareRatingModal} dbPubs={dbPubs} onSetAppHeaderVisible={onSetAppHeaderVisible} onSetTabBarVisible={setIsTabBarVisible} />}
+                    {activeSubTab === 'friends' && <FriendsFeed onViewProfile={(id) => onViewProfile(id, 'friends')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} onOpenShareRatingModal={onOpenShareRatingModal} dbPubs={dbPubs} onSetAppHeaderVisible={onSetAppHeaderVisible} onSetTabBarVisible={setIsTabBarVisible} />}
                     {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} />}
                     {activeSubTab === 'notifications' && <NotificationsPage notifications={notifications} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'notifications')} onDataRefresh={onDataRefresh} onViewPub={onViewPub} friendships={friendships} onDeleteNotification={onDeleteNotification} />}
                 </main>

@@ -1,9 +1,19 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { trackEvent } from '../analytics.js';
 
 const ImageModal = ({ rating, onClose, onReport, canReport, canAdminRemove, onAdminRemove }) => {
     
     useEffect(() => {
+        // Track when image is viewed in full screen
+        if (rating) {
+            trackEvent('view_image_fullscreen', {
+                rating_id: rating.id,
+                uploader_username: rating.user?.username,
+                pub_name: rating.pubName || rating.pub_name
+            });
+        }
+
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') {
                 onClose();
@@ -16,7 +26,7 @@ const ImageModal = ({ rating, onClose, onReport, canReport, canAdminRemove, onAd
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [onClose]);
+    }, [onClose, rating]);
 
     const modalContent = (
         <div 

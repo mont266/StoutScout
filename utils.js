@@ -296,56 +296,88 @@ const EUROZONE_COUNTRY_CODES = new Set([
 
 // A more comprehensive map for direct lookups.
 const CURRENCY_MAP = {
-    'us': { symbol: '$', code: 'USD' },
-    'ca': { symbol: '$', code: 'CAD' },
-    'gb': { symbol: '£', code: 'GBP' },
-    'uk': { symbol: '£', code: 'GBP' }, // Alias for Great Britain
-    'au': { symbol: '$', code: 'AUD' },
-    'nz': { symbol: 'NZ$', code: 'NZD' },
-    'jp': { symbol: '¥', code: 'JPY' },
-    'sg': { symbol: 'S$', code: 'SGD' },
+    'us': { symbol: '$', code: 'USD' }, 'ca': { symbol: '$', code: 'CAD' },
+    'gb': { symbol: '£', code: 'GBP' }, 'uk': { symbol: '£', code: 'GBP' }, 
+    'au': { symbol: '$', code: 'AUD' }, 'nz': { symbol: 'NZ$', code: 'NZD' },
+    'jp': { symbol: '¥', code: 'JPY' }, 'cn': { symbol: '¥', code: 'CNY' },
+    'sg': { symbol: 'S$', code: 'SGD' }, 'hk': { symbol: 'HK$', code: 'HKD' },
     'ae': { symbol: 'د.إ', code: 'AED' },
-    'pl': { symbol: 'zł', code: 'PLN' },
-    'ch': { symbol: 'CHF', code: 'CHF' },
-    'se': { symbol: 'kr', code: 'SEK' },
-    'no': { symbol: 'kr', code: 'NOK' },
-    'dk': { symbol: 'kr', code: 'DKK' },
-    'tr': { symbol: '₺', code: 'TRY' },
-    'il': { symbol: '₪', code: 'ILS' },
-    'za': { symbol: 'R', code: 'ZAR' },
-    'ma': { symbol: 'د.م.', code: 'MAD' }, // Moroccan Dirham
-    'br': { symbol: 'R$', code: 'BRL' },
-    'cn': { symbol: '¥', code: 'CNY' },
-    'in': { symbol: '₹', code: 'INR' },
-    'mx': { symbol: 'Mex$', code: 'MXN' },
-    'ru': { symbol: '₽', code: 'RUB' },
-    'cz': { symbol: 'Kč', code: 'CZK' },
+    'pl': { symbol: 'zł', code: 'PLN' }, 'ch': { symbol: 'CHF', code: 'CHF' },
+    'se': { symbol: 'kr', code: 'SEK' }, 'no': { symbol: 'kr', code: 'NOK' },
+    'dk': { symbol: 'kr', code: 'DKK' }, 'is': { symbol: 'kr', code: 'ISK' },
+    'cz': { symbol: 'Kč', code: 'CZK' }, 'hu': { symbol: 'Ft', code: 'HUF' },
+    'tr': { symbol: '₺', code: 'TRY' }, 'il': { symbol: '₪', code: 'ILS' },
+    'za': { symbol: 'R', code: 'ZAR' }, 'ma': { symbol: 'د.م.', code: 'MAD' }, 
+    'br': { symbol: 'R$', code: 'BRL' }, 'in': { symbol: '₹', code: 'INR' },
+    'mx': { symbol: 'Mex$', code: 'MXN' }, 'ru': { symbol: '₽', code: 'RUB' },
+    'kr': { symbol: '₩', code: 'KRW' }, 'th': { symbol: '฿', code: 'THB' },
+    'pe': { symbol: 'S/', code: 'PEN' },
+};
+
+// This map helps resolve full country names to their 2-letter codes.
+const COUNTRY_NAME_TO_CODE = {
+    'ireland': 'ie', 'portugal': 'pt', 'israel': 'il',
+    'poland': 'pl', 'united states': 'us', 'italy': 'it',
+    'united kingdom': 'gb', 'spain': 'es', 'germany': 'de',
+    'france': 'fr', 'australia': 'au', 'canada': 'ca',
+    'netherlands': 'nl', 'belgium': 'be', 'sweden': 'se',
+    'norway': 'no', 'denmark': 'dk', 'switzerland': 'ch',
+    'japan': 'jp', 'singapore': 'sg', 'united arab emirates': 'ae',
+    'south africa': 'za', 'turkey': 'tr', 'austria': 'at',
+    'czech republic': 'cz', 'peru': 'pe', 'south korea': 'kr',
+    'morocco': 'ma',
+};
+
+// Tier thresholds for price ratings. A price < tiers[0] gets 5 stars.
+const CURRENCY_DEFAULTS = {
+    'DEFAULT':{ examplePrice: '5.70', tiers: [4.50, 5.50, 6.00, 7.00] },
+    'GBP':    { examplePrice: '5.70', tiers: [4.50, 5.50, 6.00, 7.00] },
+    'EUR':    { examplePrice: '6.50', tiers: [5.50, 6.50, 7.00, 8.00] },
+    'USD':    { examplePrice: '7.50', tiers: [6.50, 7.50, 8.00, 9.00] },
+    'CAD':    { examplePrice: '8.00', tiers: [7.00, 8.00, 9.00, 10.00] },
+    'AUD':    { examplePrice: '10.00', tiers: [9.00, 10.00, 11.00, 12.00] },
+    'NZD':    { examplePrice: '11.00', tiers: [10.00, 11.00, 12.00, 13.00] },
+    'CZK':    { examplePrice: '55', tiers: [45, 55, 60, 70] },
+    'PLN':    { examplePrice: '18', tiers: [15, 18, 22, 25] },
+    'JPY':    { examplePrice: '800', tiers: [650, 800, 950, 1100] },
+    'KRW':    { examplePrice: '9000', tiers: [7000, 9000, 11000, 13000] },
+    'PEN':    { examplePrice: '15', tiers: [12, 15, 18, 22] },
+    'MAD':    { examplePrice: '30', tiers: [25, 30, 40, 50] },
 };
 
 /**
- * Infers currency information based solely on a pub's country code.
- * Defaults to GBP (£) for UK or any unidentified/missing country codes.
- * @param {{country_code?: string}} pubLocationData The pub's location data.
- * @returns {{symbol: string, code: string}} The currency symbol and code.
+ * Infers currency information based on a pub's country code or country name.
+ * @param {{country_code?: string, country_name?: string}} pubLocationData The pub's location data.
+ * @returns {{symbol: string, code: string, examplePrice: string, tiers: number[]}} The currency info.
  */
 export const getCurrencyInfo = (pubLocationData = {}) => {
-    const { country_code } = pubLocationData;
+    let { country_code, country_name } = pubLocationData;
+    
+    const defaults = {
+        symbol: '£',
+        code: 'GBP',
+        ...CURRENCY_DEFAULTS['DEFAULT']
+    };
+
+    if (!country_code && country_name) {
+        country_code = COUNTRY_NAME_TO_CODE[country_name.toLowerCase().trim()];
+    }
 
     if (country_code) {
         const code = country_code.toLowerCase().trim();
 
         if (EUROZONE_COUNTRY_CODES.has(code)) {
-            return { symbol: '€', code: 'EUR' };
+            return { symbol: '€', code: 'EUR', ...CURRENCY_DEFAULTS['EUR'] };
         }
         
         const currency = CURRENCY_MAP[code];
         if (currency) {
-            return currency;
+            const currencySpecifics = CURRENCY_DEFAULTS[currency.code] || CURRENCY_DEFAULTS['DEFAULT'];
+            return { ...currency, ...currencySpecifics };
         }
     }
 
-    // Fallback to GBP if country_code is null or not matched.
-    return { symbol: '£', code: 'GBP' };
+    return defaults;
 };
 
 /**
@@ -353,24 +385,19 @@ export const getCurrencyInfo = (pubLocationData = {}) => {
  * @param {number} avgStarRating The average star rating for price (1-5).
  * @param {string} currencySymbol The currency symbol to use (e.g., '£', '€', '$').
  * @param {boolean} isLondon Whether to use the London-specific price scale.
+ * @param {number[]} tiers The price thresholds for the currency.
  * @returns {string} A formatted price range string, e.g., "£5.50 - £5.99".
  */
-export const getPriceRangeFromStars = (avgStarRating, currencySymbol, isLondon = false) => {
-    if (isLondon) {
-        if (avgStarRating > 4.5) return `< ${currencySymbol}6.00`;
-        if (avgStarRating > 3.5) return `${currencySymbol}6.00 - ${currencySymbol}6.74`;
-        if (avgStarRating > 2.5) return `${currencySymbol}6.75 - ${currencySymbol}7.49`;
-        if (avgStarRating > 1.5) return `${currencySymbol}7.50 - ${currencySymbol}8.49`;
-        if (avgStarRating > 0) return `> ${currencySymbol}8.49`;
-        return '';
-    }
+export const getPriceRangeFromStars = (avgStarRating, currencySymbol, isLondon = false, tiers) => {
+    const thresholds = isLondon ? [6.00, 6.75, 7.50, 8.50] : tiers || CURRENCY_DEFAULTS.DEFAULT.tiers;
+    
+    const format = (val) => val >= 100 ? val.toFixed(0) : val.toFixed(2);
 
-    // Original logic
-    if (avgStarRating > 4.5) return `< ${currencySymbol}4.50`;
-    if (avgStarRating > 3.5) return `${currencySymbol}4.50 - ${currencySymbol}5.49`;
-    if (avgStarRating > 2.5) return `${currencySymbol}5.50 - ${currencySymbol}5.99`;
-    if (avgStarRating > 1.5) return `${currencySymbol}6.00 - ${currencySymbol}6.99`;
-    if (avgStarRating > 0) return `> ${currencySymbol}7.00`;
+    if (avgStarRating > 4.5) return `< ${currencySymbol}${format(thresholds[0])}`;
+    if (avgStarRating > 3.5) return `${currencySymbol}${format(thresholds[0])} - ${currencySymbol}${format(thresholds[1] - 0.01)}`;
+    if (avgStarRating > 2.5) return `${currencySymbol}${format(thresholds[1])} - ${currencySymbol}${format(thresholds[2] - 0.01)}`;
+    if (avgStarRating > 1.5) return `${currencySymbol}${format(thresholds[2])} - ${currencySymbol}${format(thresholds[3] - 0.01)}`;
+    if (avgStarRating > 0) return `> ${currencySymbol}${format(thresholds[3])}`;
     return ''; // Return empty string if no rating
 };
 
@@ -378,25 +405,19 @@ export const getPriceRangeFromStars = (avgStarRating, currencySymbol, isLondon =
  * Converts an exact price into a star rating (1-5).
  * @param {number | string | null} price The exact price.
  * @param {boolean} isLondon Whether to use the London-specific price scale.
+ * @param {number[]} tiers The price thresholds for the currency.
  * @returns {number} The star rating (0-5).
  */
-export const getStarRatingFromPrice = (price, isLondon = false) => {
+export const getStarRatingFromPrice = (price, isLondon = false, tiers) => {
     if (price === '' || price === null || isNaN(price)) return 0;
     const numericPrice = parseFloat(price);
 
-    if (isLondon) {
-        if (numericPrice < 6.00) return 5;
-        if (numericPrice <= 6.74) return 4;
-        if (numericPrice <= 7.49) return 3;
-        if (numericPrice <= 8.49) return 2;
-        return 1;
-    }
+    const thresholds = isLondon ? [6.00, 6.75, 7.50, 8.50] : tiers || CURRENCY_DEFAULTS.DEFAULT.tiers;
 
-    // Original logic
-    if (numericPrice < 4.50) return 5;
-    if (numericPrice <= 5.49) return 4;
-    if (numericPrice <= 5.99) return 3;
-    if (numericPrice <= 6.99) return 2;
+    if (numericPrice < thresholds[0]) return 5;
+    if (numericPrice < thresholds[1]) return 4;
+    if (numericPrice < thresholds[2]) return 3;
+    if (numericPrice < thresholds[3]) return 2;
     return 1;
 };
 

@@ -19,11 +19,11 @@ import EditSocialsModal from './components/EditSocialsModal.jsx';
 import UpdateDetailsModal from './components/UpdateDetailsModal.jsx';
 import SuggestEditModal from './components/SuggestEditModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
-import StatsPage from './components/StatsPage.jsx';
 import SocialContentHub from './components/SocialContentHub.jsx';
 import PubScoreExplanationModal from './components/PubScoreExplanationModal.jsx';
 import CookieConsentBanner from './components/CookieConsentBanner.jsx';
 import { OnlineStatusContext } from './contexts/OnlineStatusContext.jsx';
+import { ExchangeRatesProvider } from './contexts/ExchangeRatesContext.jsx';
 import AlertModal from './components/AlertModal.jsx';
 import ShopPage from './components/ShopPage.jsx';
 import CoasterWelcomeModal from './components/CoasterWelcomeModal.jsx';
@@ -59,7 +59,6 @@ const App = () => {
   // App state
   const [nominatimResults, setNominatimResults] = useState([]);
   const [pubs, setPubs] = useState([]);
-  const [enrichingPubIds, setEnrichingPubIds] = useState(new Set());
   const [allRatings, setAllRatings] = useState(new Map());
   const [pubScores, setPubScores] = useState(new Map());
   const [selectedPubId, setSelectedPubId] = useState(null);
@@ -69,6 +68,7 @@ const App = () => {
   const [filterGuinnessZero, setFilterGuinnessZero] = useState(false);
   const [isListExpanded, setIsListExpanded] = useState(true);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [geocodingPubIds, setGeocodingPubIds] = useState(new Set());
 
   // Location State
   const [realUserLocation, setRealUserLocation] = useState(DEFAULT_LOCATION);
@@ -98,6 +98,7 @@ const App = () => {
   // State for viewing other user profiles
   const [viewedProfile, setViewedProfile] = useState(null);
   const [viewedRatings, setViewedRatings] = useState([]);
+  const [viewedTrophies, setViewedTrophies] = useState([]);
   const [isFetchingViewedProfile, setIsFetchingViewedProfile] = useState(false);
   const [profileViewOrigin, setProfileViewOrigin] = useState(null);
 
@@ -122,16 +123,17 @@ const App = () => {
   const [isAndroidBetaModalOpen, setIsAndroidBetaModalOpen] = useState(false);
   const [isAndroidWelcomeModalOpen, setIsAndroidWelcomeModalOpen] = useState(false);
   const [isProfileStatsModalOpen, setIsProfileStatsModalOpen] = useState(false);
-  const [isPriceByCountryModalOpen, setIsPriceByCountryModalOpen] = useState(false);
   
   const [levelRequirements, setLevelRequirements] = useState([]);
   
   const [dbPubs, setDbPubs] = useState([]);
   const [closedOsmPubIds, setClosedOsmPubIds] = useState(new Set());
+  const [closedStoutlyPubIds, setClosedStoutlyPubIds] = useState(new Set());
   const [osmPubOverrides, setOsmPubOverrides] = useState(new Map());
   
   const [isDbPubsLoaded, setIsDbPubsLoaded] = useState(false);
   const [isClosedOsmPubsLoaded, setIsClosedOsmPubsLoaded] = useState(false);
+  const [isClosedStoutlyPubsLoaded, setIsClosedStoutlyPubsLoaded] = useState(false);
   const [isOsmOverridesLoaded, setIsOsmOverridesLoaded] = useState(false);
   const [initialSearchComplete, setInitialSearchComplete] = useState(false);
 
@@ -139,7 +141,7 @@ const App = () => {
   
   // State for legal & admin sub-pages
   const [legalPageView, setLegalPageView] = useState(null); // 'terms' or 'privacy'
-  const [settingsSubView, setSettingsSubView] = useState(null); // 'stats', 'moderation', or 'social'
+  const [settingsSubView, setSettingsSubView] = useState(null); // 'moderation' or 'social'
 
   // PWA Install prompt state
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
@@ -184,16 +186,22 @@ const App = () => {
 
   // Developer state
   const [showAllDbPubs, setShowAllDbPubs] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
 
   // Trophy State
   const [allTrophies, setAllTrophies] = useState([]);
   const [userTrophies, setUserTrophies] = useState([]);
   const [unlockedTrophiesToShow, setUnlockedTrophiesToShow] = useState([]);
 
+  // Desktop layout state
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+
   // Memoized callback for closing the trophy popup to prevent timer resets.
   const handleCloseTrophyPopup = useCallback(() => {
     setUnlockedTrophiesToShow([]);
   }, []);
+
+  const onFilterGuinnessZeroChange = (value) => setFilterGuinnessZero(value);
 
 
   useEffect(() => {
@@ -244,6 +252,7 @@ const App = () => {
     setFriendsList([]);
     setViewedProfile(null);
     setViewedRatings([]);
+    setViewedTrophies([]);
     setProfileViewOrigin(null);
 
     // When the user explicitly clicks the Community tab, reset to the main feed.
@@ -252,14 +261,9 @@ const App = () => {
     }
 
     // Tabs requiring auth
-    if ((tab === 'profile' || tab === 'community' || tab === 'moderation' || tab === 'stats' || tab === 'shop') && !session) {
+    if ((tab === 'profile') && !session) {
       setIsAuthOpen(true);
       return;
-    }
-    // Tabs requiring developer or team member role
-    if ((tab === 'stats') && !(userProfile?.is_developer || userProfile?.is_team_member)) {
-        setActiveTab('map'); // Fail silently to map
-        return;
     }
     // Tabs requiring ONLY developer role
     if ((tab === 'moderation' || tab === 'shop') && !userProfile?.is_developer) {
@@ -346,8 +350,6 @@ const App = () => {
       screenName = 'profile_own';
     } else if (activeTab === 'community') {
       screenName = `community_${communitySubTab}`;
-    } else if (activeTab === 'stats') {
-      screenName = `stats_main`;
     } else if (activeTab === 'shop') {
         screenName = 'shop';
     } else if (isAuthOpen) {
@@ -557,6 +559,20 @@ const App = () => {
     setIsClosedOsmPubsLoaded(true);
   }, []);
 
+  const fetchClosedStoutlyPubs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('pubs')
+      .select('id')
+      .eq('is_closed', true);
+    
+    if (error) {
+        console.error("Error fetching closed Stoutly pubs:", error);
+    } else {
+        setClosedStoutlyPubIds(new Set((data || []).map(p => p.id)));
+    }
+    setIsClosedStoutlyPubsLoaded(true);
+  }, []);
+
   const fetchOsmPubOverrides = useCallback(async () => {
     const { data, error } = await supabase
         .from('osm_pub_overrides')
@@ -687,6 +703,7 @@ const App = () => {
       .eq('user_id', userId);
     if (likesError) console.error("Error fetching user likes:", likesError);
     else setUserLikes(new Set((likesData || []).map(l => l.rating_id)));
+
     // Fetch user's friendships
     const { data: friendsData, error: friendsError } = await supabase
       .from('friendships')
@@ -719,17 +736,14 @@ const App = () => {
           fetchDbPubs(),
           fetchClosedOsmPubs(),
           fetchOsmPubOverrides(),
+          fetchClosedStoutlyPubs(),
           session?.user?.id ? fetchSocialData(session.user.id) : Promise.resolve(),
       ]);
-  }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchClosedOsmPubs, fetchOsmPubOverrides, fetchSocialData, session]);
+  }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchClosedOsmPubs, fetchOsmPubOverrides, fetchClosedStoutlyPubs, fetchSocialData, session]);
 
   // --- HISTORY MANAGEMENT ---
   useEffect(() => {
     const handlePopState = (event) => {
-      // If the stats page is handling this event, App should ignore it.
-      if (event.state?.isStatsInternal) {
-          return;
-      }
       // This is a "back" action. We close the topmost view based on precedence.
       if (viewingFriendsOf) {
         handleBackFromFriendsList();
@@ -763,10 +777,6 @@ const App = () => {
     let listener;
     const addListener = async () => {
       listener = await CapacitorApp.addListener('backButton', () => {
-        if (isPriceByCountryModalOpen) {
-          setIsPriceByCountryModalOpen(false);
-          return;
-        }
         if (isProfileStatsModalOpen) {
           setIsProfileStatsModalOpen(false);
           return;
@@ -813,7 +823,6 @@ const App = () => {
     handleBackFromProfileView,
     handleBackFromFriendsList,
     isProfileStatsModalOpen,
-    isPriceByCountryModalOpen,
   ]);
 
   const handleSelectPub = useCallback(async (pub, highlightOptions = {}) => {
@@ -911,6 +920,7 @@ const App = () => {
     // Clear the old viewed profile to show a loading state
     setViewedProfile(null); 
     setViewedRatings([]);
+    setViewedTrophies([]);
     setProfileViewOrigin(origin); // store where the view was initiated from
 
     try {
@@ -922,24 +932,39 @@ const App = () => {
 
         if (profileError) throw profileError;
         
-        // Correctly fetch the friend count
-        const { data: friendCount, error: friendCountError } = await supabase.rpc('get_friends_count', { user_id_param: userId }).single();
-        if (friendCountError) console.error("Error fetching friend count for viewed profile:", friendCountError);
-        // Correctly assign the direct result of the RPC call.
-        profile.friends_count = friendCount || 0;
+        // Robustly fetch the friend count for the viewed profile
+        const { data: friendCountValue, error: friendCountError } = await supabase.rpc('get_friends_count', { user_id_param: userId }).single();
 
-        // Fetch auth details to get last_sign_in_at
-        const { data: authDetails, error: authError } = await supabase
-            .rpc('get_user_auth_details', { user_id_param: userId })
-            .single();
-
-        if (authError) {
-            console.warn(`Could not fetch auth details for user ${userId}: ${authError.message}. This is expected if the RPC function doesn't exist yet.`);
-        } else if (authDetails) {
-            profile.last_sign_in_at = authDetails.last_sign_in_at;
+        if (friendCountError) {
+            // PGRST116 means "Not a single row". This can happen for anon users where RLS returns nothing. Treat as 0.
+            if (friendCountError.code === 'PGRST116') {
+                profile.friends_count = 0;
+            } else {
+                console.error("Error fetching friend count for viewed profile:", friendCountError);
+                profile.friends_count = 0; // Default to 0 on other errors.
+            }
+        } else {
+             // Handle cases where the RPC returns a value directly, or a row object.
+            const count = (typeof friendCountValue === 'number') 
+                ? friendCountValue 
+                : (friendCountValue?.count ?? friendCountValue?.get_friends_count ?? 0);
+            profile.friends_count = parseInt(count, 10) || 0;
         }
 
         setViewedProfile(profile);
+
+        // Fetch trophies for the viewed user
+        const { data: trophies, error: trophiesError } = await supabase
+            .from('user_trophies')
+            .select('trophy_id, achieved_at')
+            .eq('user_id', userId)
+            .order('achieved_at', { ascending: false });
+        
+        if (trophiesError) {
+            console.error("Error fetching trophies for viewed profile:", trophiesError);
+        } else {
+            setViewedTrophies(trophies || []);
+        }
 
         // Fetch ratings for the viewed user
         // We only fetch non-private ratings for other users.
@@ -992,12 +1017,25 @@ const App = () => {
     
     didProcessUrlParams.current = true;
     const urlParams = new URLSearchParams(window.location.search);
+    const pageFromUrl = urlParams.get('page');
     const pubIdFromUrl = urlParams.get('pub_id');
     const userIdFromUrl = urlParams.get('user_id');
     const ratingIdFromUrl = urlParams.get('rating_id');
     const commentIdFromUrl = urlParams.get('comment_id');
+    const utmSource = urlParams.get('utm_source');
 
-    if (pubIdFromUrl) {
+    if (utmSource === 'coaster') {
+      const hasSeenCoasterWelcome = localStorage.getItem('stoutly-coaster-welcome-seen');
+      if (hasSeenCoasterWelcome !== 'true') {
+        setIsCoasterWelcomeModalOpen(true);
+        trackEvent('view_coaster_welcome_modal');
+      }
+    }
+
+    if (pageFromUrl === 'terms' || pageFromUrl === 'privacy') {
+      setLegalPageView(pageFromUrl);
+      setActiveTab('settings');
+    } else if (pubIdFromUrl) {
       const highlightOptions = {
         highlightRatingId: ratingIdFromUrl,
         highlightCommentId: commentIdFromUrl,
@@ -1035,6 +1073,7 @@ const App = () => {
     fetchDbPubs();
     fetchClosedOsmPubs();
     fetchOsmPubOverrides();
+    fetchClosedStoutlyPubs();
     fetchAllTrophies();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -1067,7 +1106,7 @@ const App = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchClosedOsmPubs, fetchOsmPubOverrides]);
+  }, [fetchAllRatings, fetchPubScores, fetchDbPubs, fetchClosedOsmPubs, fetchOsmPubOverrides, fetchClosedStoutlyPubs]);
   
   // Simplified, direct notification handler
   const handleNewNotification = useCallback(async (payload) => {
@@ -1164,8 +1203,20 @@ const App = () => {
     }
 
     // Add friend count to the profile object
-    profile.friends_count = friendCountResult.data || 0;
-    if (friendCountResult.error) console.error("Error fetching friend count:", friendCountResult.error);
+    const { data: friendCountValue, error: friendCountError } = friendCountResult;
+    if (friendCountError) {
+        if (friendCountError.code === 'PGRST116') { // "Not a single row"
+            profile.friends_count = 0;
+        } else {
+            console.error("Error fetching friend count:", friendCountError);
+            profile.friends_count = 0;
+        }
+    } else {
+        const count = (typeof friendCountValue === 'number') 
+            ? friendCountValue 
+            : (friendCountValue?.count ?? friendCountValue?.get_friends_count ?? 0);
+        profile.friends_count = parseInt(count, 10) || 0;
+    }
 
     // FIX: Merge last_sign_in_at from the session user object.
     // This property exists on auth.users, not the public profiles table.
@@ -1230,6 +1281,36 @@ const App = () => {
       localStorage.setItem('stoutly-android-beta-prompt-seen', 'true');
       setIsAndroidBetaModalOpen(false);
   };
+
+  const handleBackfillCountryData = useCallback(async () => {
+    if (isBackfilling) return;
+    setIsBackfilling(true);
+    trackEvent('dev_backfill_country_data_start');
+    try {
+        const { data, error } = await supabase.functions.invoke('backfill-country-data');
+        if (error) throw new Error(error.message);
+
+        setAlertInfo({
+            isOpen: true,
+            title: 'Backfill Complete',
+            message: data.message || 'The backfill process completed successfully.',
+            theme: 'success',
+        });
+        trackEvent('dev_backfill_country_data_success', { result_message: data.message });
+        await handleDataRefresh();
+    } catch (err) {
+        console.error("Backfill error:", err);
+        setAlertInfo({
+            isOpen: true,
+            title: 'Backfill Failed',
+            message: `An error occurred: ${err.message}`,
+            theme: 'error',
+        });
+        trackEvent('dev_backfill_country_data_failed', { error_message: err.message });
+    } finally {
+        setIsBackfilling(false);
+    }
+  }, [isBackfilling, handleDataRefresh]);
 
 
   const handleDonationSuccess = useCallback(async () => {
@@ -1408,6 +1489,17 @@ const App = () => {
       if (isNative) {
         await SplashScreen.hide();
       }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const pubIdFromUrl = urlParams.get('pub_id');
+
+      if (pubIdFromUrl && !initialLocationSet) {
+        // If a pub_id is present, we skip the initial geolocation search.
+        // The URL param handler will center the map on the pub.
+        // We set initialLocationSet to true to prevent this effect from running again.
+        setInitialLocationSet(true);
+        return; // Exit early
+      }
       
       let permissionState = 'prompt';
       try {
@@ -1492,178 +1584,143 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (!isDbPubsLoaded || !isClosedOsmPubsLoaded || !isOsmOverridesLoaded) {
-      return;
+    // Wait until all foundational data from our DB is loaded before attempting to merge.
+    if (!isDbPubsLoaded || !isClosedOsmPubsLoaded || !isOsmOverridesLoaded || !isClosedStoutlyPubsLoaded) {
+      return; // Exit early if data isn't ready
     }
-    
-    const dbPubIds = new Set(dbPubs.map(p => p.id));
 
-    const processAndSetPubs = () => {
-        let pubsToFilter;
+    let pubsToFilter;
+
+    if (showAllDbPubs) {
+      // DEV MODE: Unfiltered list of all pubs from our DB for debugging.
+      pubsToFilter = dbPubs.map(pub => ({
+        ...pub,
+        is_closed: !!pub.is_closed || closedOsmPubIds.has(pub.id) || closedStoutlyPubIds.has(pub.id),
+      }));
+    } else {
+      // NORMAL MODE: Combine sources for a comprehensive list, prioritizing our DB.
+      const processedPubs = new Map();
+
+      // 1. Add all pubs from our DB first. This is the source of truth for existence, name, address, and closed status.
+      dbPubs.forEach(dbPub => {
+        const override = osmPubOverrides.get(dbPub.id);
+        processedPubs.set(dbPub.id, {
+          ...dbPub,
+          name: override?.name || dbPub.name,
+          is_closed: !!dbPub.is_closed || closedOsmPubIds.has(dbPub.id) || closedStoutlyPubIds.has(dbPub.id),
+        });
+      });
+
+      // 2. Merge with Nominatim results. This adds new pubs and updates locations for existing ones.
+      nominatimResults.forEach(nominatimPub => {
+        const override = osmPubOverrides.get(nominatimPub.id);
+        const finalNominatimName = override?.name || nominatimPub.name;
         
-        if (showAllDbPubs) {
-          pubsToFilter = dbPubs.map(pub => ({
-            ...pub,
-            is_closed: !!pub.is_closed || closedOsmPubIds.has(pub.id),
-          }));
+        if (processedPubs.has(nominatimPub.id)) {
+          // If pub exists in our DB, update its location from the live map data, but keep our data as primary.
+          const dbVersion = processedPubs.get(nominatimPub.id);
+          processedPubs.set(nominatimPub.id, {
+            ...dbVersion, // Keep DB name, address, closed status etc.
+            location: nominatimPub.location, // But use the more current location from Nominatim.
+            is_closed: !!dbVersion.is_closed || closedOsmPubIds.has(nominatimPub.id) || closedStoutlyPubIds.has(nominatimPub.id),
+          });
         } else {
-          // 1. Combine dbPubs and nominatimResults into a single map, merging by ID.
-          // This prioritizes DB data but takes fresher location/address from OSM.
-          const combinedPubsMap = new Map();
-          dbPubs.forEach(dbPub => {
-            const override = osmPubOverrides.get(dbPub.id);
-            combinedPubsMap.set(dbPub.id, {
-              ...dbPub,
-              name: override?.name || dbPub.name,
-              is_from_db: true, // Mark origin
+          // This is a new pub from OSM not in our DB. Check for spatial duplicates before adding.
+          const isSpatialDuplicate = Array.from(processedPubs.values()).some(processedPub => {
+            if (!nominatimPub.location || !processedPub.location) return false;
+            const dist = getDistance(nominatimPub.location, processedPub.location);
+            if (dist > 50) return false; // 50 meters
+            
+            const normOsmName = normalizePubNameForComparison(finalNominatimName);
+            const normDbName = normalizePubNameForComparison(processedPub.name);
+            return normOsmName && normDbName && normOsmName === normDbName;
+          });
+
+          if (!isSpatialDuplicate) {
+            processedPubs.set(nominatimPub.id, {
+              ...nominatimPub,
+              name: finalNominatimName,
+              is_closed: closedOsmPubIds.has(nominatimPub.id) || closedStoutlyPubIds.has(nominatimPub.id),
             });
-          });
-
-          nominatimResults.forEach(nominatimPub => {
-            const override = osmPubOverrides.get(nominatimPub.id);
-            const finalNominatimName = override?.name || nominatimPub.name;
-
-            if (combinedPubsMap.has(nominatimPub.id)) {
-              const dbVersion = combinedPubsMap.get(nominatimPub.id);
-              combinedPubsMap.set(nominatimPub.id, {
-                ...dbVersion,
-                name: dbVersion.name, // Keep DB name
-                location: nominatimPub.location,
-                address: (dbVersion.address && dbVersion.address !== 'Address unknown') ? dbVersion.address : nominatimPub.address,
-                country_code: dbVersion.country_code || nominatimPub.country_code,
-                country_name: dbVersion.country_name || nominatimPub.country_name,
-              });
-            } else {
-              combinedPubsMap.set(nominatimPub.id, {
-                ...nominatimPub,
-                name: finalNominatimName,
-                is_from_db: false,
-              });
-            }
-          });
-          
-          // 2. De-dupe the combined list based on spatial and name similarity.
-          const dedupedPubs = [];
-          for (const pub of Array.from(combinedPubsMap.values())) {
-              const duplicateIndex = dedupedPubs.findIndex(existingPub => {
-                if (!pub.location || !existingPub.location) return false;
-                const dist = getDistance(pub.location, existingPub.location);
-                if (dist > 50) return false;
-
-                const normNewName = normalizePubNameForComparison(pub.name);
-                const normExistingName = normalizePubNameForComparison(existingPub.name);
-                const minLength = 6;
-                if (!normNewName || !normExistingName) return false;
-
-                return normNewName === normExistingName ||
-                       (normNewName.includes(normExistingName) && normExistingName.length >= minLength) ||
-                       (normExistingName.includes(normNewName) && normNewName.length >= minLength);
-              });
-              
-              if (duplicateIndex === -1) {
-                  // Not a duplicate, add it to the list.
-                  dedupedPubs.push(pub);
-              } else {
-                  // It's a duplicate. Decide which one to keep.
-                  const originalPub = dedupedPubs[duplicateIndex];
-                  
-                  // Prioritization logic:
-                  // 1. Prefer pub from our DB over a raw OSM pub.
-                  // 2. Prefer pub with a pub_score.
-                  // 3. Prefer pub with more ratings.
-                  const newIsBetter = 
-                      (!originalPub.is_from_db && pub.is_from_db) ||
-                      (pubScores.has(pub.id) && !pubScores.has(originalPub.id)) ||
-                      ((allRatings.get(pub.id) || []).length > (allRatings.get(originalPub.id) || []).length);
-                      
-                  if (newIsBetter) {
-                      // Replace the original with the new, better version.
-                      dedupedPubs[duplicateIndex] = pub;
-                  }
-                  // Otherwise, discard the new pub and keep the original.
-              }
           }
-
-          // 3. Final processing for all known pubs
-          const allKnownPubs = dedupedPubs.map(pub => ({
-            ...pub,
-            is_closed: !!pub.is_closed || closedOsmPubIds.has(pub.id),
-          }));
-
-          pubsToFilter = allKnownPubs.filter(pub => {
-            if (!pub.location) return false;
-            const distance = getDistance(pub.location, searchOrigin);
-            return distance <= settings.radius;
-          });
         }
+      });
+      
+      const allKnownPubs = Array.from(processedPubs.values());
 
-        const initialPubsList = pubsToFilter.map(pub => ({
-          ...pub,
-          ratings: allRatings.get(pub.id) || [],
-          pub_score: pubScores.get(pub.id) ?? null,
-        }));
-        
-        setPubs(initialPubsList);
+      // 3. Filter the combined list by the user's search radius.
+      pubsToFilter = allKnownPubs.filter(pub => {
+        if (!pub.location) return false;
+        const distance = getDistance(pub.location, searchOrigin);
+        return distance <= settings.radius;
+      });
+    }
 
-        // --- START: Background Enrichment ---
-        (async () => {
-            const pubsToEnrich = initialPubsList.filter(pub =>
-                !dbPubIds.has(pub.id) && // Only enrich pubs that are NOT in the Stoutly DB
-                (pub.address === 'Address unknown' || !pub.country_code) && pub.location
-            );
+    // 4. Attach ratings and scores to the final list of pubs to be displayed.
+    const finalPubsList = pubsToFilter.map(pub => ({
+      ...pub,
+      ratings: allRatings.get(pub.id) || [],
+      pub_score: pubScores.get(pub.id) ?? null,
+    }));
 
-            if (pubsToEnrich.length > 0) {
-                setEnrichingPubIds(new Set(pubsToEnrich.map(p => p.id)));
-            }
+    setPubs(finalPubsList);
 
-            for (const pub of pubsToEnrich) {
-                try {
-                    await new Promise(resolve => setTimeout(resolve, 1100));
+  }, [showAllDbPubs, nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance, closedOsmPubIds, closedStoutlyPubIds, osmPubOverrides, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded, isClosedStoutlyPubsLoaded]);
 
-                    const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
-                    const reverseUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pub.location.lat}&lon=${pub.location.lng}&addressdetails=1`;
-                    const reverseResponse = await fetch(reverseUrl, { 
-                        headers: { 'User-Agent': userAgent, 'Accept-Language': 'en' } 
-                    });
+  // This effect will run after pubs are loaded and look for any without an address
+  useEffect(() => {
+    const reverseGeocodePub = async (pub) => {
+        try {
+            const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
+            const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pub.location.lat}&lon=${pub.location.lng}&addressdetails=1`;
+            const response = await fetch(url, { headers: { 'User-Agent': userAgent } });
+            if (!response.ok) throw new Error('API response not OK');
+            const data = await response.json();
 
-                    if (!reverseResponse.ok) {
-                        console.warn(`Nominatim reverse geocode failed for ${pub.id}: ${reverseResponse.status}`);
-                        continue;
-                    }
-
-                    const reverseData = await reverseResponse.json();
-        
-                    if (reverseData && reverseData.address) {
-                        const newAddress = normalizeReverseGeocodeResult(reverseData);
-                        const enrichedData = {
-                            address: newAddress !== 'Address unknown' ? newAddress : pub.address,
-                            country_code: reverseData.address.country_code || pub.country_code,
-                            country_name: reverseData.address.country || pub.country_name,
-                            postcode: reverseData.address.postcode ? reverseData.address.postcode.toUpperCase().replace(/\s+/g, '') : pub.postcode,
-                        };
-
-                        setPubs(currentPubs =>
-                            currentPubs.map(p =>
-                                p.id === pub.id ? { ...p, ...enrichedData } : p
-                            )
-                        );
-                    }
-                } catch (geocodeError) {
-                    console.warn(`Error during reverse geocode for ${pub.id}:`, geocodeError);
-                } finally {
-                    setEnrichingPubIds(prev => {
-                        const newSet = new Set(prev);
-                        newSet.delete(pub.id);
-                        return newSet;
-                    });
+            if (data && data.address) {
+                const newAddress = normalizeReverseGeocodeResult(data);
+                if (newAddress && newAddress !== 'Address unknown') {
+                    setPubs(currentPubs =>
+                        currentPubs.map(p =>
+                            p.id === pub.id ? { ...p, address: newAddress } : p
+                        )
+                    );
                 }
             }
-        })();
+        } catch (error) {
+            console.error(`Reverse geocoding failed for pub ${pub.id}:`, error);
+        } finally {
+            // Remove from geocoding state regardless of success or failure to prevent retries
+            setGeocodingPubIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(pub.id);
+                return newSet;
+            });
+        }
     };
+    
+    const pubsToGeocode = pubs.filter(p =>
+        p.address === 'Address unknown' &&
+        p.location?.lat &&
+        p.location?.lng &&
+        !geocodingPubIds.has(p.id)
+    );
 
-    processAndSetPubs();
+    if (pubsToGeocode.length > 0) {
+        setGeocodingPubIds(prev => {
+            const newSet = new Set(prev);
+            pubsToGeocode.forEach(p => newSet.add(p.id));
+            return newSet;
+        });
 
-  }, [showAllDbPubs, nominatimResults, dbPubs, allRatings, pubScores, searchOrigin, settings.radius, getDistance, closedOsmPubIds, osmPubOverrides, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded]);
+        // Stagger API calls to respect rate limits (max 1/sec for Nominatim)
+        pubsToGeocode.forEach((pub, index) => {
+            setTimeout(() => {
+                reverseGeocodePub(pub);
+            }, index * 1100);
+        });
+    }
+}, [pubs, geocodingPubIds]);
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   
@@ -1786,7 +1843,7 @@ const App = () => {
   }, [getAverageRating]);
 
   const sortedPubs = useMemo(() => {
-    let pubsToProcess = pubs.filter(pub => !pub.is_closed);
+    let pubsToProcess = [...pubs];
 
     if (filterGuinnessZero) {
         pubsToProcess = pubsToProcess.filter(pub => 
@@ -1795,6 +1852,8 @@ const App = () => {
     }
 
     return pubsToProcess.sort((a, b) => {
+      if (a.is_closed && !b.is_closed) return 1;
+      if (!a.is_closed && b.is_closed) return -1;
       switch (filter) {
         case FilterType.PubScore:
           return (b.pub_score ?? -1) - (a.pub_score ?? -1);
@@ -1854,46 +1913,15 @@ const App = () => {
     try {
         const { imageFile, imageWasRemoved, guinnessZeroStatus, is_private, price, quality, exact_price, message } = ratingData;
         
-        let enrichedPubData = { ...selectedPub };
-        const needsEnrichment = !enrichedPubData.country_code || enrichedPubData.address === 'Address unknown';
-
-        if (needsEnrichment && enrichedPubData.location) {
-            try {
-                const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
-                const reverseUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${enrichedPubData.location.lat}&lon=${enrichedPubData.location.lng}&addressdetails=1`;
-                const reverseResponse = await fetch(reverseUrl, { 
-                    headers: { 
-                        'User-Agent': userAgent,
-                        'Accept-Language': 'en'
-                    } 
-                });
-                if (!reverseResponse.ok) {
-                    throw new Error(`Nominatim API failed with status ${reverseResponse.status}`);
-                }
-                const reverseData = await reverseResponse.json();
-
-                if (reverseData && reverseData.address) {
-                    const newAddress = normalizeReverseGeocodeResult(reverseData);
-                    if (newAddress !== 'Address unknown') {
-                        enrichedPubData.address = newAddress;
-                    }
-                    enrichedPubData.country_code = reverseData.address.country_code;
-                    enrichedPubData.country_name = reverseData.address.country;
-                }
-            } catch (geocodeError) {
-                console.warn("Failed to enrich pub data via reverse geocode, proceeding with existing data.", geocodeError);
-            }
-        }
-        
         await supabase.from('pubs').upsert({
-          id: pubId, name: enrichedPubData.name, address: enrichedPubData.address,
-          lat: enrichedPubData.location.lat, lng: enrichedPubData.location.lng,
-          country_code: enrichedPubData.country_code, country_name: enrichedPubData.country_name,
+          id: pubId, name: pubName, address: pubAddress,
+          lat: selectedPub.location.lat, lng: selectedPub.location.lng,
+          country_code: selectedPub.country_code, country_name: selectedPub.country_name,
         });
 
         const existingRating = userRatings.find(r => r.pubId === pubId);
         const isUpdating = !!existingRating;
-        const currencyInfo = getCurrencyInfo(enrichedPubData);
+        const currencyInfo = getCurrencyInfo(selectedPub);
 
         trackEvent('rate_pub', {
             pub_id: pubId, is_update: isUpdating, quality: quality, price_rating: price,
@@ -2145,64 +2173,61 @@ const App = () => {
     }
 
     const ratingId = rating.id;
+    const pubId = rating.pub_id;
+    const userId = session.user.id;
     const isLiked = userLikes.has(ratingId);
     
     trackEvent('toggle_like', { rating_id: ratingId, action: isLiked ? 'unlike' : 'like' });
 
-    // Store original state for potential rollback
+    // --- Start optimistic updates ---
     const originalUserLikes = userLikes;
     const originalAllRatings = allRatings;
 
-    // --- OPTIMISTIC UI UPDATES ---
-    // 1. Update userLikes (global state for liked status)
-    const optimisticUserLikes = new Set(userLikes);
-    isLiked ? optimisticUserLikes.delete(ratingId) : optimisticUserLikes.add(ratingId);
-    setUserLikes(optimisticUserLikes);
+    // 1. Optimistic update for button color
+    const newUserLikes = new Set(originalUserLikes);
+    if (isLiked) {
+      newUserLikes.delete(ratingId);
+    } else {
+      newUserLikes.add(ratingId);
+    }
+    setUserLikes(newUserLikes);
 
-    // 2. Update allRatings (for like counts in PubDetails)
-    const optimisticAllRatings = new Map(allRatings);
-    let wasFound = false;
-    for (const [pubId, ratings] of optimisticAllRatings.entries()) {
-        const ratingIndex = ratings.findIndex(r => r.id === ratingId);
-        if (ratingIndex > -1) {
-            const originalRating = ratings[ratingIndex];
-            const newLikeCount = isLiked ? (originalRating.like_count || 1) - 1 : (originalRating.like_count || 0) + 1;
-            const updatedRatingsForPub = [...ratings];
-            updatedRatingsForPub[ratingIndex] = { ...originalRating, like_count: newLikeCount };
-            optimisticAllRatings.set(pubId, updatedRatingsForPub);
-            wasFound = true;
-            break;
+    // 2. Optimistic update for like count
+    const newAllRatings = new Map(originalAllRatings);
+    const pubRatings = newAllRatings.get(pubId);
+
+    if (pubRatings) {
+        const ratingIndex = pubRatings.findIndex(r => r.id === ratingId);
+        if (ratingIndex !== -1) {
+            const updatedRatings = [...pubRatings];
+            const originalRating = updatedRatings[ratingIndex];
+            const newCount = isLiked ? (originalRating.like_count || 0) - 1 : (originalRating.like_count || 0) + 1;
+            updatedRatings[ratingIndex] = { ...originalRating, like_count: Math.max(0, newCount) };
+            newAllRatings.set(pubId, updatedRatings);
+            setAllRatings(newAllRatings);
         }
     }
-    if (wasFound) {
-        setAllRatings(optimisticAllRatings);
-    }
-    // End optimistic updates
+    // --- End optimistic updates ---
 
     try {
-      const dbCall = isLiked
-        ? supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: session.user.id })
-        : supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: session.user.id });
-
-      const { error } = await dbCall;
-      if (error) throw error;
+      // 3. Database call
+      if (isLiked) {
+        const { error } = await supabase.from('rating_likes').delete().match({ rating_id: ratingId, user_id: userId });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('rating_likes').insert({ rating_id: ratingId, user_id: userId });
+        if (error) throw error;
+      }
       
-      // On success, the optimistic update persists. No immediate re-fetch needed.
-
+      // 4. Re-fetch from server to ensure consistency.
+      await fetchAllRatings();
     } catch (error) {
         console.error("Error toggling like:", error);
-        setAlertInfo({
-            isOpen: true,
-            title: 'Action Failed',
-            message: 'Your like could not be saved. Please check your connection.',
-            theme: 'error',
-        });
-        
-        // --- ROLLBACK ON ERROR ---
+        // 5. Revert on error
         setUserLikes(originalUserLikes);
         setAllRatings(originalAllRatings);
     }
-  }, [session, userLikes, allRatings, setAlertInfo]);
+  }, [session, userLikes, allRatings, fetchAllRatings]);
   
   const handleViewLegal = (page) => {
     trackEvent('view_legal_page', { page_name: page });
@@ -2437,7 +2462,7 @@ const App = () => {
           <ProfilePage
               userProfile={viewedProfile || userProfile}
               userRatings={viewedProfile ? viewedRatings : userRatings}
-              userTrophies={userTrophies}
+              userTrophies={viewedProfile ? viewedTrophies : userTrophies}
               allTrophies={allTrophies}
               onBack={onBackHandler}
               onViewPub={handleSelectPub}
@@ -2462,7 +2487,7 @@ const App = () => {
           />
       );
   }, [
-      viewedProfile, userProfile, viewedRatings, userRatings, userTrophies, allTrophies,
+      viewedProfile, userProfile, viewedRatings, userRatings, userTrophies, viewedTrophies, allTrophies,
       handleBackFromProfileView, handleSelectPub, levelRequirements, 
       handleProfileUpdate, friendships, handleFriendRequest, 
       handleFriendAction, handleViewFriends, handleDeleteRating, handleTabChange,
@@ -2517,7 +2542,7 @@ const App = () => {
       // Reverse geocode to get country info
       const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
       const reverseUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${finalPlacementLocation.lat}&lon=${finalPlacementLocation.lng}&addressdetails=1`;
-      const reverseResponse = await fetch(reverseUrl, { headers: { 'User-Agent': userAgent, 'Accept-Language': 'en' } });
+      const reverseResponse = await fetch(reverseUrl, { headers: { 'User-Agent': userAgent } });
       const reverseData = await reverseResponse.json();
       const country_code = reverseData?.address?.country_code || null;
       const country_name = reverseData?.address?.country || null;
@@ -2921,6 +2946,8 @@ const App = () => {
         p_lng: pubToEdit.location?.lng,
         p_suggested_data: suggestionData.suggested_data,
         p_notes: suggestionData.notes,
+        p_country_code: suggestionData.country_code,
+        p_country_name: suggestionData.country_name,
     });
 
     setIsSuggestEditModalOpen(false);
@@ -2947,7 +2974,7 @@ const App = () => {
       isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
       activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
-      filterGuinnessZero, onFilterGuinnessZeroChange: setFilterGuinnessZero,
+      filterGuinnessZero, onFilterGuinnessZeroChange,
       handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
       handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
       refreshTrigger, getDistance, isListExpanded, setIsListExpanded,
@@ -2966,7 +2993,6 @@ const App = () => {
       viewingFriendsOf, friendsList, isFetchingFriendsList,
       deleteConfirmationInfo,
       communitySubTab, setCommunitySubTab,
-      StatsPage,
       ShopPage,
       levelRequirements,
       settingsSubView, handleViewAdminPage,
@@ -2983,7 +3009,9 @@ const App = () => {
       onScrollComplete: () => setScrollToSection(null),
       userTrophies,
       allTrophies,
-      enrichingPubIds,
+      geocodingPubIds,
+      isDesktopSidebarCollapsed,
+      setIsDesktopSidebarCollapsed,
       
       // Implemented handlers
       handleViewProfile,
@@ -3057,8 +3085,8 @@ const App = () => {
       SocialContentHub,
       onViewSocialHub: () => handleViewAdminPage('social'),
       onDonationSuccess: handleDonationSuccess,
-      isPriceByCountryModalOpen,
-      onSetIsPriceByCountryModalOpen: setIsPriceByCountryModalOpen,
+      isBackfilling,
+      onBackfillCountryData: handleBackfillCountryData,
       onOpenAndroidBetaModal: () => {
         trackEvent('view_android_beta_prompt', { source: 'settings_button' });
         setIsAndroidBetaModalOpen(true);
@@ -3088,9 +3116,9 @@ const App = () => {
             />
         )}
         {isCoasterWelcomeModalOpen && <CoasterWelcomeModal onClose={() => setIsCoasterWelcomeModalOpen(false)} />}
-        {shareModalPub && <ShareModal pub={shareModalPub} onClose={() => setShareModalPub(null)} />}
+        {shareModalPub && <ShareModal pub={shareModalPub} onClose={() => setShareModalPub(null)} loggedInUserProfile={userProfile} />}
         {shareProfileModalUser && <ShareProfileModal user={shareProfileModalUser} onClose={() => setShareProfileModalUser(null)} />}
-        {shareRatingModalRating && <ShareRatingModal rating={shareRatingModalRating} onClose={() => setShareRatingModalRating(null)} />}
+        {shareRatingModalRating && <ShareRatingModal rating={shareRatingModalRating} onClose={() => setShareRatingModalRating(null)} loggedInUserProfile={userProfile} />}
         {unlockedTrophiesToShow.length > 0 && (
           <TrophyUnlockedPopup 
             trophies={unlockedTrophiesToShow} 
@@ -3158,31 +3186,33 @@ const App = () => {
 
   return (
     <OnlineStatusContext.Provider value={{ onlineUserIds }}>
-      <Elements stripe={stripePromise}>
-        {confettiState.active && (
-          <Confetti
-            key={confettiState.key}
-            width={windowSize.width}
-            height={windowSize.height}
-            recycle={confettiState.recycle}
-            numberOfPieces={confettiState.numberOfPieces}
-            style={{
-              zIndex: 3000,
-              pointerEvents: 'none',
-              opacity: confettiState.opacity,
-              transition: 'opacity 2s ease-out',
-            }}
-          />
-        )}
-        {renderModals()}
-        {AppContent}
-        {cookieConsent === null && !Capacitor.isNativePlatform() && (
-          <CookieConsentBanner
-            onAccept={handleAcceptCookies}
-            onDecline={handleDeclineCookies}
-          />
-        )}
-      </Elements>
+      <ExchangeRatesProvider>
+        <Elements stripe={stripePromise}>
+          {confettiState.active && (
+            <Confetti
+              key={confettiState.key}
+              width={windowSize.width}
+              height={windowSize.height}
+              recycle={confettiState.recycle}
+              numberOfPieces={confettiState.numberOfPieces}
+              style={{
+                zIndex: 3000,
+                pointerEvents: 'none',
+                opacity: confettiState.opacity,
+                transition: 'opacity 2s ease-out',
+              }}
+            />
+          )}
+          {renderModals()}
+          {AppContent}
+          {cookieConsent === null && !Capacitor.isNativePlatform() && (
+            <CookieConsentBanner
+              onAccept={handleAcceptCookies}
+              onDecline={handleDeclineCookies}
+            />
+          )}
+        </Elements>
+      </ExchangeRatesProvider>
     </OnlineStatusContext.Provider>
   );
 };

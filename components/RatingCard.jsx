@@ -1,26 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import Avatar from './Avatar.jsx';
 import StarRating from './StarRating.jsx';
 import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import CommentsSection from './CommentsSection.jsx';
+import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 
 const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, fallbackLocationData = null }) => {
 
     const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng, comment_count, message, pub_country_code, pub_country_name } = rating;
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
+    const { rates: exchangeRates } = useContext(ExchangeRatesContext);
 
-    const isLiked = useMemo(() => userLikes?.has(id) || false, [userLikes, id]);
-    const displayedLikeCount = like_count || 0;
-    
-    const handleLikeClick = () => {
-        if (!onToggleLike) {
-            onLoginRequest();
-            return;
-        }
-        // Immediately call the parent handler. The parent will optimistically
-        // update its state and send new props down, causing this component to re-render.
-        onToggleLike(rating);
-    };
+    const isLiked = userLikes && userLikes.has(id);
     
     // Prioritize the rating's specific location data, but use the pub's data as a fallback.
     const effectiveLocationData = {
@@ -72,8 +63,24 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
         onOpenShareRatingModal(enrichedRating);
     };
 
+    const userHomeCurrency = getCurrencyInfo(loggedInUserProfile || { country_code: 'gb' });
+    let convertedPriceText = null;
+    if (
+        exact_price > 0 && 
+        exchangeRates &&
+        currencyInfo.code !== userHomeCurrency.code &&
+        exchangeRates[currencyInfo.code] &&
+        exchangeRates[userHomeCurrency.code]
+    ) {
+        // Convert the pint's price to the base currency (GBP)
+        const priceInGbp = exact_price / exchangeRates[currencyInfo.code];
+        // Convert from the base currency to the user's home currency
+        const convertedPrice = priceInGbp * exchangeRates[userHomeCurrency.code];
+        convertedPriceText = `${userHomeCurrency.symbol}${convertedPrice.toFixed(2)}`;
+    }
+
     return (
-        <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-md">
+        <div data-rating-id={id} className="relative bg-white dark:bg-gray-800 rounded-lg shadow-md">
             {/* Card Header */}
             <div className="p-3 flex items-center space-x-3">
                 <button onClick={() => onViewProfile(user.id, 'community')} className="flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
@@ -88,16 +95,18 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                             <i className={`fas ${rankData.icon} text-sm text-amber-500 dark:text-amber-400`} title={rankData.name}></i>
                         )}
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 break-words" title={pub_name}>
-                        rated a pint at{' '}
-                        <button
-                            onClick={handlePubClick}
-                            disabled={!onViewPub || !pub_lat || !pub_lng}
-                            className="font-medium hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded disabled:no-underline disabled:cursor-default"
-                        >
-                            {pub_name}
-                        </button>
-                    </p>
+                    {onViewPub && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 break-words" title={pub_name}>
+                            rated a pint at{' '}
+                            <button
+                                onClick={handlePubClick}
+                                disabled={!onViewPub || !pub_lat || !pub_lng}
+                                className="font-medium hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded disabled:no-underline disabled:cursor-default"
+                            >
+                                {pub_name}
+                            </button>
+                        </p>
+                    )}
                 </div>
                  <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">{formatTimeAgo(new Date(created_at).getTime())}</span>
             </div>
@@ -135,12 +144,15 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                  
                  {exact_price > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700/50">
-                        <p className="text-sm text-gray-600 dark:text-gray-400 flex justify-between items-center">
-                            <span>Price Paid:</span>
-                            <span className="font-bold text-lg text-gray-800 dark:text-white bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded">
-                                {currencyInfo.symbol}{exact_price.toFixed(2)}
-                            </span>
-                        </p>
+                        <div className="flex justify-between items-start">
+                            <span className="text-sm text-gray-600 dark:text-gray-400 mt-1">Price Paid:</span>
+                            <div className="text-right">
+                                <span className="font-bold text-lg text-gray-800 dark:text-white bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded" title={currencyInfo.code}>
+                                    {currencyInfo.symbol}{exact_price.toFixed(2)}
+                                </span>
+                                {convertedPriceText && <div className="text-xs font-normal text-gray-500 dark:text-gray-400 mt-1" title={userHomeCurrency.code}>{convertedPriceText}</div>}
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -148,17 +160,17 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
              {/* Action Bar */}
             <div className="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-around">
                  <button
-                    onClick={handleLikeClick}
+                    onClick={() => onToggleLike ? onToggleLike(rating) : onLoginRequest()}
                     className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center ${
                         isLiked
                         ? 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-300'
                         : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                     }`}
                     aria-pressed={isLiked}
-                    aria-label={isLiked ? `Unlike rating, currently ${displayedLikeCount} likes` : `Like rating, currently ${displayedLikeCount} likes`}
+                    aria-label={isLiked ? `Unlike rating, currently ${like_count} likes` : `Like rating, currently ${like_count} likes`}
                   >
                       <i className={`${isLiked ? 'fas' : 'far'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
-                      <span>{displayedLikeCount}</span>
+                      <span>{like_count || 0}</span>
                 </button>
                  <button
                     onClick={() => setIsCommentsVisible(prev => !prev)}

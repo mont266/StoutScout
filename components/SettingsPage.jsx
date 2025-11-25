@@ -3,7 +3,6 @@ import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants.js';
 import { supabase } from '../supabase.js';
 import Avatar from './Avatar.jsx';
 import ModerationPage from './ModerationPage.jsx';
-import StatsPage from './StatsPage.jsx';
 import { trackEvent } from '../analytics.js';
 import { getMobileOS } from '../utils.js';
 import useIsDesktop from '../hooks/useIsDesktop.js';
@@ -15,7 +14,7 @@ import { Capacitor } from '@capacitor/core';
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewStats, onViewModeration, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, onViewSocialHub, onOpenAndroidBetaModal }) => {
+const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewModeration, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, onOpenAndroidBetaModal }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
@@ -24,8 +23,16 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   const [rebuildSuccess, setRebuildSuccess] = useState(false);
   const isDesktop = useIsDesktop();
   
-  const handleUnitChange = (unit) => onSettingsChange({ ...settings, unit });
-  const handleThemeChange = (theme) => onSettingsChange({ ...settings, theme });
+  const handleUnitChange = (unit) => {
+    onSettingsChange({ ...settings, unit });
+    trackEvent('change_setting', { setting_name: 'distance_unit', value: unit });
+  };
+
+  const handleThemeChange = (theme) => {
+    onSettingsChange({ ...settings, theme });
+    trackEvent('change_setting', { setting_name: 'theme', value: theme });
+  };
+  
   const handleDeveloperModeChange = (enabled) => onSettingsChange({ ...settings, developerMode: enabled });
 
   const handleRadiusChange = (e) => {
@@ -334,7 +341,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                           </button>
                         )}
                         <button
-                            onClick={() => { onViewStats(); trackEvent('view_stats_page'); }}
+                            onClick={() => { window.open('https://analytics.stoutly.co.uk', '_blank'); trackEvent('view_external_stats'); }}
                             className="flex-1 flex items-center justify-center space-x-2 bg-blue-500/10 text-blue-500 dark:text-blue-400 font-bold py-3 px-4 rounded-lg hover:bg-blue-500/20 transition-colors"
                         >
                             <i className="fas fa-chart-bar"></i>
@@ -573,7 +580,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
           
           {/* Version Number */}
           <div className="text-center text-xs text-gray-400 dark:text-gray-500 pt-4">
-            Version V1.32
+            Version V1.33
           </div>
       </div>
     </>

@@ -143,7 +143,7 @@ const BioRenderer = ({ text }) => {
     if (!text) return null;
 
     // Regex to find URLs
-    const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])|(\bwww\.[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+    const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
     
     // Split the text by the regex, keeping the delimiters
     const parts = text.split(urlRegex).filter(Boolean);
@@ -320,9 +320,7 @@ const TrophyCabinet = ({ trophies, onOpenTrophyModal, onNavigateToSettings }) =>
                             </button>
                             {trophy && (
                                 <div className={`absolute bottom-full mb-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-300 z-10 ${tooltipPositionClasses}`}>
-                                    <h5 className={`font-bold text-base ${trophy.isUnlocked ? 'text-amber-400' : 'text-gray-400'}`}>
-                                        {trophy.name} {!trophy.isUnlocked && '(Locked)'}
-                                    </h5>
+                                    <h5 className={`font-bold text-base ${trophy.isUnlocked ? 'text-amber-400' : 'text-gray-400'}`}>{trophy.name} {!trophy.isUnlocked && '(Locked)'}</h5>
                                     <p className="text-gray-300 mt-1">{trophy.description}</p>
                                     {!trophy.isUnlocked && trophy.id === PATRON_TROPHY_ID && onNavigateToSettings && (
                                         <div className="mt-2 pt-2 border-t border-gray-700">
@@ -354,17 +352,41 @@ const hasMetConditions = (trophy, stats) => {
         return false;
     }
     
-    // Using 'in' for safer property checking
-    if ('min_ratings' in conditions && (stats.ratingsCount || 0) < conditions.min_ratings) return false;
-    if ('min_unique_pubs' in conditions && (stats.uniquePubsCount || 0) < conditions.min_unique_pubs) return false;
-    if ('min_countries' in conditions && (stats.uniqueCountriesCount || 0) < conditions.min_countries) return false;
-    if ('min_pubs_added' in conditions && (stats.pubsAddedCount || 0) < conditions.min_pubs_added) return false;
-    if ('min_ratings_with_photo' in conditions && (stats.ratingsWithPhotoCount || 0) < conditions.min_ratings_with_photo) return false;
-    if ('has_perfect_quality_rating' in conditions && !stats.has_perfect_quality_rating) return false;
-    if ('has_perfect_price_rating' in conditions && !stats.has_perfect_price_rating) return false;
+    let conditionChecked = false;
 
-    // If all defined conditions are met, the re-validation passes.
-    return true;
+    // Using 'in' for safer property checking
+    if ('min_ratings' in conditions) {
+        conditionChecked = true;
+        if ((stats.ratingsCount || 0) < conditions.min_ratings) return false;
+    }
+    if ('min_unique_pubs' in conditions) {
+        conditionChecked = true;
+        if ((stats.uniquePubsCount || 0) < conditions.min_unique_pubs) return false;
+    }
+    if ('min_countries' in conditions) {
+        conditionChecked = true;
+        if ((stats.uniqueCountriesCount || 0) < conditions.min_countries) return false;
+    }
+    if ('min_pubs_added' in conditions) {
+        conditionChecked = true;
+        if ((stats.pubsAddedCount || 0) < conditions.min_pubs_added) return false;
+    }
+    if ('min_ratings_with_photo' in conditions) {
+        conditionChecked = true;
+        if ((stats.ratingsWithPhotoCount || 0) < conditions.min_ratings_with_photo) return false;
+    }
+    if ('has_perfect_quality_rating' in conditions) {
+        conditionChecked = true;
+        if (!stats.has_perfect_quality_rating) return false;
+    }
+    if ('has_perfect_price_rating' in conditions) {
+        conditionChecked = true;
+        if (!stats.has_perfect_price_rating) return false;
+    }
+
+    // If we checked valid stats and didn't return false, it's true.
+    // If we didn't find any known stats (e.g. only date based conditions), return false to rely on DB.
+    return conditionChecked;
 };
 
 const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen }) => {
@@ -387,13 +409,20 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
     const mainScrollRef = useRef(null);
     const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
     const [activeTab, setActiveTab] = useState('ratings');
+    const [visibleRatingsCount, setVisibleRatingsCount] = useState(5);
 
     const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
 
-    // Moved these declarations before the hooks that use them, and made them safe for null `userProfile`
-    const isViewingOwnProfile = !loggedInUserProfile || userProfile?.id === loggedInUserProfile?.id;
+    const isViewingOwnProfile = loggedInUserProfile && userProfile && userProfile.id === loggedInUserProfile.id;
     const isDeveloper = loggedInUserProfile?.is_developer;
     const canViewStats = isViewingOwnProfile || isDeveloper;
+
+    const displayFriendCount = useMemo(() => {
+        if (isViewingOwnProfile && friendships) {
+            return friendships.filter(f => f.status === 'accepted').length;
+        }
+        return userProfile?.friends_count || 0;
+    }, [isViewingOwnProfile, friendships, userProfile]);
 
     // Collapsing header logic for mobile
     useEffect(() => {
@@ -428,68 +457,59 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         has_perfect_price_rating: userRatings.some(r => r.rating.price === 5),
     }), [userRatings, userProfile]);
     
-    const trophiesForCabinet = useMemo(() => {
-        const CABINET_SIZE = 4;
+    const trophiesWithStatus = useMemo(() => {
+        if (!allTrophies || !userProfile) return [];
+        
+        // userTrophies is passed from parent. If viewing another user, App.jsx must ensure this contains THAT user's trophies.
+        const unlockedTrophyIdsFromDb = new Set((userTrophies || []).map(ut => ut.trophy_id));
         const userStats = userStatsForTrophies;
 
-        // First, determine the definitive `isUnlocked` status for every trophy.
-        const allTrophiesWithStatus = (allTrophies || []).map(trophy => {
-            let isUnlocked;
-
-            // The "Stoutly Patron" trophy is unlocked ONLY if the user has donated.
+        return allTrophies.map(trophy => {
+            let isUnlocked = false;
+            // Check 1: Patron trophy (special case)
             if (trophy.id === PATRON_TROPHY_ID) {
-                isUnlocked = !!userProfile?.has_donated;
-            } else {
-                // For all other trophies, check the DB record first.
-                let isUnlockedInDb = (userTrophies || []).some(ut => ut.trophy_id === trophy.id);
-                const isStatBased = trophy.trigger_conditions && Object.keys(trophy.trigger_conditions).length > 0;
-                
-                if (isUnlockedInDb && isStatBased) {
-                    // If it's unlocked in the DB and is stat-based, re-validate against current stats.
-                    isUnlocked = hasMetConditions(trophy, userStats);
-                } else {
-                    // If not stat-based or not unlocked in DB, the DB status is final.
-                    isUnlocked = isUnlockedInDb;
-                }
+                isUnlocked = !!userProfile.has_donated;
+            } 
+            // Check 2: Stat-based trophies (Inclusive Check: Database OR Stats)
+            // This ensures that if the DB record exists, it's unlocked. If not, we check stats for instant feedback.
+            else if (trophy.trigger_conditions && Object.keys(trophy.trigger_conditions).length > 0) {
+                const inDb = unlockedTrophyIdsFromDb.has(trophy.id);
+                const metStats = hasMetConditions(trophy, userStats);
+                isUnlocked = inDb || metStats;
+            }
+            // Check 3: Event-based trophies (must be in the DB)
+            else {
+                isUnlocked = unlockedTrophyIdsFromDb.has(trophy.id);
             }
             return { ...trophy, isUnlocked };
         });
+    }, [allTrophies, userTrophies, userProfile, userStatsForTrophies]);
 
-        // Now, build the cabinet display from this definitive list.
-        const unlockedTrophies = allTrophiesWithStatus.filter(t => t.isUnlocked);
+    const trophiesForCabinet = useMemo(() => {
+        const CABINET_SIZE = 4;
         
-        // Create a map for quick lookup of achievement dates
         const achievementDateMap = new Map((userTrophies || []).map(ut => [ut.trophy_id, new Date(ut.achieved_at).getTime()]));
 
-        // Sort the unlocked trophies to prioritize Patron and then by most recent
-        unlockedTrophies.sort((a, b) => {
-            // Prioritize the Patron trophy
-            if (a.id === PATRON_TROPHY_ID && b.id !== PATRON_TROPHY_ID) return -1;
-            if (a.id !== PATRON_TROPHY_ID && b.id === PATRON_TROPHY_ID) return 1;
+        const sortedTrophies = [...trophiesWithStatus].sort((a, b) => {
+            // Prioritize unlocked trophies
+            if (a.isUnlocked && !b.isUnlocked) return -1;
+            if (!a.isUnlocked && b.isUnlocked) return 1;
 
-            // Sort by most recently achieved
-            const dateA = achievementDateMap.get(a.id) || 0;
-            const dateB = achievementDateMap.get(b.id) || 0;
-            return dateB - dateA;
+            // If both are unlocked, prioritize Patron then recency
+            if (a.isUnlocked && b.isUnlocked) {
+                if (a.id === PATRON_TROPHY_ID && b.id !== PATRON_TROPHY_ID) return -1;
+                if (a.id !== PATRON_TROPHY_ID && b.id === PATRON_TROPHY_ID) return 1;
+                const dateA = achievementDateMap.get(a.id) || 0;
+                const dateB = achievementDateMap.get(b.id) || 0;
+                return dateB - dateA;
+            }
+            
+            // If both are locked, maintain original sort order
+            return 0;
         });
 
-        const unlockedForCabinet = unlockedTrophies.slice(0, CABINET_SIZE);
-        
-        if (unlockedForCabinet.length >= CABINET_SIZE) {
-            return unlockedForCabinet;
-        }
-
-        const needed = CABINET_SIZE - unlockedForCabinet.length;
-        const unlockedIds = new Set(unlockedForCabinet.map(t => t.id));
-
-        const lockedForCabinet = allTrophiesWithStatus
-            .filter(t => !unlockedIds.has(t.id))
-            .slice(0, needed);
-        
-        return [...unlockedForCabinet, ...lockedForCabinet];
-
-    }, [userTrophies, allTrophies, userStatsForTrophies, userProfile]);
-
+        return sortedTrophies.slice(0, CABINET_SIZE);
+    }, [trophiesWithStatus, userTrophies]);
 
     if (!userProfile) {
         return (
@@ -504,7 +524,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         if (modalOpener) modalOpener();
     };
 
-    const { username, level, is_beta_tester, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, friends_count, bio } = userProfile;
+    const { username, level, is_beta_tester, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, bio } = userProfile;
     const reviews = userProfile.reviews || 0;
     
     const rankData = getRankData(level);
@@ -772,14 +792,17 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         </button>
     );
 
+    const ratingsToShow = userRatings.slice(0, visibleRatingsCount);
+    const hasMoreRatings = userRatings.length > visibleRatingsCount;
+
     const RatingsList = () => (
         <div className="space-y-3">
-            {userRatings.length === 0 ? (
+            {ratingsToShow.length === 0 ? (
                 <div className="text-center text-gray-500 dark:text-gray-400 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
                     <p>No ratings submitted yet.</p>
                 </div>
             ) : (
-                userRatings.map((r) => {
+                ratingsToShow.map((r) => {
                     const currencyInfo = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
                     return (
                         <li key={r.id} className="list-none bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
@@ -824,6 +847,16 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                     );
                 })
             )}
+            {hasMoreRatings && (
+                <div className="mt-4">
+                    <button 
+                        onClick={() => setVisibleRatingsCount(prev => prev + 5)}
+                        className="w-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    >
+                        Load More
+                    </button>
+                </div>
+            )}
         </div>
     );
     
@@ -839,8 +872,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
             <TrophyModal
                 isOpen={isTrophyModalOpen}
                 onClose={() => setIsTrophyModalOpen(false)}
-                allTrophies={allTrophies}
-                unlockedTrophyIds={new Set(userTrophies.map(t => t.trophy_id))}
+                trophiesWithStatus={trophiesWithStatus}
                 userStats={userStatsForTrophies}
                 onNavigateToSettings={onNavigateToSettings}
                 userProfile={userProfile}
@@ -927,7 +959,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                         onClick={() => setIsTrophyModalOpen(true)}
                                         className="text-center transition-colors group"
                                     >
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400">{userTrophies?.length || 0}</p>
+                                        <p className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400">{trophiesWithStatus.filter(t => t.isUnlocked).length}</p>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trophies</p>
                                     </button>
                                     <button
@@ -935,7 +967,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                         className="text-center disabled:cursor-default transition-colors group"
                                         disabled={!onViewFriends}
                                     >
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400">{friends_count}</p>
+                                        <p className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400">{displayFriendCount}</p>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Friends</p>
                                     </button>
                                 </div>
@@ -971,7 +1003,8 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                         <div className="flex justify-around text-center p-3 bg-white dark:bg-gray-800 rounded-xl shadow-md">
                                             <div><p className="text-2xl font-bold text-gray-900 dark:text-white">{level}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Level</p></div>
                                             <div><p className="text-2xl font-bold text-gray-900 dark:text-white">{reviews}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ratings</p></div>
-                                            <div><button onClick={() => onViewFriends(userProfile)} className="disabled:cursor-default" disabled={!onViewFriends}><p className="text-2xl font-bold text-gray-900 dark:text-white">{friends_count}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Friends</p></button></div>
+                                            <div><button onClick={() => setIsTrophyModalOpen(true)} className="disabled:cursor-default"><p className="text-2xl font-bold text-gray-900 dark:text-white">{trophiesWithStatus.filter(t => t.isUnlocked).length}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trophies</p></button></div>
+                                            <div><button onClick={() => onViewFriends(userProfile)} className="disabled:cursor-default" disabled={!onViewFriends}><p className="text-2xl font-bold text-gray-900 dark:text-white">{displayFriendCount}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Friends</p></button></div>
                                         </div>
                                     </section>
                                 )}

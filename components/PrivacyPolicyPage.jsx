@@ -21,14 +21,14 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const PrivacyPolicyPage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Privacy Policy" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 25, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: November 21, 2025</p>
             <p>Your privacy is important to us. This Privacy Policy explains how Stoutly ("we," "us," or "our") collects, uses, and shares information about you when you use our Service.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Information We Collect</h2>
             <p className="font-bold">Information You Provide to Us:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li><strong>Account Information:</strong> When you create an account, we collect your email address, username, date of birth, and country of residence. Your password is encrypted and managed by our backend provider, Supabase; we never see it in plain text.</li>
-                <li><strong>Profile Information:</strong> We collect information you add to your profile, such as your selected or uploaded avatar/profile picture and your bio.</li>
+                <li><strong>Profile Information:</strong> We collect information you add to your profile, such as your selected or uploaded avatar/profile picture, your bio, and social media handles (e.g., for Instagram, X, or YouTube).</li>
                 <li><strong>Ratings and Reviews:</strong> We collect the ratings you submit, which include your scores for price and quality, and optionally, the exact price paid.</li>
                 <li><strong>Photographs:</strong> If you choose to add a photo to your rating, we collect and store the image file you upload. This image will be associated with your rating and profile.</li>
                 <li><strong>Comments:</strong> We collect any comments you post on ratings, which are linked to your account.</li>
@@ -54,6 +54,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 <li>Authenticate users and allow you to sign in to your account.</li>
                 <li>Display your ratings, comments, profile picture, and other profile information to the community (e.g., on leaderboards and pub detail pages).</li>
                 <li>Display the photographs you've submitted alongside your ratings to the community.</li>
+                <li>Analyze your User Content (such as photos and comments) with automated systems, including third-party AI services like the Google Gemini API, to generate insights, curate content, and improve the Service.</li>
                 <li>Personalize your experience (e.g., by saving your theme and distance unit preferences).</li>
                 <li>Communicate with you for password recovery and other essential service notifications.</li>
                 <li>Send you marketing emails about new features, news, offers, and community events, but only if you have given us your explicit consent to do so.</li>
@@ -69,6 +70,9 @@ const PrivacyPolicyPage = ({ onBack }) => {
                     <ul className="list-disc list-inside space-y-1 pl-6 mt-1">
                         <li><strong>Supabase:</strong> Our backend and database provider. They store your account information, profiles, ratings, comments, and uploaded images.</li>
                         <li><strong>Stripe:</strong> Our payment processor for handling donations. They manage your payment information securely.</li>
+                        <li><strong>Google Gemini API:</strong> For AI-powered analysis of user-generated content like comments and images.</li>
+                        <li><strong>Dicebear:</strong> For generating stylized user avatars.</li>
+                        <li><strong>Quickchart.io:</strong> For generating QR codes in our sharing features.</li>
                         <li><strong>OpenStreetMap & Nominatim:</strong> We use map data from OpenStreetMap contributors and the Nominatim search service for geocoding (e.g., finding addresses). This allows us to display maps and find pubs. Their privacy policy can be found on their respective websites.</li>
                         <li><strong>Google Analytics:</strong> If you provide consent, we use Google Analytics to analyze usage trends and improve the app.</li>
                     </ul>

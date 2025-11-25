@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useContext } from 'react';
 import StarRating from './StarRating.jsx';
 import RatingForm from './RatingForm.jsx';
 import ImageModal from './ImageModal.jsx';
@@ -13,6 +13,7 @@ import CommentsSection from './CommentsSection.jsx';
 import CertifiedBadge from './CertifiedBadge.jsx';
 import RatingCard from './RatingCard.jsx';
 import CertifiedExplanationModal from './CertifiedExplanationModal.jsx';
+import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 
 const Section = ({ title, children, ...props }) => (
     <section {...props} aria-labelledby={title ? `section-title-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined}>
@@ -99,47 +100,48 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   const ratingsListRef = useRef(null);
   const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
   const [isCertifiedModalOpen, setIsCertifiedModalOpen] = useState(false);
+  const { rates: exchangeRates } = useContext(ExchangeRatesContext);
 
   const isLondonNonDynamic = useMemo(() => isLondonPub(localPub) && !localPub.is_dynamic_price_area, [localPub]);
   const isCertified = localPub.certification_status === 'certified' || localPub.certification_status === 'at_risk';
   const isDeveloper = loggedInUserProfile?.is_developer;
 
   useEffect(() => {
-    // Optimistically set the local pub state to what we received in props.
-    // This ensures the UI updates immediately.
-    setLocalPub(pub);
+    // This effect ensures we always have the most complete pub data available.
+    // It handles two cases for missing country info: rated pubs (in our DB)
+    // and unrated pubs (new from OSM).
+    setLocalPub(pub); // Optimistically set the local pub first
 
-    const fetchAuthoritativePubData = async () => {
-        if (!pub || !pub.id) return;
+    const hasCountryInfo = pub.country_code || pub.country_name;
+    const isRated = pub.ratings?.length > 0 || pub.pub_score != null;
 
-        // Fetch the pub record from our database. This is the source of truth
-        // for properties like `is_closed`, official name, certification, etc.
-        const { data: dbData, error } = await supabase
-            .from('pubs')
-            .select('id, name, address, lat, lng, country_code, country_name, is_closed, certification_status, certified_since')
-            .eq('id', pub.id)
-            .single();
+    if (!hasCountryInfo && pub.id && pub.location) {
+        // Pub is missing country info, we need to fetch it.
+        if (isRated) {
+            // It's a rated pub, so it must exist in our DB. Fetch full record.
+            const fetchFullPubData = async () => {
+                const { data, error } = await supabase
+                    .from('pubs')
+                    .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since, is_closed')
+                    .eq('id', pub.id)
+                    .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found, which is not an error here
-            console.error(`Error fetching authoritative data for pub ${pub.id}:`, error);
-            return;
-        }
-
-        if (dbData) {
-            // If data was found in our DB, merge it with the prop data.
-            // Data from our DB is considered more authoritative for core fields.
-            setLocalPub(prevPub => ({
-                ...prevPub, // Keep live data from props (like ratings, pub_score)
-                ...dbData,  // Overwrite with authoritative data from DB
-                is_closed: !!dbData.is_closed, // Ensure it's a boolean
-                location: { lat: dbData.lat, lng: dbData.lng }, // Re-structure location
-            }));
+                if (data && !error) {
+                    // Important: The `pub` prop contains the definitive `is_closed` status from the App.jsx merge logic.
+                    // When we fetch supplementary data from the DB, we must not overwrite this with potentially stale data.
+                    const { is_closed: _, ...restOfData } = data;
+                    setLocalPub(prevPub => ({
+                        ...prevPub, // Keep live data like ratings, pub_score, and the definitive is_closed status from the prop
+                        ...restOfData, // Overwrite with supplementary data from DB (name, address, country etc.)
+                        location: { lat: data.lat, lng: data.lng },
+                    }));
+                }
+            };
+            fetchFullPubData();
         } else {
-            // The pub is not in our database (e.g., a fresh OSM result).
-            // We can still try to enrich it if it's missing info.
-            const needsEnrichment = (!pub.country_code || !pub.country_name) && pub.location;
-            if (needsEnrichment) {
-                 try {
+            // It's unrated, likely a new pub from OSM. Reverse geocode to get country.
+            const reverseGeocodeForCountry = async () => {
+                try {
                     const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
                     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pub.location.lat}&lon=${pub.location.lng}&addressdetails=1`;
                     const response = await fetch(url, { headers: { 'User-Agent': userAgent } });
@@ -155,11 +157,10 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                 } catch (error) {
                     console.error("Reverse geocoding for country failed:", error);
                 }
-            }
+            };
+            reverseGeocodeForCountry();
         }
-    };
-
-    fetchAuthoritativePubData();
+    }
   }, [pub]);
 
   useEffect(() => {
@@ -215,13 +216,36 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   
   const priceInfo = useMemo(() => {
     const ratingsWithPrice = localPub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
-    if (ratingsWithPrice.length === 0) return { text: `${avgPrice.toFixed(1)} / 5`, stars: avgPrice };
+    if (ratingsWithPrice.length === 0) return { text: `${avgPrice.toFixed(1)} / 5`, stars: avgPrice, originalPrice: null, convertedPrice: null, originalCode: null, convertedCode: null };
 
     const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
     const average = total / ratingsWithPrice.length;
+    
+    const userHomeCurrency = getCurrencyInfo(loggedInUserProfile || { country_code: 'gb' });
+    let convertedPriceText = null;
+    let convertedCode = null;
+    if (
+        average > 0 && 
+        exchangeRates &&
+        currencyInfo.code !== userHomeCurrency.code &&
+        exchangeRates[currencyInfo.code] &&
+        exchangeRates[userHomeCurrency.code]
+    ) {
+        const priceInGbp = average / exchangeRates[currencyInfo.code];
+        const convertedPrice = priceInGbp * exchangeRates[userHomeCurrency.code];
+        convertedPriceText = `${userHomeCurrency.symbol}${convertedPrice.toFixed(2)}`;
+        convertedCode = userHomeCurrency.code;
+    }
 
-    return { text: `${currencyInfo.symbol}${average.toFixed(2)}`, stars: avgPrice };
-  }, [localPub.ratings, avgPrice, currencyInfo]);
+    return { 
+        text: `${currencyInfo.symbol}${average.toFixed(2)}`, 
+        stars: avgPrice,
+        originalPrice: `${currencyInfo.symbol}${average.toFixed(2)}`,
+        convertedPrice: convertedPriceText,
+        originalCode: currencyInfo.code,
+        convertedCode: convertedCode,
+    };
+  }, [localPub.ratings, avgPrice, currencyInfo, loggedInUserProfile, exchangeRates]);
 
   const handleInitiateReport = (ratingToReport) => {
     setImageToView(null); // Close the image modal first
@@ -295,6 +319,11 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
         }
         return { ...prev, [ratingId]: !isVisible };
     });
+  };
+
+  const handleOpenCertifiedModal = () => {
+    trackEvent('view_certification_details', { pub_id: localPub.id, pub_name: localPub.name });
+    setIsCertifiedModalOpen(true);
   };
   
   const GuinnessZeroStatus = () => {
@@ -547,7 +576,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                                     <CertifiedBadge certifiedSince={localPub.certified_since} className="w-10 h-10" />
                                     <p className="font-bold text-green-600 dark:text-green-400 mt-2 text-sm">Stoutly Certified</p>
                                     <button 
-                                        onClick={() => setIsCertifiedModalOpen(true)}
+                                        onClick={handleOpenCertifiedModal}
                                         className="text-xs text-gray-500 dark:text-gray-400 hover:underline mt-1"
                                     >
                                         What is this?
@@ -570,7 +599,14 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
                             {/* Avg. Price Card */}
                             <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
                                 <i className="fas fa-tag text-3xl text-green-500 mb-2"></i>
-                                <div className="text-xl font-bold text-gray-900 dark:text-white">{priceInfo.text}</div>
+                                {priceInfo.originalPrice ? (
+                                    <div>
+                                        <div className="text-xl font-bold text-gray-900 dark:text-white" title={priceInfo.originalCode}>{priceInfo.originalPrice}</div>
+                                        {priceInfo.convertedPrice && <div className="text-sm font-semibold text-gray-500 dark:text-gray-400" title={priceInfo.convertedCode}>{priceInfo.convertedPrice}</div>}
+                                    </div>
+                                ) : (
+                                    <div className="text-xl font-bold text-gray-900 dark:text-white">{priceInfo.text}</div>
+                                )}
                                 <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1 flex items-center justify-center gap-1">
                                     <span>Avg. Price</span>
                                     {(isLondonNonDynamic || localPub.is_dynamic_price_area || localPub.area_identifier) && <i className="fas fa-hourglass-half text-xs"></i>}

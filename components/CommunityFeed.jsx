@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
 import RatingCard from './RatingCard.jsx';
+import ScrollToTopButton from './ScrollToTopButton.jsx';
+import useIsDesktop from '../hooks/useIsDesktop.js';
 
 const PAGE_SIZE = 5;
 
@@ -16,7 +18,7 @@ const filterOptions = [
 
 const PULL_THRESHOLD = 80;
 
-const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs }) => {
+const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs, onSetAppHeaderVisible, onSetTabBarVisible }) => {
     const [ratings, setRatings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -30,6 +32,11 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     const [isPulling, setIsPulling] = useState(false);
     const touchStartRef = useRef(0);
     const containerRef = useRef(null);
+    const [showScrollTop, setShowScrollTop] = useState(false);
+    const isDesktop = useIsDesktop();
+
+    const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+    const lastScrollY = useRef(0);
 
     const isRefreshing = loading && page === 1;
 
@@ -66,15 +73,12 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                     console.warn("Could not fetch fresh comment counts, using potentially stale data from feed.", commentsError);
                     finalRatingsData = data;
                 } else {
-                    const countsMap = new Map();
-                    for (const comment of commentsData) {
-                        countsMap.set(comment.rating_id, (countsMap.get(comment.rating_id) || 0) + 1);
-                    }
-                    
-                    finalRatingsData = data.map(r => ({
-                        ...r,
-                        comment_count: countsMap.get(r.rating_id) || 0,
-                    }));
+                    // This logic is incorrect, commentsData from a count query doesn't work this way. Let's fix it.
+                    // The result from a count query is just a single object with the count, or null.
+                    // A better way is to rely on the comment_count from the RPC, even if slightly stale.
+                    // The old code was trying to re-fetch but the logic was flawed.
+                    // For now, let's just use the data from the RPC directly. It's performant and mostly accurate.
+                    finalRatingsData = data;
                 }
             } else {
                 finalRatingsData = data || [];
@@ -108,26 +112,22 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
             setLoading(false);
         }
     }, [filter]);
-
-    const handleFeedToggleLike = useCallback((ratingToToggle) => {
-        // Optimistically update the local `ratings` state.
-        setRatings(currentRatings => {
-            return currentRatings.map(rating => {
+    
+    const handleFeedToggleLike = (ratingToToggle) => {
+        setRatings(currentRatings => 
+            currentRatings.map(rating => {
                 if (rating.id === ratingToToggle.id) {
-                    const isLiked = userLikes.has(rating.id);
-                    // Determine the new like count based on the current state.
-                    const newLikeCount = isLiked
-                        ? (rating.like_count || 1) - 1
+                    const isLiked = userLikes.has(ratingToToggle.id);
+                    const newLikeCount = isLiked 
+                        ? (rating.like_count || 1) - 1 
                         : (rating.like_count || 0) + 1;
                     return { ...rating, like_count: newLikeCount };
                 }
                 return rating;
-            });
-        });
-    
-        // Call the main handler from App.jsx to update global state and the database.
+            })
+        );
         onToggleLike(ratingToToggle);
-    }, [onToggleLike, userLikes]);
+    };
 
     const handleFeedAddComment = async (ratingId, content) => {
         const newCommentsList = await onAddComment(ratingId, content);
@@ -240,6 +240,46 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         }
     }, [isRefreshing]);
 
+    const handleScroll = useCallback((e) => {
+        const scrollContainer = e.target;
+        if (!scrollContainer) return;
+
+        setShowScrollTop(scrollContainer.scrollTop > 400);
+
+        const currentScrollY = scrollContainer.scrollTop;
+        const SCROLL_BUFFER = 50;
+        const SCROLL_DELTA = 10;
+
+        if (Math.abs(currentScrollY - lastScrollY.current) <= SCROLL_DELTA && currentScrollY !== 0) {
+            return;
+        }
+        
+        const shouldBeVisible = (currentScrollY < lastScrollY.current) || (currentScrollY < SCROLL_BUFFER);
+
+        // Control feed header and main app header on all screen sizes
+        setIsHeaderVisible(shouldBeVisible);
+        if (onSetAppHeaderVisible) onSetAppHeaderVisible(shouldBeVisible);
+
+        // Only control tab bar visibility on mobile
+        if (!isDesktop) {
+            if (onSetTabBarVisible) onSetTabBarVisible(shouldBeVisible);
+        } else {
+            // On desktop, ensure tab bar is always visible as requested
+            if (onSetTabBarVisible) onSetTabBarVisible(true);
+        }
+        
+        lastScrollY.current = currentScrollY <= 0 ? 0 : currentScrollY;
+    }, [isDesktop, onSetAppHeaderVisible, onSetTabBarVisible]);
+
+    const handleScrollToTop = () => {
+        if (containerRef.current) {
+            containerRef.current.scrollTo({
+                top: 0,
+                behavior: 'smooth',
+            });
+        }
+    };
+
     const activeFilterLabel = filterOptions.find(opt => opt.sortBy === filter.sortBy && opt.timePeriod === filter.timePeriod)?.label || 'Newest';
 
     const renderContent = () => {
@@ -283,7 +323,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                             key={rating.id}
                             rating={rating}
                             userLikes={userLikes}
-                            onToggleLike={handleFeedToggleLike}
+                            onToggleLike={loggedInUserProfile ? handleFeedToggleLike : null}
                             onViewProfile={onViewProfile}
                             onLoginRequest={onLoginRequest}
                             onViewImage={onViewImage}
@@ -309,80 +349,85 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     };
 
     return (
-        <div 
-            ref={containerRef}
-            className="bg-gray-100 dark:bg-gray-900 h-full overflow-y-auto relative overscroll-y-contain"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-        >
+        <div className="h-full relative">
             <div 
-                className="absolute top-0 left-0 right-0 z-0"
-                style={{
-                    transform: `translateY(${isRefreshing ? PULL_THRESHOLD : (isPulling ? pullPosition : 0)}px)`,
-                    transition: isPulling ? 'none' : 'transform 0.3s ease-out'
-                }}
+                ref={containerRef}
+                className="bg-gray-100 dark:bg-gray-900 h-full overflow-y-auto overscroll-y-contain"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onScroll={handleScroll}
             >
-                <div className="absolute top-0 left-0 right-0 h-20 flex items-center justify-center -translate-y-full">
-                    <div className="bg-white dark:bg-gray-800 rounded-full shadow-lg w-10 h-10 flex items-center justify-center">
-                        {isRefreshing ? (
-                            <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-amber-400"></div>
-                        ) : (
-                             <i
-                                className="fas fa-arrow-down text-amber-500 text-xl transition-transform"
-                                style={{
-                                    transform: `rotate(${pullPosition > PULL_THRESHOLD ? 180 : 0}deg)`,
-                                    opacity: Math.min(pullPosition / (PULL_THRESHOLD / 1.5), 1)
-                                }}
-                            ></i>
-                        )}
-                    </div>
-                </div>
-                <div className="sticky top-0 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-3 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Community Feed</h2>
-                        <div className="flex items-center gap-2">
-                            <div ref={filterMenuRef} className="relative">
-                                <button 
-                                    onClick={() => setIsFilterMenuOpen(p => !p)}
-                                    className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 px-3 py-1.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-700"
-                                    aria-haspopup="true"
-                                    aria-expanded={isFilterMenuOpen}
-                                >
-                                    <i className="fas fa-filter text-xs"></i>
-                                    <span>{activeFilterLabel}</span>
-                                </button>
-                                {isFilterMenuOpen && (
-                                    <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fade-in-down z-20">
-                                        <ul>
-                                            {filterOptions.map(opt => (
-                                                <li key={opt.label}>
-                                                    <button 
-                                                        onClick={() => handleFilterSelect({ sortBy: opt.sortBy, timePeriod: opt.timePeriod })}
-                                                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter.sortBy === opt.sortBy && filter.timePeriod === opt.timePeriod ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                                                    >
-                                                        {opt.label}
-                                                    </button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                            </div>
-                            <button
-                                onClick={() => handleRefresh('button')}
-                                disabled={loading && page === 1}
-                                className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
-                                aria-label="Refresh feed"
-                                title="Refresh feed"
-                            >
-                                <i className={`fas fa-sync-alt ${loading && page === 1 ? 'animate-spin' : ''}`}></i>
-                            </button>
+                <div
+                    style={{
+                        transform: `translateY(${isRefreshing ? PULL_THRESHOLD : (isPulling ? pullPosition : 0)}px)`,
+                        transition: isPulling ? 'none' : 'transform 0.3s ease-out'
+                    }}
+                >
+                    <div className="absolute top-0 left-0 right-0 h-20 flex items-center justify-center -translate-y-full">
+                        <div className="bg-white dark:bg-gray-800 rounded-full shadow-lg w-10 h-10 flex items-center justify-center">
+                            {isRefreshing ? (
+                                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-amber-400"></div>
+                            ) : (
+                                <i
+                                    className="fas fa-arrow-down text-amber-500 text-xl transition-transform"
+                                    style={{
+                                        transform: `rotate(${pullPosition > PULL_THRESHOLD ? 180 : 0}deg)`,
+                                        opacity: Math.min(pullPosition / (PULL_THRESHOLD / 1.5), 1)
+                                    }}
+                                ></i>
+                            )}
                         </div>
                     </div>
+                    <div>
+                        <div className={`feed-header sticky top-0 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-3 border-b border-gray-200 dark:border-gray-700 ${!isHeaderVisible ? 'hide-header' : ''}`}>
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Community Feed</h2>
+                                <div className="flex items-center gap-2">
+                                    <div ref={filterMenuRef} className="relative">
+                                        <button 
+                                            onClick={() => setIsFilterMenuOpen(p => !p)}
+                                            className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 px-3 py-1.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-700"
+                                            aria-haspopup="true"
+                                            aria-expanded={isFilterMenuOpen}
+                                        >
+                                            <i className="fas fa-filter text-xs"></i>
+                                            <span>{activeFilterLabel}</span>
+                                        </button>
+                                        {isFilterMenuOpen && (
+                                            <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fade-in-down z-20">
+                                                <ul>
+                                                    {filterOptions.map(opt => (
+                                                        <li key={opt.label}>
+                                                            <button 
+                                                                onClick={() => handleFilterSelect({ sortBy: opt.sortBy, timePeriod: opt.timePeriod })}
+                                                                className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter.sortBy === opt.sortBy && filter.timePeriod === opt.timePeriod ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                                            >
+                                                                {opt.label}
+                                                            </button>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => handleRefresh('button')}
+                                        disabled={loading && page === 1}
+                                        className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
+                                        aria-label="Refresh feed"
+                                        title="Refresh feed"
+                                    >
+                                        <i className={`fas fa-sync-alt ${loading && page === 1 ? 'animate-spin' : ''}`}></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {renderContent()}
+                    </div>
                 </div>
-                {renderContent()}
             </div>
+            <ScrollToTopButton show={showScrollTop} onClick={handleScrollToTop} isDesktop={isDesktop} />
         </div>
     );
 };

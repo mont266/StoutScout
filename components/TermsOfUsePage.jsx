@@ -20,11 +20,11 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const TermsOfUsePage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Terms of Use" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: August 25, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: November 21, 2025</p>
             <p>Welcome to Stoutly! These Terms of Use ("Terms") govern your access to and use of the Stoutly web application and any related services (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Description of Service</h2>
-            <p>Stoutly is a platform that allows users to find, rate, and review pints of Guinness based on factors like price and quality. The Service uses location data to display nearby pubs and aggregates user ratings to provide community-driven insights.</p>
+            <p>Stoutly is a platform that allows users to find, rate, and review pints of Guinness based on factors like price and quality. The Service uses location data to display nearby pubs, aggregates user ratings to provide community-driven insights, and includes social features like adding friends and gamification elements such as earning trophies.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">2. Eligibility and User Accounts</h2>
             <ul className="list-disc list-inside space-y-2 pl-4">
@@ -49,7 +49,7 @@ const TermsOfUsePage = ({ onBack }) => {
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">4. User-Generated Content</h2>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li><strong>Your Content:</strong> You retain ownership of the content you submit to the Service, including your ratings, comments, reviews, bio, profile pictures, photographs, and other materials (collectively, "User Content").</li>
-                <li><strong>License to Us:</strong> By submitting User Content, you grant Stoutly a worldwide, non-exclusive, royalty-free, perpetual license to use, display, reproduce, modify (for formatting), and distribute your User Content in connection with operating and promoting the Service. This allows us to, for example, show your rating, comments, and photograph on the Service, include you on the leaderboard, and feature your content in promotional materials for Stoutly (such as on our social media channels or website). We will always credit your username when doing so.</li>
+                <li><strong>License to Us:</strong> By submitting User Content, you grant Stoutly a worldwide, non-exclusive, royalty-free, perpetual license to use, analyze, process (including through automated or third-party systems), display, reproduce, modify (for formatting), and distribute your User Content in connection with operating and promoting the Service. This allows us to, for example, show your rating on the Service, include you on the leaderboard, and feature your content in promotional materials. We will always credit your username when doing so.</li>
                 <li><strong>Public Display:</strong> You understand and agree that your username, avatar, rank, ratings, and comments will be publicly visible to other users of the Service.</li>
                 <li><strong>Content Warranty:</strong> You represent and warrant that you own or have the necessary licenses, rights, consents, and permissions to publish the User Content you submit. You further agree that the User Content you submit will not contain third-party copyrighted material, or material that is subject to other third-party proprietary rights, unless you have permission from the rightful owner of the material.</li>
             </ul>

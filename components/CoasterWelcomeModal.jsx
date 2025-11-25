@@ -31,6 +31,7 @@ const CoasterWelcomeModal = ({ onClose }) => {
 
     const handleClose = () => {
         trackEvent('close_coaster_welcome_modal');
+        localStorage.setItem('stoutly-coaster-welcome-seen', 'true');
         onClose();
     };
 

@@ -2,7 +2,8 @@
   "name": "Stoutly",
   "description": "Stoutly helps you find and rate the best pints of Guinness based on price, quality, and your location.",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "camera"
   ],
   "prompt": ""
 }

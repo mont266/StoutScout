@@ -3,6 +3,7 @@ import Avatar from './Avatar.jsx';
 import { formatTimeAgo, getRankData } from '../utils.js';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
+import { trackEvent } from '../analytics.js';
 
 const MAX_COMMENT_LENGTH = 150;
 const MAX_SUBMIT_LENGTH = 500;
@@ -40,6 +41,7 @@ const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, on
                 newSet.delete(commentId);
             } else {
                 newSet.add(commentId);
+                trackEvent('expand_comment', { rating_id: ratingId, comment_id: commentId });
             }
             return newSet;
         });

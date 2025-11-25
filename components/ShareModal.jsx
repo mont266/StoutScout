@@ -1,8 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from './Icon.jsx';
 import StarRating from './StarRating.jsx';
 import { trackEvent } from '../analytics.js';
+import { Capacitor } from '@capacitor/core';
+import { getCurrencyInfo } from '../utils.js';
+import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 
 const ScoreGauge = ({ score }) => {
     if (score === null || score === undefined) return null;
@@ -42,8 +45,9 @@ const ScoreGauge = ({ score }) => {
 };
 
 
-const ShareModal = ({ pub, onClose }) => {
+const ShareModal = ({ pub, onClose, loggedInUserProfile }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy Link');
+    const { rates: exchangeRates } = useContext(ExchangeRatesContext);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -54,7 +58,10 @@ const ShareModal = ({ pub, onClose }) => {
     }, [onClose]);
 
     // Base URL without UTM params
-    const baseUrl = `${window.location.origin}/?pub_id=${pub.id}`;
+    const productionUrl = 'https://www.stoutly.co.uk';
+    const origin = Capacitor.isNativePlatform() ? productionUrl : window.location.origin;
+    const baseUrl = `${origin}/?pub_id=${pub.id}`;
+
     // URL for the Share button and Copy Link button
     const shareUrl = `${baseUrl}&utm_source=stoutly_app&utm_medium=share&utm_campaign=pub_share`;
     // URL specifically for the QR code
@@ -75,7 +82,44 @@ const ShareModal = ({ pub, onClose }) => {
     }, [pub.ratings]);
 
     const avgQuality = pub.ratings.reduce((acc, r) => acc + r.quality, 0) / pub.ratings.length;
-    const avgPrice = pub.ratings.reduce((acc, r) => acc + r.price, 0) / pub.ratings.length;
+    
+    const currencyInfo = getCurrencyInfo(pub);
+
+    const priceInfo = useMemo(() => {
+        const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
+        const avgStarPrice = pub.ratings.length > 0 ? pub.ratings.reduce((acc, r) => acc + r.price, 0) / pub.ratings.length : 0;
+        if (ratingsWithPrice.length === 0) return { text: null, stars: avgStarPrice, originalPrice: null, convertedPrice: null, originalCode: null, convertedCode: null };
+
+        const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
+        const average = total / ratingsWithPrice.length;
+        
+        const userHomeCurrency = getCurrencyInfo(loggedInUserProfile || { country_code: 'gb' });
+        let convertedPriceText = null;
+        let convertedCode = null;
+        if (
+            average > 0 && 
+            exchangeRates &&
+            currencyInfo.code !== userHomeCurrency.code &&
+            exchangeRates[currencyInfo.code] &&
+            exchangeRates[userHomeCurrency.code]
+        ) {
+            const priceInGbp = average / exchangeRates[currencyInfo.code];
+            const convertedPrice = priceInGbp * exchangeRates[userHomeCurrency.code];
+            convertedPriceText = `${userHomeCurrency.symbol}${convertedPrice.toFixed(2)}`;
+            convertedCode = userHomeCurrency.code;
+        }
+
+        return { 
+            text: `${currencyInfo.symbol}${average.toFixed(2)}`, 
+            stars: avgStarPrice,
+            originalPrice: `${currencyInfo.symbol}${average.toFixed(2)}`,
+            convertedPrice: convertedPriceText,
+            originalCode: currencyInfo.code,
+            convertedCode: convertedCode,
+        };
+    }, [pub.ratings, currencyInfo, loggedInUserProfile, exchangeRates]);
+
+    const avgPrice = priceInfo.stars;
 
     const isCertified = pub.certification_status === 'certified' || pub.certification_status === 'at_risk';
 
@@ -150,17 +194,28 @@ const ShareModal = ({ pub, onClose }) => {
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 text-center text-sm">
-                            <div className="bg-gray-100 dark:bg-gray-700/50 p-2 rounded-md flex flex-col items-center">
-                                <p className="text-xs uppercase text-gray-500 dark:text-gray-400">Quality</p>
+                            <div className="bg-gray-100 dark:bg-gray-700/50 p-2 rounded-md flex flex-col items-center justify-center">
+                                <p className="text-xs uppercase text-gray-500 dark:text-gray-400">Avg. Quality</p>
+                                <p className="font-bold text-lg">{avgQuality.toFixed(1)} / 5</p>
                                 <div className="flex justify-center">
                                     <StarRating rating={avgQuality} color="text-amber-400" />
                                 </div>
                             </div>
-                            <div className="bg-gray-100 dark:bg-gray-700/50 p-2 rounded-md flex flex-col items-center">
-                                <p className="text-xs uppercase text-gray-500 dark:text-gray-400">Price</p>
-                                <div className="flex justify-center">
-                                    <StarRating rating={avgPrice} color="text-green-400" />
-                                </div>
+                            <div className="bg-gray-100 dark:bg-gray-700/50 p-2 rounded-md flex flex-col items-center justify-center">
+                                <p className="text-xs uppercase text-gray-500 dark:text-gray-400">Avg. Price</p>
+                                {priceInfo.originalPrice ? (
+                                    <div className="text-center">
+                                        <p className="font-bold text-lg" title={priceInfo.originalCode}>{priceInfo.originalPrice}</p>
+                                        {priceInfo.convertedPrice && <p className="text-xs font-semibold text-gray-500 dark:text-gray-400" title={priceInfo.convertedCode}>{priceInfo.convertedPrice}</p>}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="font-bold text-lg">{avgPrice.toFixed(1)} / 5</p>
+                                        <div className="flex justify-center">
+                                            <StarRating rating={avgPrice} color="text-green-400" />
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                         

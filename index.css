@@ -51,6 +51,12 @@
   .dark.native-android .mobile-layout-container::after {
     background-color: #1f2937; /* Matches dark mode Header/TabBar (gray-800) */
   }
+  
+  /* New class to adjust scroll-to-top button on native Android */
+  .native-android .scroll-to-top-android-fix {
+    /* bottom-24 is 6rem. Add 2rem for the android nav bar padding. 8rem is bottom-32. */
+    bottom: 8rem;
+  }
 
 
   #orientation-lock-overlay {
@@ -76,6 +82,24 @@
     30% { transform: rotate(0deg); }
     70% { transform: rotate(0deg); }
     100% { transform: rotate(90deg); }
+  }
+
+  .app-header, .community-header, .feed-header {
+    transition: transform 0.3s ease-in-out;
+  }
+  .app-header.hide-header, .community-header.hide-header, .feed-header.hide-header {
+      transform: translateY(-100%);
+  }
+
+  .community-tabs-container {
+    transition: all 0.3s ease-in-out;
+    max-height: 6rem; /* A safe large value */
+    overflow: hidden;
+  }
+  .community-tabs-container.hide {
+      max-height: 0;
+      border-bottom-width: 0;
+      opacity: 0;
   }
 }
 

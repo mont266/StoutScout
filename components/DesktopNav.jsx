@@ -7,7 +7,7 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
   const isActive = activeTab === tab.id;
 
   const handleClick = () => {
-    if ((tab.id === 'profile' || tab.id === 'community' || tab.id === 'moderation' || tab.id === 'stats' || tab.id === 'shop') && !userProfile) {
+    if ((tab.id === 'profile' || tab.id === 'moderation' || tab.id === 'shop') && !userProfile) {
       onLoginRequest();
     } else {
       onTabChange(tab.id);
@@ -108,11 +108,18 @@ const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequ
          ))}
 
         {(userProfile?.is_developer || userProfile?.is_team_member) && (
-             <NavButton
-                tab={{ id: 'stats', icon: 'fa-chart-bar', label: 'Stats' }}
-                {...{ activeTab, onTabChange, onLoginRequest, userProfile }}
-                tooltipPosition="top"
-            />
+            <div className="group relative">
+                <button
+                    onClick={() => window.open('https://analytics.stoutly.co.uk', '_blank')}
+                    className="w-14 h-14 flex items-center justify-center rounded-2xl text-2xl transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 dark:focus:ring-offset-gray-900 text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-amber-500/20 hover:text-amber-600 dark:hover:text-amber-400 hover:rounded-xl"
+                    aria-label="Stats"
+                >
+                    <i className="fas fa-chart-bar fa-fw"></i>
+                </button>
+                <div className="absolute px-3 py-2 text-sm font-semibold text-white bg-gray-900/80 rounded-md shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all delay-300 pointer-events-none bottom-full mb-2 left-1/2 -translate-x-1/2 translate-y-2 group-hover:translate-y-0">
+                    Stats
+                </div>
+            </div>
         )}
         {userProfile?.is_developer && (
             <NavButton

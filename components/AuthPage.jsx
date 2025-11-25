@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabase.js';
 import Icon from './Icon.jsx';
@@ -118,6 +119,10 @@ const AuthPage = ({ onClose }) => {
   const [ageValidationError, setAgeValidationError] = useState('');
   const [message, setMessage] = useState(null);
   const [showResendLink, setShowResendLink] = useState(false);
+  
+  // Password Visibility States
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Refs for auto-focusing DOB inputs
   const dayRef = useRef(null);
@@ -142,6 +147,8 @@ const AuthPage = ({ onClose }) => {
     setPassword('');
     setConfirmPassword('');
     setShowResendLink(false);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     // keep email and username for convenience
   };
 
@@ -400,14 +407,46 @@ const AuthPage = ({ onClose }) => {
                 <div className="relative">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="password">Password</label>
                      <div className="absolute left-3 top-9 text-gray-400"><i className="fas fa-lock"></i></div>
-                    <input id="password" className="w-full pl-9 pr-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                    <input 
+                        id="password" 
+                        className="w-full pl-9 pr-10 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500" 
+                        type={showPassword ? "text" : "password"} 
+                        placeholder="••••••••" 
+                        value={password} 
+                        onChange={(e) => setPassword(e.target.value)} 
+                        required 
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-9 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                        <i className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                    </button>
                 </div>
                 {view === 'signUp' && (
                     <>
                         <div className="relative">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="confirm-password">Confirm Password</label>
                             <div className="absolute left-3 top-9 text-gray-400"><i className="fas fa-lock"></i></div>
-                            <input id="confirm-password" className="w-full pl-9 pr-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                            <input 
+                                id="confirm-password" 
+                                className="w-full pl-9 pr-10 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500" 
+                                type={showConfirmPassword ? "text" : "password"} 
+                                placeholder="••••••••" 
+                                value={confirmPassword} 
+                                onChange={(e) => setConfirmPassword(e.target.value)} 
+                                required 
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                className="absolute right-3 top-9 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                            >
+                                <i className={`fas ${showConfirmPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                            </button>
                         </div>
 
                         <div>
@@ -520,6 +559,7 @@ const AuthPage = ({ onClose }) => {
       onClick={handleClose}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="auth-modal-title"
     >
       <div className="max-w-sm w-full" onClick={e => e.stopPropagation()}>
         <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-t-4 border-amber-400 flex flex-col max-h-[90vh]">

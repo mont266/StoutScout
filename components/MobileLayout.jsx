@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import Header from './Header.jsx';
 import FilterControls from './FilterControls.jsx';
@@ -90,10 +90,9 @@ const MobileLayout = (props) => {
         // Community props
         CommunityPage, friendships, userLikes, onToggleLike, onFriendRequest, onFriendAction,
         // Friends List props
-        viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
+        viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList, handleFriendAction,
         deleteConfirmationInfo,
-        // Stats & Admin
-        StatsPage,
+        // Admin
         settingsSubView, handleViewAdminPage,
         onOpenScoreExplanation,
         // "Suggest Edit" handlers
@@ -120,15 +119,23 @@ const MobileLayout = (props) => {
         dbPubs,
         onViewSocialHub,
         isDesktop,
-        isPriceByCountryModalOpen,
-        onSetIsPriceByCountryModalOpen,
         allRatings, communitySubTab, setCommunitySubTab,
         onOpenAndroidBetaModal,
-        enrichingPubIds,
+        geocodingPubIds,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
     const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+    const [isAppHeaderVisible, setIsAppHeaderVisible] = useState(true);
+    
+    // Reset header visibility when switching tabs
+    useEffect(() => {
+        setIsAppHeaderVisible(true);
+    }, [activeTab]);
+
+    const handleSetAppHeaderVisible = useCallback((visible) => {
+        setIsAppHeaderVisible(visible);
+    }, []);
 
     return (
         <div className="mobile-layout-container w-full max-w-md mx-auto h-full flex flex-col overflow-hidden">
@@ -152,12 +159,13 @@ const MobileLayout = (props) => {
                 levelRequirements={levelRequirements}
                 onProfileClick={() => handleTabChange('profile')}
                 onLoginRequest={() => setIsAuthOpen(true)}
+                className={!isAppHeaderVisible ? 'hide-header' : ''}
             />
 
             <main className="relative flex-grow flex flex-col overflow-hidden">
                 <div className={`flex-grow flex flex-col overflow-y-auto ${activeTab !== 'map' ? '' : 'hidden'}`}>
                     {activeTab === 'profile' && profilePage}
-                    {activeTab === 'community' && session && (
+                    {activeTab === 'community' && (
                         <CommunityPage 
                             userProfile={userProfile}
                             onViewProfile={handleViewProfile}
@@ -184,20 +192,11 @@ const MobileLayout = (props) => {
                             onReportComment={onReportComment}
                             onOpenShareRatingModal={onOpenShareRatingModal}
                             dbPubs={dbPubs}
+                            onSetAppHeaderVisible={handleSetAppHeaderVisible}
+                            setAlertInfo={setAlertInfo}
                         />
                     )}
                     {activeTab === 'settings' && (() => {
-                        if (settingsSubView === 'stats') {
-                            return <StatsPage 
-                                onBack={() => handleViewAdminPage(null)} 
-                                onViewProfile={handleViewProfile} 
-                                onViewPub={handleSelectPub} 
-                                userProfile={userProfile} 
-                                onAdminDeleteComment={onAdminDeleteComment} 
-                                isPriceByCountryModalOpen={props.isPriceByCountryModalOpen}
-                                onSetIsPriceByCountryModalOpen={props.onSetIsPriceByCountryModalOpen}
-                            />;
-                        }
                         if (settingsSubView === 'moderation') {
                             return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
                         }
@@ -217,7 +216,6 @@ const MobileLayout = (props) => {
                                 session={session}
                                 onViewProfile={handleViewProfile}
                                 onViewLegal={handleViewLegal}
-                                onViewStats={() => handleViewAdminPage('stats')}
                                 onViewModeration={() => handleViewAdminPage('moderation')}
                                 onViewSocialHub={onViewSocialHub}
                                 onDataRefresh={handleDataRefresh}
@@ -325,7 +323,7 @@ const MobileLayout = (props) => {
                             searchRadius={settings.radius}
                             isLoading={isInitialDataLoading || isRefreshing}
                             onOpenScoreExplanation={onOpenScoreExplanation}
-                            enrichingPubIds={enrichingPubIds}
+                            geocodingPubIds={geocodingPubIds}
                         />
                     </div>
                 </div>
@@ -362,6 +360,7 @@ const MobileLayout = (props) => {
                             onClearGuinnessZeroVote={onClearGuinnessZeroVote}
                             onOpenShareModal={onOpenShareModal}
                             onOpenShareRatingModal={onOpenShareRatingModal}
+                            setAlertInfo={setAlertInfo}
                         />
                     )}
                 </div>
@@ -376,7 +375,7 @@ const MobileLayout = (props) => {
                             isLoading={isFetchingFriendsList}
                             onBack={() => handleBackFromFriendsList()}
                             onViewProfile={handleViewProfile}
-                            onFriendAction={onFriendAction}
+                            onFriendAction={handleFriendAction}
                         />
                     )}
                 </div>

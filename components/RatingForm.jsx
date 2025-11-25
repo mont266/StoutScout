@@ -2,8 +2,48 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import StarRating from './StarRating.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import { getStarRatingFromPrice } from '../utils.js';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
+import useIsDesktop from '../hooks/useIsDesktop.js';
 
-const RatingForm = ({ onSubmit, existingRating, currencyInfo = { symbol: '£', code: 'GBP' }, existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote, isLondon = false }) => {
+const ImageSourceChooser = ({ isOpen, onClose, onSelectCamera, onSelectGallery }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div 
+            className="fixed inset-0 bg-black/60 z-[1300] flex items-end" 
+            onClick={onClose}
+            role="dialog"
+            aria-modal="true"
+        >
+            <div 
+                className="bg-white dark:bg-gray-800 w-full rounded-t-2xl p-4 animate-fade-in-up" 
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="w-10 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-4"></div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">Add a Photo</h3>
+                <ul className="space-y-2">
+                    <li>
+                        <button onClick={onSelectCamera} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3">
+                            <i className="fas fa-camera w-6 text-center text-gray-500"></i>
+                            <span>Take Photo</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button onClick={onSelectGallery} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3">
+                            <i className="fas fa-images w-6 text-center text-gray-500"></i>
+                            <span>Choose from Gallery</span>
+                        </button>
+                    </li>
+                </ul>
+                <button onClick={onClose} className="w-full mt-4 bg-gray-200 dark:bg-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600">Cancel</button>
+                <div className="pb-safe"></div>
+            </div>
+        </div>
+    );
+};
+
+const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote, isLondon = false }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
   const [priceInput, setPriceInput] = useState('');
@@ -14,67 +54,34 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = { symbol: '£', c
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [imageWasRemoved, setImageWasRemoved] = useState(false);
-  const fileInputRef = useRef(null);
+  
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [imageToCrop, setImageToCrop] = useState(null);
 
   const [validationError, setValidationError] = useState(null);
+  const [showImageSourceChooser, setShowImageSourceChooser] = useState(false);
+  const isDesktop = useIsDesktop();
 
-  const { symbol: currencySymbol, code: currencyCode } = currencyInfo;
+  const { symbol: currencySymbol = '£', examplePrice = '5.70', tiers } = currencyInfo;
 
-  const paddingClass = useMemo(() => {
-    const len = currencySymbol.length;
-    if (len > 2) return 'pl-10'; // e.g., 'Mex$', 'د.م.'
-    if (len === 2) return 'pl-8';  // e.g., 'Kč', 'R$'
-    return 'pl-7';                // e.g., '£', '$'
-  }, [currencySymbol]);
-
-  const placeholder = useMemo(() => {
-    switch (currencyCode) {
-        case 'JPY':
-            return 'e.g., 700';
-        case 'CNY':
-            return 'e.g., 70';
-        case 'MAD':
-            return 'e.g., 30';
-        case 'PLN':
-            return 'e.g., 15';
-        case 'ILS':
-            return 'e.g., 25';
-        case 'TRY':
-            return 'e.g., 120';
-        case 'INR':
-            return 'e.g., 150';
-        case 'RUB':
-            return 'e.g., 250';
-        case 'CZK':
-            return 'e.g., 55';
-        default:
-            return 'e.g., 5.70';
-    }
-  }, [currencyCode]);
-
-
-  // Dynamically create price labels based on the currency symbol
+  // Dynamically create price labels based on the currency symbol and tiers
   const priceLabels = useMemo(() => {
-    if (isLondon) {
-        return [
-            `Very Expensive\n(e.g., > ${currencySymbol}8.49)`,
-            `Expensive\n(e.g., ${currencySymbol}7.50 - ${currencySymbol}8.49)`,
-            `Average\n(e.g., ${currencySymbol}6.75 - ${currencySymbol}7.49)`,
-            `Cheap\n(e.g., ${currencySymbol}6.00 - ${currencySymbol}6.74)`,
-            `Very Cheap\n(e.g., < ${currencySymbol}6.00)`
-        ];
-    }
+    const thresholds = isLondon ? [6.00, 6.75, 7.50, 8.50] : tiers;
+    if (!thresholds) return [];
+
+    const format = (val) => val >= 100 ? val.toFixed(0) : val.toFixed(2);
+    
     return [
-        `Very Expensive\n(e.g., > ${currencySymbol}7.00)`,
-        `Expensive\n(e.g., ${currencySymbol}6.00 - ${currencySymbol}6.99)`,
-        `Average\n(e.g., ${currencySymbol}5.50 - ${currencySymbol}5.99)`,
-        `Cheap\n(e.g., ${currencySymbol}4.50 - ${currencySymbol}5.49)`,
-        `Very Cheap\n(e.g., < ${currencySymbol}4.50)`
+        `Very Expensive\n(e.g., > ${currencySymbol}${format(thresholds[3])})`,
+        `Expensive\n(e.g., ${currencySymbol}${format(thresholds[2])} - ${currencySymbol}${format(thresholds[3])})`,
+        `Average\n(e.g., ${currencySymbol}${format(thresholds[1])} - ${currencySymbol}${format(thresholds[2]-0.01)})`,
+        `Cheap\n(e.g., ${currencySymbol}${format(thresholds[0])} - ${currencySymbol}${format(thresholds[1]-0.01)})`,
+        `Very Cheap\n(e.g., < ${currencySymbol}${format(thresholds[0])})`
     ];
-  }, [currencySymbol, isLondon]);
+  }, [currencySymbol, isLondon, tiers]);
 
   useEffect(() => {
     // Pre-fill the form if an existing rating is provided
@@ -102,7 +109,7 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = { symbol: '£', c
   const handlePriceInputChange = (e) => {
     const newPrice = e.target.value;
     setPriceInput(newPrice);
-    setPrice(getStarRatingFromPrice(newPrice, isLondon));
+    setPrice(getStarRatingFromPrice(newPrice, isLondon, tiers));
   };
   
   const handlePriceStarChange = (newStarRating) => {
@@ -120,6 +127,9 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = { symbol: '£', c
       });
       reader.readAsDataURL(file);
     }
+     // Reset both inputs to allow re-selecting the same file
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
   };
 
   const handleCropComplete = (croppedFile) => {
@@ -138,9 +148,36 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = { symbol: '£', c
     setImageWasRemoved(true);
     setImageToCrop(null);
     setIsCropperOpen(false);
-    // Reset file input so user can select the same file again if they wish
-    if (fileInputRef.current) {
-        fileInputRef.current.value = "";
+  };
+
+  const handleAddPhotoClick = async () => {
+    if (isDesktop) {
+        galleryInputRef.current?.click();
+        return;
+    }
+
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const image = await Camera.getPhoto({
+                quality: 90,
+                allowEditing: false,
+                resultType: CameraResultType.Uri,
+                source: CameraSource.Prompt, // Ask user to choose between Camera and Gallery
+                saveToGallery: true,
+            });
+
+            if (image.webPath) {
+                setImageToCrop(image.webPath);
+                setIsCropperOpen(true);
+            }
+        } catch (error) {
+            // This error can happen if the user cancels the camera/gallery selection.
+            // We can safely ignore it.
+            console.log('Capacitor Camera action cancelled or failed:', error);
+        }
+    } else {
+        // For web browsers, show our custom chooser
+        setShowImageSourceChooser(true);
     }
   };
 
@@ -177,6 +214,18 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = { symbol: '£', c
 
   return (
     <>
+    <ImageSourceChooser 
+        isOpen={showImageSourceChooser}
+        onClose={() => setShowImageSourceChooser(false)}
+        onSelectCamera={() => {
+            cameraInputRef.current?.click();
+            setShowImageSourceChooser(false);
+        }}
+        onSelectGallery={() => {
+            galleryInputRef.current?.click();
+            setShowImageSourceChooser(false);
+        }}
+    />
     {isCropperOpen && imageToCrop && (
         <ImageCropper 
             imageSrc={imageToCrop}
@@ -213,8 +262,8 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = { symbol: '£', c
             min="0"
             value={priceInput}
             onChange={handlePriceInputChange}
-            placeholder={placeholder}
-            className={`w-full ${paddingClass} pr-3 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500`}
+            placeholder={`e.g., ${examplePrice}`}
+            className="w-full pl-7 pr-3 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
       </div>
@@ -268,17 +317,31 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = { symbol: '£', c
                   </button>
               </div>
           ) : (
-              <label className="w-full aspect-square cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-colors">
-                  <i className="fas fa-camera text-3xl mb-2"></i>
-                  <span className="font-semibold">Add Photo of Your Pint</span>
-                  <input
-                      type="file"
-                      ref={fileInputRef}
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                  />
-              </label>
+              <>
+                <button
+                    type="button"
+                    onClick={handleAddPhotoClick}
+                    className="w-full aspect-square cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                    <i className="fas fa-camera text-3xl mb-2"></i>
+                    <span className="font-semibold">{isDesktop ? 'Choose from Files...' : 'Add Photo of Your Pint'}</span>
+                </button>
+                <input
+                    type="file"
+                    ref={cameraInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleImageChange}
+                />
+                <input
+                    type="file"
+                    ref={galleryInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                />
+              </>
           )}
       </div>
 

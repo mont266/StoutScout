@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { normalizeOverpassResult, getDistance } from '../utils.js';
 
@@ -106,9 +106,24 @@ const MapComponent = ({
   mapTileRefreshKey,
   searchOrigin,
   radius,
+  isSidebarCollapsed,
 }) => {
   const mapRef = useRef(null);
   const isSearchingRef = useRef(false);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map) {
+      // The sidebar has a 300ms transition. We wait slightly longer to ensure
+      // the transition is complete before invalidating the map size.
+      const timer = setTimeout(() => {
+        map.invalidateSize();
+      }, 310);
+
+      // Cleanup the timer if the component unmounts or the state changes again
+      return () => clearTimeout(timer);
+    }
+  }, [isSidebarCollapsed]);
 
   const searchForPubs = useCallback(async () => {
     if (isSearchingRef.current) {
@@ -259,7 +274,22 @@ const MapComponent = ({
                 position={pub.location} 
                 icon={icon}
                 eventHandlers={{ click: () => onSelectPub(pub) }} 
-            />
+            >
+              {isDesktop && (
+                <Tooltip>
+                  <div>
+                    <p className="font-bold">{pub.name}</p>
+                    {pub.ratings?.length > 0 && pub.pub_score != null && (
+                      <div className="mt-1 pt-1 border-t border-gray-300">
+                        <p className="text-xs">
+                          <span className="font-semibold">{pub.pub_score}</span> Pub Score ({pub.ratings.length} {pub.ratings.length === 1 ? 'rating' : 'ratings'})
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </Tooltip>
+              )}
+            </Marker>
           );
         })}
 
