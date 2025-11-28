@@ -32,8 +32,7 @@ import ShareRatingModal from './components/ShareRatingModal.jsx';
 import ShareModal from './components/ShareModal.jsx';
 import ShareProfileModal from './components/ShareProfileModal.jsx';
 import TrophyUnlockedPopup from './components/TrophyUnlockedPopup.jsx';
-import AndroidBetaModal from './components/AndroidBetaModal.jsx';
-import AndroidWelcomeModal from './components/AndroidWelcomeModal.jsx';
+import WelcomeModal from './components/WelcomeModal.jsx';
 
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -120,8 +119,7 @@ const App = () => {
   const [shareModalPub, setShareModalPub] = useState(null);
   const [shareProfileModalUser, setShareProfileModalUser] = useState(null);
   const [shareRatingModalRating, setShareRatingModalRating] = useState(null);
-  const [isAndroidBetaModalOpen, setIsAndroidBetaModalOpen] = useState(false);
-  const [isAndroidWelcomeModalOpen, setIsAndroidWelcomeModalOpen] = useState(false);
+  const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
   const [isProfileStatsModalOpen, setIsProfileStatsModalOpen] = useState(false);
   
   const [levelRequirements, setLevelRequirements] = useState([]);
@@ -389,23 +387,15 @@ const App = () => {
     };
   }, []);
 
-  useEffect(() => {
-    const hasSeenPrompt = localStorage.getItem('stoutly-android-beta-prompt-seen');
-    if (getMobileOS() === 'Android' && !Capacitor.isNativePlatform() && !hasSeenPrompt) {
-        trackEvent('view_android_beta_prompt', { source: 'auto_popup' });
-        setIsAndroidBetaModalOpen(true);
-    }
-  }, []);
-
-  // One-time welcome modal for native Android beta users
+  // One-time welcome modal for native Android users
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
         const platform = Capacitor.getPlatform();
         if (platform === 'android') {
-            const hasSeenWelcome = localStorage.getItem('stoutly-android-beta-welcome-seen');
+            const hasSeenWelcome = localStorage.getItem('stoutly-welcome-seen');
             if (!hasSeenWelcome) {
-                setIsAndroidWelcomeModalOpen(true);
-                trackEvent('view_android_beta_welcome');
+                setIsWelcomeModalOpen(true);
+                trackEvent('view_welcome_modal');
             }
         }
     }
@@ -1275,12 +1265,6 @@ const App = () => {
 
 
   // --- CORE APP LOGIC & HANDLERS ---
-
-  const handleCloseAndroidBetaModal = () => {
-      trackEvent('dismiss_android_beta_prompt');
-      localStorage.setItem('stoutly-android-beta-prompt-seen', 'true');
-      setIsAndroidBetaModalOpen(false);
-  };
 
   const handleBackfillCountryData = useCallback(async () => {
     if (isBackfilling) return;
@@ -3087,33 +3071,12 @@ const App = () => {
       onDonationSuccess: handleDonationSuccess,
       isBackfilling,
       onBackfillCountryData: handleBackfillCountryData,
-      onOpenAndroidBetaModal: () => {
-        trackEvent('view_android_beta_prompt', { source: 'settings_button' });
-        setIsAndroidBetaModalOpen(true);
-      },
   };
 
   const renderModals = () => (
     <>
-        {isAndroidWelcomeModalOpen && (
-            <AndroidWelcomeModal
-                onClose={() => {
-                    localStorage.setItem('stoutly-android-beta-welcome-seen', 'true');
-                    setIsAndroidWelcomeModalOpen(false);
-                    trackEvent('dismiss_android_beta_welcome');
-                }}
-                onGoToFeedback={() => {
-                    localStorage.setItem('stoutly-android-beta-welcome-seen', 'true');
-                    setIsAndroidWelcomeModalOpen(false);
-                    handleTabChange('settings', 'feedback');
-                    trackEvent('click_go_to_feedback_from_welcome');
-                }}
-            />
-        )}
-        {isAndroidBetaModalOpen && (
-            <AndroidBetaModal 
-                onClose={handleCloseAndroidBetaModal} 
-            />
+        {isWelcomeModalOpen && (
+            <WelcomeModal onClose={() => setIsWelcomeModalOpen(false)} />
         )}
         {isCoasterWelcomeModalOpen && <CoasterWelcomeModal onClose={() => setIsCoasterWelcomeModalOpen(false)} />}
         {shareModalPub && <ShareModal pub={shareModalPub} onClose={() => setShareModalPub(null)} loggedInUserProfile={userProfile} />}

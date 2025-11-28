@@ -79,7 +79,7 @@ const urlsToCache = [
   '/components/GuinnessFactCard.jsx',
   '/components/PintPulseReportCard.jsx',
   '/components/PintOfTheWeekCard.jsx',
-  '/components/AndroidBetaModal.jsx',
+  '/components/WelcomeModal.jsx',
 ];
 
 self.addEventListener('install', event => {
