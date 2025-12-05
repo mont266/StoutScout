@@ -155,7 +155,7 @@ const DesktopLayout = (props) => {
                 );
             }
             return (
-                <div className="h-full flex flex-col">
+                <div className="flex flex-col h-full">
                     <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                         <MapSearchBar
                             onPlaceSelected={handleFindPlace}
@@ -198,6 +198,21 @@ const DesktopLayout = (props) => {
                             onOpenScoreExplanation={onOpenScoreExplanation}
                             geocodingPubIds={geocodingPubIds}
                         />
+                    </div>
+                    <div className="flex-shrink-0 p-2 text-center border-t border-gray-200 dark:border-gray-700">
+                        <button
+                            onClick={() => handleViewLegal('terms')}
+                            className="text-xs text-gray-500 dark:text-gray-400 hover:underline"
+                        >
+                            Terms of Use
+                        </button>
+                        <span className="mx-2 text-gray-400 dark:text-gray-500">&middot;</span>
+                        <button
+                            onClick={() => handleViewLegal('privacy')}
+                            className="text-xs text-gray-500 dark:text-gray-400 hover:underline"
+                        >
+                            Privacy Policy
+                        </button>
                     </div>
                 </div>
             );
@@ -278,7 +293,7 @@ const DesktopLayout = (props) => {
                             userTrophies={userTrophies}
                             allTrophies={allTrophies}
                             isBackfilling={isBackfilling}
-                            onBackfillCountryData={onBackfillCountryData}
+                            onBackfillCountryData={handleBackfillCountryData}
                             onOpenAndroidBetaModal={onOpenAndroidBetaModal}
                         />
                     </div>
@@ -408,7 +423,7 @@ const DesktopLayout = (props) => {
             )}
             {toastNotification && (
                 <NotificationToast
-                    key={toastNotification.id}
+                    key={toastNotification.id} // Use key to force re-mount on new notification
                     notification={toastNotification}
                     onClick={onToastClick}
                     onClose={onCloseToast}
