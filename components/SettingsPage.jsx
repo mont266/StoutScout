@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants.js';
 import { supabase } from '../supabase.js';
 import Avatar from './Avatar.jsx';
-import ModerationPage from './ModerationPage.jsx';
 import { trackEvent } from '../analytics.js';
 import { getMobileOS } from '../utils.js';
 import useIsDesktop from '../hooks/useIsDesktop.js';
@@ -10,17 +9,19 @@ import ContactModal from './ContactModal.jsx';
 import FeedbackModal from './FeedbackModal.jsx';
 import DonationForm from './DonationForm.jsx';
 import { Capacitor } from '@capacitor/core';
+import ConfirmationModal from './ConfirmationModal.jsx';
 
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewModeration, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies }) => {
+const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
   const [refreshStatsSuccess, setRefreshStatsSuccess] = useState(false);
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [rebuildSuccess, setRebuildSuccess] = useState(false);
+  const [confirmation, setConfirmation] = useState({ isOpen: false });
   const isDesktop = useIsDesktop();
   
   const handleUnitChange = (unit) => {
@@ -132,6 +133,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
           opacity: 1,
           key: crypto.randomUUID(),
           numberOfPieces: 300,
+          colors: ['#F59E0B', '#FBBF24', '#FDEED4', '#FFFFFF'],
       });
   };
   
@@ -156,6 +158,20 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
         theme: 'success',
     });
     triggerConfetti();
+  };
+
+  const confirmToggleGlobalMode = (isActive) => {
+    setConfirmation({
+        isOpen: true,
+        title: `Confirm Global Change`,
+        message: `Are you sure you want to ${isActive ? 'ENABLE' : 'DISABLE'} St. Paddy's Mode for all users? This will change the app theme immediately.`,
+        onConfirm: () => {
+            onToggleGlobalStPaddysMode(isActive);
+            setConfirmation({ isOpen: false });
+        },
+        confirmText: isActive ? 'Enable Globally' : 'Disable Globally',
+        theme: isActive ? 'green' : 'red',
+    });
   };
 
   const isKm = settings.unit === 'km';
@@ -206,6 +222,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
     <>
       {isContactModalOpen && <ContactModal userProfile={userProfile} session={session} onClose={() => setIsContactModalOpen(false)} />}
       {isFeedbackModalOpen && <FeedbackModal userProfile={userProfile} onClose={() => setIsFeedbackModalOpen(false)} />}
+      {confirmation.isOpen && <ConfirmationModal {...confirmation} onClose={() => setConfirmation({isOpen: false})} />}
       <div className="p-4 sm:p-6 space-y-8">
           {(installButton || isAndroidWebApp) && (
             <div className="border-b border-gray-200 dark:border-gray-700 pb-6 space-y-3">
@@ -332,7 +349,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                    <h3 className="text-xl font-bold text-red-500 dark:text-red-400 text-center">Admin Tools</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <button
-                            onClick={() => { onViewSocialHub(); trackEvent('view_social_hub'); }}
+                            onClick={() => { window.open('https://social.stoutly.co.uk', '_blank'); trackEvent('view_external_social_hub'); }}
                             className="flex-1 flex items-center justify-center space-x-2 bg-purple-500/10 text-purple-500 dark:text-purple-400 font-bold py-3 px-4 rounded-lg hover:bg-purple-500/20 transition-colors"
                         >
                             <i className="fas fa-magic"></i>
@@ -380,45 +397,15 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
               {settings.developerMode && (
                   <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg space-y-4 animate-fade-in-down">
                       <div className="space-y-3">
-                          <p className="text-xs text-center text-gray-500 dark:text-gray-400">Use these tools to fix data inconsistencies or test features.</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <button
-                                onClick={handleRebuildDynamicPricing}
-                                disabled={isRebuilding}
-                                className="flex-1 flex items-center justify-center space-x-2 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-bold py-3 px-4 rounded-lg hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
-                              >
-                                  {isRebuilding 
-                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
-                                      : rebuildSuccess 
-                                          ? <i className="fas fa-check"></i> 
-                                          : <i className="fas fa-cogs"></i>}
-                                  <span>
-                                      {isRebuilding 
-                                          ? 'Rebuilding...' 
-                                          : rebuildSuccess 
-                                              ? 'Rebuilt!' 
-                                              : 'Rebuild Dynamic Pricing'}
-                                  </span>
-                              </button>
-                              <button
-                                onClick={handleManualPriceStatRefresh}
-                                disabled={isRefreshingStats}
-                                className="flex-1 flex items-center justify-center space-x-2 bg-green-500/10 text-green-600 dark:text-green-400 font-bold py-3 px-4 rounded-lg hover:bg-green-500/20 transition-colors disabled:opacity-50"
-                              >
-                                  {isRefreshingStats 
-                                      ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div> 
-                                      : refreshStatsSuccess 
-                                          ? <i className="fas fa-check"></i> 
-                                          : <i className="fas fa-calculator"></i>}
-                                  <span>
-                                      {isRefreshingStats 
-                                          ? 'Refreshing...' 
-                                          : refreshStatsSuccess 
-                                              ? 'Refreshed!' 
-                                              : 'Refresh Area Prices'}
-                                  </span>
-                              </button>
-                          </div>
+                        <h4 className="font-bold text-center text-gray-700 dark:text-white">Event Modes</h4>
+                        <label htmlFor="local-paddys-toggle" className="flex items-center justify-between cursor-pointer p-1">
+                          <span className="flex flex-col"><span className="font-medium text-gray-700 dark:text-gray-300">Local St. Paddy's Mode (Preview)</span></span>
+                          <div className="relative"><input id="local-paddys-toggle" type="checkbox" className="sr-only peer" checked={localStPaddysOverride} onChange={(e) => onToggleLocalStPaddysMode(e.target.checked)} /><div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div><div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div></div>
+                        </label>
+                        <label htmlFor="global-paddys-toggle" className="flex items-center justify-between cursor-pointer p-1">
+                          <span className="flex flex-col"><span className="font-medium text-red-600 dark:text-red-400">GLOBAL St. Paddy's Mode</span></span>
+                          <div className="relative"><input id="global-paddys-toggle" type="checkbox" className="sr-only peer" checked={systemFlags.st_paddys_mode || false} onChange={(e) => confirmToggleGlobalMode(e.target.checked)} /><div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div><div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div></div>
+                        </label>
                       </div>
                       <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                         <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">Map Tools</label>
@@ -472,6 +459,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                               opacity: 1,
                               key: crypto.randomUUID(),
                               numberOfPieces: 300,
+                              colors: ['#F59E0B', '#FBBF24', '#FDEED4', '#FFFFFF'],
                           });
                       }}
                       userTrophies={userTrophies}

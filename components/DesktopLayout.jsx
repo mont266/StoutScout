@@ -81,12 +81,16 @@ const DesktopLayout = (props) => {
         userTrophies,
         allTrophies,
         dbPubs,
-        onViewSocialHub,
         isBackfilling, onBackfillCountryData,
-        onOpenAndroidBetaModal,
         geocodingPubIds,
         isDesktopSidebarCollapsed,
         setIsDesktopSidebarCollapsed,
+        // Event Mode Toggles
+        systemFlags,
+        localStPaddysOverride,
+        onToggleGlobalStPaddysMode,
+        onToggleLocalStPaddysMode,
+        isStPaddysModeActive,
     } = props;
     
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -275,7 +279,7 @@ const DesktopLayout = (props) => {
                             onLogout={handleLogout}
                             onViewLegal={handleViewLegal}
                             onViewModeration={() => handleViewAdminPage('moderation')}
-                            onViewSocialHub={onViewSocialHub}
+                            onViewSocialHub={() => handleViewAdminPage('social')}
                             onDataRefresh={handleDataRefresh}
                             installPromptEvent={installPromptEvent}
                             setInstallPromptEvent={setInstallPromptEvent}
@@ -293,8 +297,11 @@ const DesktopLayout = (props) => {
                             userTrophies={userTrophies}
                             allTrophies={allTrophies}
                             isBackfilling={isBackfilling}
-                            onBackfillCountryData={handleBackfillCountryData}
-                            onOpenAndroidBetaModal={onOpenAndroidBetaModal}
+                            onBackfillCountryData={onBackfillCountryData}
+                            systemFlags={systemFlags}
+                            localStPaddysOverride={localStPaddysOverride}
+                            onToggleGlobalStPaddysMode={onToggleGlobalStPaddysMode}
+                            onToggleLocalStPaddysMode={onToggleLocalStPaddysMode}
                         />
                     </div>
                 </div>
@@ -358,6 +365,7 @@ const DesktopLayout = (props) => {
                                 searchOrigin={searchOrigin}
                                 radius={settings.radius}
                                 isSidebarCollapsed={isDesktopSidebarCollapsed}
+                                isStPaddysModeActive={isStPaddysModeActive}
                             />
                             {(locationError && locationPermissionStatus !== 'denied') && 
                                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>

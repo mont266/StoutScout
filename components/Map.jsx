@@ -16,14 +16,17 @@ const userLocationIcon = L.divIcon({
   iconAnchor: [8, 8],
 });
 
-const createPubIcon = (fillColor, strokeColor, sellsGuinnessZero) => L.divIcon({
+const createPubIcon = (fillColor, strokeColor, sellsGuinnessZero, isStPaddysMode = false) => L.divIcon({
   html: `
     <div class="w-10 h-10 relative flex items-center justify-center">
       <svg viewBox="0 0 24 24" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1" class="w-full h-full drop-shadow-lg">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
       </svg>
       <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-3">
-        ${sellsGuinnessZero ? '<div class="w-3 h-3 rounded-full bg-black border-2 border-amber-400"></div>' : `<i class="fas fa-beer text-base" style="color: ${strokeColor}"></i>`}
+        ${sellsGuinnessZero
+          ? '<div class="w-3 h-3 rounded-full bg-black border-2 border-amber-400"></div>'
+          : `<i class="fas ${isStPaddysMode ? 'fa-clover' : 'fa-beer'} text-base" style="color: ${strokeColor}"></i>`
+        }
       </div>
     </div>
   `,
@@ -107,6 +110,7 @@ const MapComponent = ({
   searchOrigin,
   radius,
   isSidebarCollapsed,
+  isStPaddysModeActive,
 }) => {
   const mapRef = useRef(null);
   const isSearchingRef = useRef(false);
@@ -217,19 +221,22 @@ const MapComponent = ({
 
   const icons = useMemo(() => {
     const strokeColor = theme === 'dark' ? '#1A202C' : '#FFFFFF';
-    const sellsGuinnessZeroIcon = (fill) => createPubIcon(fill, strokeColor, true);
-    const regularIcon = (fill) => createPubIcon(fill, strokeColor, false);
+    const mainColor = isStPaddysModeActive ? '#22C55E' : '#F59E0B'; // Green or Amber
+    const selectedColor = isStPaddysModeActive ? '#4ADE80' : '#FBBF24'; // Brighter Green or Amber
+
+    const sellsGuinnessZeroIcon = (fill) => createPubIcon(fill, strokeColor, true, isStPaddysModeActive);
+    const regularIcon = (fill) => createPubIcon(fill, strokeColor, false, isStPaddysModeActive);
 
     return {
-      unrated: regularIcon('#6B7280'),   // gray-500
-      rated: regularIcon('#F59E0B'),     // amber-600 (Gold)
-      selected: regularIcon('#FBBF24'),  // amber-400 (Brighter Gold)
+      unrated: regularIcon('#6B7280'),
+      rated: regularIcon(mainColor),
+      selected: regularIcon(selectedColor),
       unratedZero: sellsGuinnessZeroIcon('#6B7280'),
-      ratedZero: sellsGuinnessZeroIcon('#F59E0B'),
-      selectedZero: sellsGuinnessZeroIcon('#FBBF24'),
+      ratedZero: sellsGuinnessZeroIcon(mainColor),
+      selectedZero: sellsGuinnessZeroIcon(selectedColor),
       closed: createClosedPubIcon(strokeColor),
     }
-  }, [theme]);
+  }, [theme, isStPaddysModeActive]);
 
   return (
     <div className="w-full h-full relative">

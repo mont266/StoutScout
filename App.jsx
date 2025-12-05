@@ -19,7 +19,6 @@ import EditSocialsModal from './components/EditSocialsModal.jsx';
 import UpdateDetailsModal from './components/UpdateDetailsModal.jsx';
 import SuggestEditModal from './components/SuggestEditModal.jsx';
 import CommunityPage from './components/CommunityPage.jsx';
-import SocialContentHub from './components/SocialContentHub.jsx';
 import PubScoreExplanationModal from './components/PubScoreExplanationModal.jsx';
 import CookieConsentBanner from './components/CookieConsentBanner.jsx';
 import { OnlineStatusContext } from './contexts/OnlineStatusContext.jsx';
@@ -176,7 +175,7 @@ const App = () => {
   const [onlineUserIds, setOnlineUserIds] = useState(new Set());
 
   // Confetti State
-  const [confettiState, setConfettiState] = useState({ active: false, recycle: false, opacity: 0, key: null, numberOfPieces: 200 });
+  const [confettiState, setConfettiState] = useState({ active: false, recycle: false, opacity: 0, key: null, numberOfPieces: 200, confettiSource: { x: 0, y: 0, w: 0, h: 0 } });
   const [windowSize, setWindowSize] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -193,6 +192,10 @@ const App = () => {
 
   // Desktop layout state
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  
+  // St. Paddy's Day Mode State
+  const [systemFlags, setSystemFlags] = useState({});
+  const [localStPaddysOverride, setLocalStPaddysOverride] = useState(false);
 
   // Memoized callback for closing the trophy popup to prevent timer resets.
   const handleCloseTrophyPopup = useCallback(() => {
@@ -890,7 +893,7 @@ const App = () => {
         setSearchOrigin(pubToSelect.location);
         setSearchOnNextMoveEnd(true);
     }
-  }, [isDesktop, isListExpanded, pubs, selectedPubId]);
+  }, [isDesktop, isListExpanded, pubs, selectedPubId, setAlertInfo]);
   
   const handleViewProfile = useCallback(async (userId, origin) => {
     if (!userId) return;
@@ -1023,8 +1026,7 @@ const App = () => {
     }
 
     if (pageFromUrl === 'terms' || pageFromUrl === 'privacy') {
-      setLegalPageView(pageFromUrl);
-      setActiveTab('settings');
+      handleViewLegal(pageFromUrl);
     } else if (pubIdFromUrl) {
       const highlightOptions = {
         highlightRatingId: ratingIdFromUrl,
@@ -2211,12 +2213,12 @@ const App = () => {
         setUserLikes(originalUserLikes);
         setAllRatings(originalAllRatings);
     }
-  }, [session, userLikes, allRatings, fetchAllRatings]);
+  }, [session, userLikes, allRatings, fetchAllRatings, setIsAuthOpen]);
   
   const handleViewLegal = (page) => {
     trackEvent('view_legal_page', { page_name: page });
     setLegalPageView(page);
-    // Ensure other full-screen views are closed
+    setActiveTab('settings');
     setSelectedPubId(null);
   };
   
@@ -2696,7 +2698,7 @@ const App = () => {
       });
       return updatedCommentsList;
     }
-  }, [session]);
+  }, [session, setAlertInfo, setCommentsByRating, setAllRatings, setIsAuthOpen]);
 
   const handleDeleteComment = useCallback(async (commentId, ratingId) => {
     trackEvent('delete_comment', { comment_id: commentId });
@@ -2774,7 +2776,7 @@ const App = () => {
         theme: 'success',
       });
     }
-  }, [reportCommentInfo]);
+  }, [reportCommentInfo.comment]);
 
   const handleMarkNotificationsAsRead = useCallback(async () => {
     if (!session || unreadNotificationsCount === 0) return;
@@ -2818,7 +2820,7 @@ const App = () => {
             theme: 'error',
         });
     }
-  }, [session, notifications]);
+  }, [session, notifications, setAlertInfo, setNotifications]);
   
   // --- MODERATION HANDLERS (for reported comments) ---
 
@@ -2841,7 +2843,7 @@ const App = () => {
     } else {
       setReportedComments(data || []);
     }
-  }, []);
+  }, [setReportedComments]);
 
   const handleResolveCommentReport = useCallback(async (report, action) => {
     trackEvent('resolve_comment_report', { report_id: report.id, action });
@@ -2860,7 +2862,7 @@ const App = () => {
           await fetchAllRatings();
       }
     }
-  }, [fetchAllRatings]);
+  }, [fetchAllRatings, setReportedComments]);
 
   const handleAdminDeleteComment = useCallback(async (commentId) => {
       trackEvent('admin_delete_comment', { comment_id: commentId });
@@ -2900,7 +2902,7 @@ const App = () => {
         theme: 'error',
       });
     }
-  }, [session, userProfile]);
+  }, [session, userProfile, setUserProfile, setAlertInfo]);
 
   const handleOpenSuggestEditModal = useCallback((pub) => {
     if (!session) {
@@ -2954,6 +2956,82 @@ const App = () => {
     }
   }, [pubToEdit]);
 
+  // --- St Paddy's Day Mode ---
+  
+  const isStPaddysModeActive = (systemFlags.st_paddys_mode || false) || localStPaddysOverride;
+
+  // Fetch and subscribe to system flags
+  useEffect(() => {
+    const fetchFlags = async () => {
+      const { data, error } = await supabase.from('system_flags').select('*');
+      if (!error && data) {
+        const flags = data.reduce((acc, flag) => {
+          acc[flag.flag_name] = flag.is_active;
+          return acc;
+        }, {});
+        setSystemFlags(flags);
+      }
+    };
+    fetchFlags();
+
+    const channel = supabase.channel('system-flags')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'system_flags' }, (payload) => {
+        setSystemFlags(prev => ({ ...prev, [payload.new.flag_name]: payload.new.is_active }));
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Update root class and confetti for theme
+  useEffect(() => {
+    const root = document.documentElement;
+    const hasBeenActivated = sessionStorage.getItem('stoutly-paddys-confetti-seen');
+
+    if (isStPaddysModeActive) {
+      root.classList.add('st-paddys-mode');
+      if (!hasBeenActivated) {
+        setConfettiState({
+          active: true,
+          recycle: true,
+          opacity: 1,
+          key: 'st-paddys-day',
+          numberOfPieces: 400,
+          colors: ['#22c55e', '#ffffff', '#fbbf24', '#16a34a'],
+          drawShape: (ctx) => {
+            ctx.beginPath();
+            ctx.moveTo(0, -1);
+            ctx.arc(1, -2, 2, Math.PI, Math.PI * 1.7);
+            ctx.arc(-1, -2, 2, Math.PI * 1.3, Math.PI * 2);
+            ctx.arc(0, 0, 1, Math.PI * 0.4, Math.PI * 1.1);
+            ctx.fill();
+          }
+        });
+        sessionStorage.setItem('stoutly-paddys-confetti-seen', 'true');
+      }
+    } else {
+      root.classList.remove('st-paddys-mode');
+    }
+  }, [isStPaddysModeActive]);
+  
+  // Developer toggles for event mode
+  const handleToggleGlobalStPaddysMode = useCallback(async (isActive) => {
+    trackEvent('dev_toggle_global_event', { event: 'st_paddys_mode', active: isActive });
+    const { error } = await supabase.rpc('toggle_system_flag', {
+        p_flag_name: 'st_paddys_mode',
+        p_is_active: isActive,
+    });
+    if (error) {
+        setAlertInfo({ isOpen: true, title: "Error", message: `Failed to toggle global mode: ${error.message}`, theme: 'error' });
+    }
+  }, [setAlertInfo]);
+
+  const handleToggleLocalStPaddysMode = useCallback((isActive) => {
+    setLocalStPaddysOverride(isActive);
+  }, []);
+
   const layoutProps = {
       isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
@@ -2967,7 +3045,7 @@ const App = () => {
       selectedPub, existingUserRatingForSelectedPub, handleRatePub,
       reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
       isAvatarModalOpen, setIsAvatarModalOpen,
-      viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
+      handleUpdateAvatar, viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
       installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
       showSearchAreaButton, handleSearchThisArea,
       searchOnNextMoveEnd, handleSearchAfterMove,
@@ -3008,7 +3086,6 @@ const App = () => {
       handleFindPlace,
       handleFindCurrentPub,
       onRequestPermission: handleRequestPermission,
-      handleUpdateAvatar,
       
       // Guinness 0.0 handlers
       userZeroVotes,
@@ -3065,12 +3142,15 @@ const App = () => {
       showAllDbPubs,
       onToggleShowAllDbPubs: handleToggleShowAllDbPubs,
       dbPubs,
-      // Social Content Hub
-      SocialContentHub,
-      onViewSocialHub: () => handleViewAdminPage('social'),
+      onViewSocialHub: () => window.open('https://social.stoutly.co.uk', '_blank'),
       onDonationSuccess: handleDonationSuccess,
       isBackfilling,
       onBackfillCountryData: handleBackfillCountryData,
+      isStPaddysModeActive,
+      systemFlags,
+      localStPaddysOverride,
+      onToggleGlobalStPaddysMode: handleToggleGlobalStPaddysMode,
+      onToggleLocalStPaddysMode: handleToggleLocalStPaddysMode,
   };
 
   const renderModals = () => (
@@ -3164,6 +3244,8 @@ const App = () => {
                 opacity: confettiState.opacity,
                 transition: 'opacity 2s ease-out',
               }}
+              colors={confettiState.colors}
+              drawShape={confettiState.drawShape}
             />
           )}
           {renderModals()}

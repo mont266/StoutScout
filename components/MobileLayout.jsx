@@ -88,7 +88,7 @@ const MobileLayout = (props) => {
         locationPermissionStatus, onRequestPermission,
         mapTileRefreshKey,
         // Community props
-        CommunityPage, friendships, userLikes, onToggleLike, onFriendRequest, onFriendAction,
+        CommunityPage, friendships, userLikes, onToggleLike, onFriendRequest,
         // Friends List props
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList, handleFriendAction,
         deleteConfirmationInfo,
@@ -122,6 +122,12 @@ const MobileLayout = (props) => {
         allRatings, communitySubTab, setCommunitySubTab,
         onOpenAndroidBetaModal,
         geocodingPubIds,
+        isStPaddysModeActive,
+        // Event Mode Toggles
+        systemFlags,
+        localStPaddysOverride,
+        onToggleGlobalStPaddysMode,
+        onToggleLocalStPaddysMode,
     } = props;
 
     const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
@@ -171,7 +177,7 @@ const MobileLayout = (props) => {
                             onViewProfile={handleViewProfile}
                             friendships={friendships}
                             onFriendRequest={onFriendRequest}
-                            onFriendAction={onFriendAction}
+                            onFriendAction={handleFriendAction}
                             userLikes={userLikes}
                             onToggleLike={onToggleLike}
                             onLoginRequest={() => setIsAuthOpen(true)}
@@ -235,6 +241,10 @@ const MobileLayout = (props) => {
                                 userTrophies={userTrophies}
                                 allTrophies={allTrophies}
                                 onOpenAndroidBetaModal={onOpenAndroidBetaModal}
+                                systemFlags={systemFlags}
+                                localStPaddysOverride={localStPaddysOverride}
+                                onToggleGlobalStPaddysMode={onToggleGlobalStPaddysMode}
+                                onToggleLocalStPaddysMode={onToggleLocalStPaddysMode}
                             />
                         );
                     })()}
@@ -293,6 +303,7 @@ const MobileLayout = (props) => {
                             mapTileRefreshKey={mapTileRefreshKey}
                             searchOrigin={searchOrigin}
                             radius={settings.radius}
+                            isStPaddysModeActive={isStPaddysModeActive}
                         />
                          <button
                             onClick={handleFindCurrentPub}

@@ -10,6 +10,7 @@ const Icon = ({ className }) => (
         fill='#1A120F'
         stroke='#F59E0B'
         strokeWidth='4'
+        className="stoutly-logo-stroke"
       />
       <path 
         d='M25 45 C 40 30, 60 30, 75 45 C 75 35, 65 25, 50 25 C 35 25, 25 35, 25 45 Z' 
