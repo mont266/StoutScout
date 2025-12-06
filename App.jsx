@@ -2216,7 +2216,17 @@ const App = () => {
   }, [session, userLikes, allRatings, fetchAllRatings, setIsAuthOpen]);
   
   const handleViewLegal = (page) => {
-    trackEvent('view_legal_page', { page_name: page });
+    if (page) {
+        trackEvent('view_legal_page', { page_name: page });
+
+        // Update URL for better navigation and deep-linking, without creating duplicate history entries.
+        const newSearch = `?page=${page}`;
+        const title = `Stoutly - ${page.charAt(0).toUpperCase() + page.slice(1)}`;
+        if (window.location.search !== newSearch) {
+            history.pushState({ view: 'legal', page }, title, newSearch);
+        }
+    }
+    
     setLegalPageView(page);
     setActiveTab('settings');
     setSelectedPubId(null);
