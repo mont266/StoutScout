@@ -14,7 +14,7 @@ import ConfirmationModal from './ConfirmationModal.jsx';
 
 // This component is no longer a modal, but a full page for settings
 // that appears in its own tab.
-const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode }) => {
+const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode, onViewModeration }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
@@ -189,18 +189,6 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
   const renderInstallButton = () => {
     const isDesktop = useIsDesktop();
     if (isDesktop) return null;
-
-    if (mobileOS === 'Android' && installPromptEvent) {
-      return (
-        <button
-          onClick={handleInstallClick}
-          className="w-full flex items-center justify-center space-x-2 bg-black dark:bg-white text-white dark:text-black font-bold py-3 px-4 rounded-lg hover:opacity-80 transition-opacity"
-        >
-          <i className="fas fa-download"></i>
-          <span>Install PWA</span>
-        </button>
-      );
-    }
 
     if (mobileOS === 'iOS') {
       return (
