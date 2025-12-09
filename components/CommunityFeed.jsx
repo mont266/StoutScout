@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
@@ -63,22 +64,26 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
             if (data && data.length > 0) {
                 const ratingIds = data.map(r => r.rating_id);
                 
-                // Fetch all comments for these ratings in a single query to get accurate counts
+                // Fetch actual comment rows to count them manually, ensuring accuracy
                 const { data: commentsData, error: commentsError } = await supabase
                     .from('comments')
-                    .select('rating_id', { count: 'exact', head: false })
+                    .select('rating_id')
                     .in('rating_id', ratingIds);
 
                 if (commentsError) {
                     console.warn("Could not fetch fresh comment counts, using potentially stale data from feed.", commentsError);
                     finalRatingsData = data;
                 } else {
-                    // This logic is incorrect, commentsData from a count query doesn't work this way. Let's fix it.
-                    // The result from a count query is just a single object with the count, or null.
-                    // A better way is to rely on the comment_count from the RPC, even if slightly stale.
-                    // The old code was trying to re-fetch but the logic was flawed.
-                    // For now, let's just use the data from the RPC directly. It's performant and mostly accurate.
-                    finalRatingsData = data;
+                    const counts = {};
+                    commentsData.forEach(c => {
+                        counts[c.rating_id] = (counts[c.rating_id] || 0) + 1;
+                    });
+
+                    // Merge correct counts into rating data
+                    finalRatingsData = data.map(r => ({
+                        ...r,
+                        comment_count: counts[r.rating_id] || 0
+                    }));
                 }
             } else {
                 finalRatingsData = data || [];

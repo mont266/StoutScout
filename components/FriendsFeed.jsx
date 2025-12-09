@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
@@ -204,18 +205,26 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
             if (data && data.length > 0) {
                 const ratingIds = data.map(r => r.rating_id);
                 
+                // Fetch actual comment rows to count them manually, ensuring accuracy
                 const { data: commentsData, error: commentsError } = await supabase
                     .from('comments')
-                    .select('rating_id', { count: 'exact', head: false })
+                    .select('rating_id')
                     .in('rating_id', ratingIds);
 
                 if (commentsError) {
-                    console.warn("Could not fetch comment counts for friends feed, using potentially stale data.", commentsError);
+                    console.warn("Could not fetch fresh comment counts for friends feed, using potentially stale data.", commentsError);
                     finalRatingsData = data;
                 } else {
-                    // This logic was incorrect for a count query. The RPC already provides comment_count.
-                    // Relying on the RPC's count is simpler and sufficient.
-                    finalRatingsData = data;
+                    const counts = {};
+                    commentsData.forEach(c => {
+                        counts[c.rating_id] = (counts[c.rating_id] || 0) + 1;
+                    });
+
+                    // Merge correct counts into rating data
+                    finalRatingsData = data.map(r => ({
+                        ...r,
+                        comment_count: counts[r.rating_id] || 0
+                    }));
                 }
             } else {
                 finalRatingsData = data || [];
