@@ -154,10 +154,10 @@ const PubSelectorView = memo(({
 
 // Sub-component for the main post creation view, memoized for performance.
 const MainView = memo(({
-    userProfile, title, setTitle, content, setContent, handleSubmit, isLoading, error, onClose, onAttachPubsClick,
-    selectedPubs, onTogglePubSelection, draggedIndex, dragOverIndex,
-    handleDragStart, handleDragEnter, handleDragOver, handleDrop, handleDragEnd,
-    isAnnouncement, setIsAnnouncement, isEditing, createPostModalOrigin
+    userProfile, title, setTitle, content, setContent, handleSubmit, isLoading, error, setError, onClose, onAttachPubsClick,
+    selectedPubs, onTogglePubSelection, handleMovePub,
+    isAnnouncement, setIsAnnouncement, isEditing, createPostModalOrigin,
+    validationError, setValidationError
 }) => {
     const textareaRef = useRef(null);
     const isEditingPost = !!isEditing;
@@ -194,23 +194,35 @@ const MainView = memo(({
                             <input
                                 type="text"
                                 value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                placeholder="Add a catchy title..."
+                                onChange={(e) => {
+                                    setTitle(e.target.value);
+                                    if (validationError) {
+                                        setValidationError(null);
+                                        setError('');
+                                    }
+                                }}
+                                placeholder={validationError?.title ? "A title or content is required" : "Add a catchy title..."}
                                 maxLength={MAX_TITLE_LENGTH}
-                                className="w-full text-xl font-bold bg-transparent focus:outline-none placeholder-gray-400 dark:placeholder-gray-500"
+                                className={`w-full text-xl font-bold bg-transparent focus:outline-none placeholder-gray-400 dark:placeholder-gray-500 ${validationError?.title ? 'placeholder:text-red-400' : ''}`}
                             />
                             <p className={`text-right text-xs mt-1 ${title.length > MAX_TITLE_LENGTH ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
                                 {title.length} / {MAX_TITLE_LENGTH}
                             </p>
                         </div>
-                        <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div className={`pt-2 border-t ${validationError ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'}`}>
                             <textarea
                                 ref={textareaRef}
                                 value={content}
-                                onChange={(e) => setContent(e.target.value)}
-                                placeholder="What's happening?"
+                                onChange={(e) => {
+                                    setContent(e.target.value);
+                                    if (validationError) {
+                                        setValidationError(null);
+                                        setError('');
+                                    }
+                                }}
+                                placeholder={validationError?.content ? "A title or content is required" : "What's happening?"}
                                 maxLength={MAX_POST_LENGTH}
-                                className="w-full text-base bg-transparent focus:outline-none resize-none min-h-[100px]"
+                                className={`w-full text-base bg-transparent focus:outline-none resize-none min-h-[100px] placeholder-gray-400 dark:placeholder-gray-500 ${validationError?.content ? 'placeholder:text-red-400' : ''}`}
                                 onInput={(e) => {
                                     e.target.style.height = 'auto';
                                     e.target.style.height = `${e.target.scrollHeight}px`;
@@ -227,25 +239,44 @@ const MainView = memo(({
                 
                 {selectedPubs.length > 0 && (
                     <div className="px-4">
-                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Attached Pubs (drag to re-order):</p>
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Attached Pubs:</p>
                         <ul className="space-y-2">
                             {selectedPubs.map((pub, index) => (
                                 <li
-                                    key={pub.id} draggable onDragStart={(e) => handleDragStart(e, index)}
-                                    onDragEnter={(e) => handleDragEnter(e, index)} onDragOver={handleDragOver}
-                                    onDrop={handleDrop} onDragEnd={handleDragEnd}
-                                    className={`p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md flex items-center justify-between transition-all duration-200 
-                                        ${draggedIndex === index ? 'opacity-30' : 'opacity-100'}
-                                        ${dragOverIndex === index ? 'border-2 border-dashed border-amber-500' : 'border-2 border-transparent'}`
-                                    }
+                                    key={pub.id}
+                                    className="p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md flex items-center justify-between"
                                 >
                                     <div className="flex items-center space-x-2 min-w-0">
-                                        <i className="fas fa-grip-vertical text-gray-400 dark:text-gray-500 cursor-grab"></i>
+                                        <span className="font-bold text-gray-500 dark:text-gray-400 w-6 text-center">{index + 1}.</span>
                                         <div className="min-w-0">
                                             <p className="font-semibold text-sm truncate">{pub.name}</p>
                                         </div>
                                     </div>
-                                    <button type="button" onClick={() => onTogglePubSelection(pub)} className="w-6 h-6 text-gray-400 hover:text-red-500"><i className="fas fa-times"></i></button>
+                                    <div className="flex items-center space-x-1">
+                                        <div className="flex flex-col">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleMovePub(index, -1)}
+                                                disabled={index === 0}
+                                                className="text-gray-400 hover:text-gray-600 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                                aria-label="Move pub up"
+                                            >
+                                                <i className="fas fa-chevron-up"></i>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleMovePub(index, 1)}
+                                                disabled={index === selectedPubs.length - 1}
+                                                className="text-gray-400 hover:text-gray-600 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                                aria-label="Move pub down"
+                                            >
+                                                <i className="fas fa-chevron-down"></i>
+                                            </button>
+                                        </div>
+                                        <button type="button" onClick={() => onTogglePubSelection(pub)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500" aria-label="Remove pub">
+                                            <i className="fas fa-times"></i>
+                                        </button>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
@@ -294,9 +325,8 @@ const CreatePostModal = ({ userProfile, onClose, onPostSuccess, userRatings, edi
     const [selectedPubs, setSelectedPubs] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     
-    const [draggedIndex, setDraggedIndex] = useState(null);
-    const [dragOverIndex, setDragOverIndex] = useState(null);
     const [isAnnouncement, setIsAnnouncement] = useState(false);
+    const [validationError, setValidationError] = useState(null);
 
     useEffect(() => {
         if (editingPost) {
@@ -310,11 +340,13 @@ const CreatePostModal = ({ userProfile, onClose, onPostSuccess, userRatings, edi
 
     const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
-        if (!title.trim() && !content.trim() && selectedPubs.length === 0) {
-            setError('Your post needs a title, some content, or at least one attached pub.');
+        if (!title.trim() && !content.trim()) {
+            setError('A post must have a title or some content.');
+            setValidationError({ title: true, content: true });
             return;
         }
         setError('');
+        setValidationError(null);
         setIsLoading(true);
 
         try {
@@ -369,39 +401,21 @@ const CreatePostModal = ({ userProfile, onClose, onPostSuccess, userRatings, edi
             return [...prev, pub];
         });
     }, []);
+
+    const handleMovePub = useCallback((index, direction) => {
+        setSelectedPubs(prevPubs => {
+            const newPubs = [...prevPubs];
+            const newIndex = index + direction;
     
-    const handleDragStart = useCallback((e, index) => {
-        setDraggedIndex(index);
-        e.dataTransfer.effectAllowed = 'move';
-    }, []);
-
-    const handleDragEnter = useCallback((e, index) => {
-        e.preventDefault();
-        if (index !== draggedIndex) {
-            setDragOverIndex(index);
-        }
-    }, [draggedIndex]);
+            if (newIndex < 0 || newIndex >= newPubs.length) {
+                return newPubs; // Out of bounds
+            }
     
-    const handleDragOver = useCallback((e) => e.preventDefault(), []);
-
-    const handleDrop = useCallback((e) => {
-        e.preventDefault();
-        if (draggedIndex === null || dragOverIndex === null || draggedIndex === dragOverIndex) {
-            setDraggedIndex(null);
-            setDragOverIndex(null);
-            return;
-        }
-        const newSelectedPubs = [...selectedPubs];
-        const [draggedItem] = newSelectedPubs.splice(draggedIndex, 1);
-        newSelectedPubs.splice(dragOverIndex, 0, draggedItem);
-        setSelectedPubs(newSelectedPubs);
-        setDraggedIndex(null);
-        setDragOverIndex(null);
-    }, [draggedIndex, dragOverIndex, selectedPubs]);
-
-    const handleDragEnd = useCallback(() => {
-        setDraggedIndex(null);
-        setDragOverIndex(null);
+            // Swap elements
+            [newPubs[index], newPubs[newIndex]] = [newPubs[newIndex], newPubs[index]];
+    
+            return newPubs;
+        });
     }, []);
 
     const modalContent = (
@@ -432,21 +446,18 @@ const CreatePostModal = ({ userProfile, onClose, onPostSuccess, userRatings, edi
                         handleSubmit={handleSubmit}
                         isLoading={isLoading}
                         error={error}
+                        setError={setError}
                         onClose={onClose}
                         onAttachPubsClick={() => setIsPubSelectorOpen(true)}
                         selectedPubs={selectedPubs}
                         onTogglePubSelection={togglePubSelection}
-                        draggedIndex={draggedIndex}
-                        dragOverIndex={dragOverIndex}
-                        handleDragStart={handleDragStart}
-                        handleDragEnter={handleDragEnter}
-                        handleDragOver={handleDragOver}
-                        handleDrop={handleDrop}
-                        handleDragEnd={handleDragEnd}
+                        handleMovePub={handleMovePub}
                         isAnnouncement={isAnnouncement}
                         setIsAnnouncement={setIsAnnouncement}
                         isEditing={!!editingPost}
                         createPostModalOrigin={createPostModalOrigin}
+                        validationError={validationError}
+                        setValidationError={setValidationError}
                     />
                 )}
             </div>
