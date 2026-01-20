@@ -21,11 +21,11 @@ const getTitle = (tab) => {
     }
 }
 
-const Header = ({ activeTab, userProfile, levelRequirements, onProfileClick, onLoginRequest }) => {
+const Header = ({ activeTab, userProfile, levelRequirements, onProfileClick, onLoginRequest, className }) => {
   const title = getTitle(activeTab);
 
   return (
-    <header className="app-header flex-shrink-0 px-2 h-16 box-content bg-white dark:bg-gray-800 shadow-md z-20 flex justify-between items-center">
+    <header className={`app-header flex-shrink-0 px-2 h-16 box-content bg-white dark:bg-gray-800 shadow-md z-20 flex justify-between items-center ${className || ''}`}>
         {/* Left side: App Icon */}
         <div className="w-12 flex justify-center items-center">
             <Icon className="w-10 h-10 p-1" />

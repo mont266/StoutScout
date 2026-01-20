@@ -38,7 +38,7 @@ const AlertModal = ({ onClose, title, message, theme = 'info', customIcon }) => 
 
     const modalContent = (
          <div 
-            className="fixed inset-0 bg-black/60 z-[2000] flex items-center justify-center p-4 animate-modal-fade-in"
+            className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-4 animate-modal-fade-in"
             onClick={onClose}
             role="dialog"
             aria-modal="true"

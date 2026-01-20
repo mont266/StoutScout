@@ -80,6 +80,14 @@ const urlsToCache = [
   '/components/PintPulseReportCard.jsx',
   '/components/PintOfTheWeekCard.jsx',
   '/components/WelcomeModal.jsx',
+  '/components/StaticWorldMap.jsx',
+  '/components/WorldStatsMapModal.jsx',
+  '/components/ChangelogPage.jsx',
+  '/components/ChangelogManager.jsx',
+  '/components/CreatePostModal.jsx',
+  '/components/PostCard.jsx',
+  '/components/FloatingActionButton.jsx',
+  '/components/CreatePostInput.jsx'
 ];
 
 self.addEventListener('install', event => {

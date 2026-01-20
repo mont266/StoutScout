@@ -5,23 +5,38 @@ import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import CommentsSection from './CommentsSection.jsx';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 
-const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, fallbackLocationData = null }) => {
+const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, fallbackLocationData = null, highlightedCommentId }) => {
 
-    const { user, pub_name, pub_address, image_url, created_at, quality, price, like_count, id, exact_price, pub_id, pub_lat, pub_lng, comment_count, message, pub_country_code, pub_country_name } = rating;
+    const { user, image_url, created_at, updated_at, quality, price, like_count, id, exact_price, comment_count, message } = rating;
+    
+    // Create "effective" variables to handle multiple possible data shapes for pub info
+    const pubId = rating.pub_id || rating.pub?.id;
+    const pubName = rating.pub?.name || rating.pub_name || rating.pubName || fallbackLocationData?.name;
+    const pubAddress = rating.pub?.address || rating.pub_address || rating.pubAddress || fallbackLocationData?.address;
+    const pubLat = rating.pub?.lat || rating.pub_lat || rating.pubLocation?.lat || fallbackLocationData?.location?.lat;
+    const pubLng = rating.pub?.lng || rating.pub_lng || rating.pubLocation?.lng || fallbackLocationData?.location?.lng;
+    const pubCountryCode = rating.pub?.country_code || rating.pub_country_code || rating.pubCountryCode || fallbackLocationData?.country_code;
+    const pubCountryName = rating.pub?.country_name || rating.pub_country_name || rating.pubCountryName || fallbackLocationData?.country_name;
+
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
     const { rates: exchangeRates } = useContext(ExchangeRatesContext);
 
     const isLiked = userLikes && userLikes.has(id);
-    
-    // Prioritize the rating's specific location data, but use the pub's data as a fallback.
+
     const effectiveLocationData = {
-        country_code: pub_country_code || fallbackLocationData?.country_code,
-        country_name: pub_country_name || fallbackLocationData?.country_name,
-        address: pub_address || fallbackLocationData?.address
+        country_code: pubCountryCode,
+        country_name: pubCountryName,
+        address: pubAddress
     };
     
     const currencyInfo = getCurrencyInfo(effectiveLocationData);
     const rankData = user.level ? getRankData(user.level) : null;
+
+    useEffect(() => {
+        if (highlightedCommentId) {
+            setIsCommentsVisible(true);
+        }
+    }, [highlightedCommentId]);
 
     useEffect(() => {
         if (isCommentsVisible && onFetchComments) {
@@ -34,14 +49,14 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
 
     const handlePubClick = () => {
         if (!onViewPub) return;
-        if (pub_lat && pub_lng) {
+        if (pubLat && pubLng) {
             const pubForSelection = {
-                id: pub_id,
-                name: pub_name,
-                address: pub_address,
-                location: { lat: pub_lat, lng: pub_lng },
-                country_code: pub_country_code,
-                country_name: pub_country_name,
+                id: pubId,
+                name: pubName,
+                address: pubAddress,
+                location: { lat: pubLat, lng: pubLng },
+                country_code: pubCountryCode,
+                country_name: pubCountryName,
             };
             onViewPub(pubForSelection, { highlightRatingId: id });
         } else {
@@ -53,12 +68,12 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
         // Create an enriched rating object right here to guarantee all data is present for the modal.
         const enrichedRating = {
             ...rating,
-            pub_country_code: pub_country_code || fallbackLocationData?.country_code,
-            pub_country_name: pub_country_name || fallbackLocationData?.country_name,
-            pub_name: pub_name || fallbackLocationData?.name,
-            pub_address: pub_address || fallbackLocationData?.address,
-            pub_lat: pub_lat || fallbackLocationData?.location?.lat,
-            pub_lng: pub_lng || fallbackLocationData?.location?.lng,
+            pub_country_code: pubCountryCode,
+            pub_country_name: pubCountryName,
+            pub_name: pubName,
+            pub_address: pubAddress,
+            pub_lat: pubLat,
+            pub_lng: pubLng,
         };
         onOpenShareRatingModal(enrichedRating);
     };
@@ -96,19 +111,21 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                         )}
                     </div>
                     {onViewPub && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 break-words" title={pub_name}>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 break-words" title={pubName}>
                             rated a pint at{' '}
                             <button
                                 onClick={handlePubClick}
-                                disabled={!onViewPub || !pub_lat || !pub_lng}
+                                disabled={!onViewPub || !pubLat || !pubLng}
                                 className="font-medium hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded disabled:no-underline disabled:cursor-default"
                             >
-                                {pub_name}
+                                {pubName}
                             </button>
                         </p>
                     )}
                 </div>
-                 <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">{formatTimeAgo(new Date(created_at).getTime())}</span>
+                 <div className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                    <span>{formatTimeAgo(new Date(created_at).getTime())}</span>
+                </div>
             </div>
 
             {/* Message */}
@@ -120,10 +137,9 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                 </div>
             )}
 
-            {/* Image */}
             {image_url && (
                 <button onClick={() => onViewImage(rating)} className="w-full aspect-square block bg-gray-100 dark:bg-gray-900">
-                    <img src={image_url} alt={`Pint at ${pub_name}`} loading="lazy" className="w-full h-full object-cover"/>
+                    <img src={image_url} alt={`Pint at ${pubName}`} loading="lazy" className="w-full h-full object-cover"/>
                 </button>
             )}
 
@@ -169,7 +185,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                     aria-pressed={isLiked}
                     aria-label={isLiked ? `Unlike rating, currently ${like_count} likes` : `Like rating, currently ${like_count} likes`}
                   >
-                      <i className={`${isLiked ? 'fas' : 'far'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
+                      <i className={`${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart transition-transform ${isLiked ? 'scale-110' : ''}`}></i>
                       <span>{like_count || 0}</span>
                 </button>
                  <button
@@ -177,7 +193,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                     className="flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                     aria-expanded={isCommentsVisible}
                 >
-                    <i className="far fa-comment"></i>
+                    <i className="fa-regular fa-comment"></i>
                     <span>{comment_count || 0}</span>
                 </button>
                 <button
@@ -185,7 +201,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                     className="flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors text-sm font-semibold w-full justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                     aria-label="Share this rating"
                 >
-                    <i className="far fa-share-square"></i>
+                    <i className="fa-solid fa-share-from-square"></i>
                     <span>Share</span>
                 </button>
             </div>
@@ -201,6 +217,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                     onReportComment={onReportComment}
                     onLoginRequest={onLoginRequest}
                     onViewProfile={onViewProfile}
+                    highlightedCommentId={highlightedCommentId}
                 />
             )}
         </div>

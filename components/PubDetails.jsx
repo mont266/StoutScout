@@ -14,6 +14,7 @@ import CertifiedBadge from './CertifiedBadge.jsx';
 import RatingCard from './RatingCard.jsx';
 import CertifiedExplanationModal from './CertifiedExplanationModal.jsx';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
+import useIsDesktop from '../hooks/useIsDesktop.js';
 
 const Section = ({ title, children, ...props }) => (
     <section {...props} aria-labelledby={title ? `section-title-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined}>
@@ -89,7 +90,7 @@ const PintGallery = ({ ratings, onViewImage }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo }) => {
+const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [] }) => {
   const [localPub, setLocalPub] = useState(pub);
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
@@ -101,58 +102,57 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
   const [isCertifiedModalOpen, setIsCertifiedModalOpen] = useState(false);
   const { rates: exchangeRates } = useContext(ExchangeRatesContext);
+  const isDesktop = useIsDesktop();
 
   const isLondonNonDynamic = useMemo(() => isLondonPub(localPub) && !localPub.is_dynamic_price_area, [localPub]);
   const isCertified = localPub.certification_status === 'certified' || localPub.certification_status === 'at_risk';
   const isDeveloper = loggedInUserProfile?.is_developer;
 
-  useEffect(() => {
-    // This effect ensures we always have the most complete pub data available.
-    // It handles two cases for missing country info: rated pubs (in our DB)
-    // and unrated pubs (new from OSM).
-    setLocalPub(pub); // Optimistically set the local pub first
+  const rank = useMemo(() => {
+    if (!top10PubIds || top10PubIds.length === 0) return null;
+    const index = top10PubIds.indexOf(localPub.id);
+    return index !== -1 ? index + 1 : null;
+  }, [top10PubIds, localPub.id]);
 
+  useEffect(() => {
+    setLocalPub(pub); 
     const hasCountryInfo = pub.country_code || pub.country_name;
     const isRated = pub.ratings?.length > 0 || pub.pub_score != null;
 
     if (!hasCountryInfo && pub.id && pub.location) {
-        // Pub is missing country info, we need to fetch it.
         if (isRated) {
-            // It's a rated pub, so it must exist in our DB. Fetch full record.
             const fetchFullPubData = async () => {
                 const { data, error } = await supabase
                     .from('pubs')
                     .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since, is_closed')
                     .eq('id', pub.id)
                     .single();
-
                 if (data && !error) {
-                    // Important: The `pub` prop contains the definitive `is_closed` status from the App.jsx merge logic.
-                    // When we fetch supplementary data from the DB, we must not overwrite this with potentially stale data.
                     const { is_closed: _, ...restOfData } = data;
                     setLocalPub(prevPub => ({
-                        ...prevPub, // Keep live data like ratings, pub_score, and the definitive is_closed status from the prop
-                        ...restOfData, // Overwrite with supplementary data from DB (name, address, country etc.)
+                        ...prevPub,
+                        ...restOfData,
                         location: { lat: data.lat, lng: data.lng },
                     }));
                 }
             };
             fetchFullPubData();
         } else {
-            // It's unrated, likely a new pub from OSM. Reverse geocode to get country.
             const reverseGeocodeForCountry = async () => {
                 try {
-                    const userAgent = 'Stoutly/1.0 (https://stoutly-app.com)';
-                    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pub.location.lat}&lon=${pub.location.lng}&addressdetails=1`;
-                    const response = await fetch(url, { headers: { 'User-Agent': userAgent } });
+                    const accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+                    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${pub.location.lng},${pub.location.lat}.json?access_token=${accessToken}&types=country`;
+                    const response = await fetch(url);
                     const data = await response.json();
-                    
-                    if (data && data.address) {
-                        setLocalPub(prevPub => ({
-                            ...prevPub,
-                            country_code: data.address.country_code,
-                            country_name: data.address.country,
-                        }));
+                    if (data && data.features?.length > 0 && data.features[0].context) {
+                        const country = data.features[0].context.find(c => c.id.startsWith('country'));
+                        if (country) {
+                             setLocalPub(prevPub => ({
+                                ...prevPub,
+                                country_code: country.short_code,
+                                country_name: country.text,
+                            }));
+                        }
                     }
                 } catch (error) {
                     console.error("Reverse geocoding for country failed:", error);
@@ -180,27 +180,23 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   
     useEffect(() => {
         if (highlightedCommentId) {
-            const commentRatingId = Object.keys(commentsByRating.get(localPub.id) || {}).find(ratingId =>
-                commentsByRating.get(localPub.id)[ratingId]?.some(c => c.id === highlightedCommentId)
-            );
-
-            // Automatically open the comment section for the relevant rating
-            if (commentRatingId && !visibleComments[commentRatingId]) {
-                 toggleComments(commentRatingId);
-            }
+            // Find which rating the highlighted comment belongs to
+            const targetRating = (localPub.ratings || []).find(rating => {
+                const ratingComments = commentsByRating.get(rating.id);
+                return ratingComments && ratingComments.some(c => c.id === highlightedCommentId || c.parent_comment_id === highlightedCommentId);
+            });
             
-            setTimeout(() => {
-                const element = document.getElementById(`comment-${highlightedCommentId}`);
-                if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    element.classList.add('highlight-comment');
-                    setTimeout(() => {
-                        element.classList.remove('highlight-comment');
-                    }, 2500);
-                }
-            }, 400); // Delay to allow for comment section to open
+            // This logic is now handled inside RatingCard, but we still scroll to the right card.
+            if (targetRating && ratingsListRef.current) {
+                setTimeout(() => {
+                    const element = ratingsListRef.current.querySelector(`[data-rating-id="${targetRating.id}"]`);
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 350);
+            }
         }
-    }, [highlightedCommentId, commentsByRating, localPub.id, visibleComments]);
+    }, [highlightedCommentId, localPub.ratings, commentsByRating]);
 
   const handleScrollToRatings = () => {
     if (ratingsListRef.current) {
@@ -304,7 +300,7 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
   };
 
   const handleRatingSubmit = (ratingData) => {
-    onRate(localPub.id, localPub.name, localPub.address, ratingData);
+    handleRatePub(localPub.id, localPub.name, localPub.address, ratingData);
     // Collapse the form after a new submission, but not after an update.
     if (!existingUserRating) {
         setIsRatingFormExpanded(false);
@@ -503,8 +499,8 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
     {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={isActionLoading} onClose={() => setConfirmation({ isOpen: false })} />}
     {isCertifiedModalOpen && <CertifiedExplanationModal isOpen={isCertifiedModalOpen} onClose={() => setIsCertifiedModalOpen(false)} />}
 
-    <div className="h-full flex flex-col bg-gray-100 dark:bg-gray-900 overflow-hidden">
-        <header className="p-4 bg-white dark:bg-gray-800 shadow-md z-10 flex-shrink-0">
+    <div className="flex flex-col bg-gray-100 dark:bg-gray-900 min-h-full">
+        <header className="sticky top-0 p-4 bg-white dark:bg-gray-800 shadow-md z-10 flex-shrink-0">
             <div className="flex items-center space-x-2">
                 <button
                     onClick={onClose}
@@ -545,157 +541,170 @@ const PubDetails = ({ pub, onClose, onRate, getAverageRating, existingUserRating
             </div>
         </header>
 
-        <main className="flex-grow overflow-y-auto p-4 space-y-6">
-            {isDevInfoVisible && isDeveloper && (
-                <Section>
-                    <div className="p-3 bg-gray-200 dark:bg-gray-900 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 break-all animate-fade-in-down">
-                        <p><strong>Pub ID:</strong> {localPub.id}</p>
-                    </div>
-                </Section>
-            )}
-            {localPub.is_closed && (
-                <div className="p-4 bg-red-100 dark:bg-red-900/50 border-l-4 border-red-500 text-red-800 dark:text-red-200 rounded-r-lg text-center">
-                    <p className="font-bold"><i className="fas fa-exclamation-triangle mr-2"></i>This pub is reported as permanently closed.</p>
-                </div>
-            )}
-            
-            {localPub.ratings.length > 0 ? (
-                <>
-                    {/* Pub Score Section */}
+        <main className="flex-grow">
+            <div className={`w-full ${isDesktop ? 'max-w-3xl mx-auto' : ''} p-4 space-y-6`}>
+                {isDevInfoVisible && isDeveloper && (
                     <Section>
-                        <div className="text-center flex flex-col items-center">
-                            <div className="flex items-center gap-2 mb-2">
-                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Pub Score</h3>
-                                <button onClick={onOpenScoreExplanation} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
-                                    <i className="fas fa-info-circle"></i>
-                                </button>
-                            </div>
-                            <ScoreGauge score={localPub.pub_score} />
-                            {isCertified && (
-                                <div className="mt-4 flex flex-col items-center animate-fade-in-down">
-                                    <CertifiedBadge certifiedSince={localPub.certified_since} className="w-10 h-10" />
-                                    <p className="font-bold text-green-600 dark:text-green-400 mt-2 text-sm">Stoutly Certified</p>
-                                    <button 
-                                        onClick={handleOpenCertifiedModal}
-                                        className="text-xs text-gray-500 dark:text-gray-400 hover:underline mt-1"
-                                    >
-                                        What is this?
+                        <div className="p-3 bg-gray-200 dark:bg-gray-900 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 break-all animate-fade-in-down">
+                            <p><strong>Pub ID:</strong> {localPub.id}</p>
+                        </div>
+                    </Section>
+                )}
+                {localPub.is_closed && (
+                    <div className="p-4 bg-red-100 dark:bg-red-900/50 border-l-4 border-red-500 text-red-800 dark:text-red-200 rounded-r-lg text-center">
+                        <p className="font-bold"><i className="fas fa-exclamation-triangle mr-2"></i>This pub is reported as permanently closed.</p>
+                    </div>
+                )}
+                
+                {localPub.ratings.length > 0 ? (
+                    <>
+                        {/* Pub Score Section */}
+                        <Section>
+                            <div className="text-center flex flex-col items-center">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Pub Score</h3>
+                                    <button onClick={onOpenScoreExplanation} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+                                        <i className="fas fa-info-circle"></i>
                                     </button>
                                 </div>
-                            )}
-                        </div>
-                    </Section>
-
-                    {/* Small Stat Cards Section */}
-                    <Section>
-                        <div className="flex gap-4">
-                            {/* Quality Card */}
-                            <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
-                                <i className="fas fa-beer text-3xl text-amber-500 mb-2"></i>
-                                <div className="text-xl font-bold text-gray-900 dark:text-white">{avgQuality.toFixed(1)} / 5</div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1">Quality</div>
-                            </div>
-
-                            {/* Avg. Price Card */}
-                            <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
-                                <i className="fas fa-tag text-3xl text-green-500 mb-2"></i>
-                                {priceInfo.originalPrice ? (
-                                    <div>
-                                        <div className="text-xl font-bold text-gray-900 dark:text-white" title={priceInfo.originalCode}>{priceInfo.originalPrice}</div>
-                                        {priceInfo.convertedPrice && <div className="text-sm font-semibold text-gray-500 dark:text-gray-400" title={priceInfo.convertedCode}>{priceInfo.convertedPrice}</div>}
+                                <ScoreGauge score={localPub.pub_score} />
+                                {rank && (
+                                    <div className="mt-4 animate-fade-in-down">
+                                        <span className="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-sm font-bold px-4 py-2 rounded-full border border-amber-200 dark:border-amber-800/60">
+                                            <i className="fas fa-trophy mr-2"></i>
+                                            #{rank} Top Rated Pub on Stoutly
+                                        </span>
                                     </div>
-                                ) : (
-                                    <div className="text-xl font-bold text-gray-900 dark:text-white">{priceInfo.text}</div>
                                 )}
-                                <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1 flex items-center justify-center gap-1">
-                                    <span>Avg. Price</span>
-                                    {(isLondonNonDynamic || localPub.is_dynamic_price_area || localPub.area_identifier) && <i className="fas fa-hourglass-half text-xs"></i>}
-                                </div>
-                            </div>
-
-                            {/* Ratings Card */}
-                            <button
-                                onClick={handleScrollToRatings}
-                                className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
-                                aria-label={`Scroll to ${localPub.ratings.length} community ratings`}
-                            >
-                                <i className="fas fa-users text-3xl text-blue-500 mb-2"></i>
-                                <div className="text-xl font-bold text-gray-900 dark:text-white">{localPub.ratings.length}</div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1">Ratings</div>
-                            </button>
-                        </div>
-                    </Section>
-                </>
-            ) : (
-                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg text-center shadow-md">
-                     <p className="text-gray-700 dark:text-gray-300">No ratings yet for this pub.</p>
-                     <p className="text-sm text-gray-500 dark:text-gray-400">Be the first to add one!</p>
-                </div>
-            )}
-
-            <GuinnessZeroStatus />
-
-            <div className="text-center mt-2">
-                <button
-                    onClick={() => onOpenSuggestEditModal(localPub)}
-                    className="text-sm text-gray-500 dark:text-gray-400 hover:underline"
-                >
-                    <i className="fas fa-edit mr-1"></i>Suggest an edit
-                </button>
-            </div>
-
-            {renderYourRatingSection()}
-            
-            <PintGallery ratings={localPub.ratings} onViewImage={setImageToView} />
-
-            <Section title="Community Ratings" className="mt-4">
-                <div ref={ratingsListRef} className="space-y-3">
-                    {
-                        (() => {
-                            // We now show the user's own rating in this list.
-                            // We sort them to show the user's rating first, followed by the newest ratings.
-                            const sortedRatings = [...localPub.ratings].sort((a, b) => {
-                                if (existingUserRating) {
-                                    if (a.id === existingUserRating.id) return -1; // a comes first
-                                    if (b.id === existingUserRating.id) return 1;  // b comes first
-                                }
-                                // For all other ratings, sort by date (newest first)
-                                return new Date(b.created_at) - new Date(a.created_at);
-                            });
-
-                            if (sortedRatings.length > 0) {
-                                return sortedRatings.map(rating => (
-                                    <RatingCard 
-                                        key={rating.id}
-                                        rating={rating}
-                                        userLikes={userLikes}
-                                        onToggleLike={onToggleLike}
-                                        onViewProfile={onViewProfile}
-                                        onLoginRequest={onLoginRequest}
-                                        onViewImage={setImageToView}
-                                        onViewPub={null} // Already on the pub page
-                                        loggedInUserProfile={loggedInUserProfile}
-                                        comments={commentsByRating.get(rating.id)}
-                                        isCommentsLoading={isCommentsLoading}
-                                        onFetchComments={onFetchComments}
-                                        onAddComment={onAddComment}
-                                        onDeleteComment={onDeleteComment}
-                                        onReportComment={onReportComment}
-                                        onOpenShareRatingModal={onOpenShareRatingModal}
-                                        fallbackLocationData={localPub}
-                                    />
-                                ));
-                            } else {
-                                return (
-                                    <div className="text-center p-4 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                                        <p>No community ratings yet. Be the first!</p>
+                                {isCertified && (
+                                    <div className="mt-4 flex flex-col items-center animate-fade-in-down">
+                                        <CertifiedBadge certifiedSince={localPub.certified_since} className="w-10 h-10" />
+                                        <p className="font-bold text-green-600 dark:text-green-400 mt-2 text-sm">Stoutly Certified</p>
+                                        <button 
+                                            onClick={handleOpenCertifiedModal}
+                                            className="text-xs text-gray-500 dark:text-gray-400 hover:underline mt-1"
+                                        >
+                                            What is this?
+                                        </button>
                                     </div>
-                                );
-                            }
-                        })()
-                    }
+                                )}
+                            </div>
+                        </Section>
+
+                        {/* Small Stat Cards Section */}
+                        <Section>
+                            <div className="flex gap-4">
+                                {/* Quality Card */}
+                                <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
+                                    <i className="fas fa-beer text-3xl text-amber-500 mb-2"></i>
+                                    <div className="text-xl font-bold text-gray-900 dark:text-white">{avgQuality.toFixed(1)} / 5</div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1">Quality</div>
+                                </div>
+
+                                {/* Avg. Price Card */}
+                                <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
+                                    <i className="fas fa-tag text-3xl text-green-500 mb-2"></i>
+                                    {priceInfo.originalPrice ? (
+                                        <div>
+                                            <div className="text-xl font-bold text-gray-900 dark:text-white" title={priceInfo.originalCode}>{priceInfo.originalPrice}</div>
+                                            {priceInfo.convertedPrice && <div className="text-sm font-semibold text-gray-500 dark:text-gray-400" title={priceInfo.convertedCode}>{priceInfo.convertedPrice}</div>}
+                                        </div>
+                                    ) : (
+                                        <div className="text-xl font-bold text-gray-900 dark:text-white">{priceInfo.text}</div>
+                                    )}
+                                    <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1 flex items-center justify-center gap-1">
+                                        <span>Avg. Price</span>
+                                        {(isLondonNonDynamic || localPub.is_dynamic_price_area || localPub.area_identifier) && <i className="fas fa-hourglass-half text-xs"></i>}
+                                    </div>
+                                </div>
+
+                                {/* Ratings Card */}
+                                <button
+                                    onClick={handleScrollToRatings}
+                                    className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+                                    aria-label={`Scroll to ${localPub.ratings.length} community ratings`}
+                                >
+                                    <i className="fas fa-users text-3xl text-blue-500 mb-2"></i>
+                                    <div className="text-xl font-bold text-gray-900 dark:text-white">{localPub.ratings.length}</div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1">Ratings</div>
+                                </button>
+                            </div>
+                        </Section>
+                    </>
+                ) : (
+                    <div className="p-4 bg-white dark:bg-gray-800 rounded-lg text-center shadow-md">
+                        <p className="text-gray-700 dark:text-gray-300">No ratings yet for this pub.</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Be the first to add one!</p>
+                    </div>
+                )}
+
+                <GuinnessZeroStatus />
+
+                <div className="text-center mt-2">
+                    <button
+                        onClick={() => onOpenSuggestEditModal(localPub)}
+                        className="text-sm text-gray-500 dark:text-gray-400 hover:underline"
+                    >
+                        <i className="fas fa-edit mr-1"></i>Suggest an edit
+                    </button>
                 </div>
-            </Section>
+
+                {renderYourRatingSection()}
+                
+                <PintGallery ratings={localPub.ratings} onViewImage={setImageToView} />
+
+                <Section title="Community Ratings" className="mt-4">
+                    <div ref={ratingsListRef} className="space-y-3">
+                        {
+                            (() => {
+                                // We now show the user's own rating in this list.
+                                // We sort them to show the user's rating first, followed by the newest ratings.
+                                const sortedRatings = [...localPub.ratings].sort((a, b) => {
+                                    if (existingUserRating) {
+                                        if (a.id === existingUserRating.id) return -1; // a comes first
+                                        if (b.id === existingUserRating.id) return 1;  // b comes first
+                                    }
+                                    // For all other ratings, sort by updated date (newest first)
+                                    const dateA = new Date(a.updated_at || a.created_at);
+                                    const dateB = new Date(b.updated_at || b.created_at);
+                                    return dateB - dateA;
+                                });
+
+                                if (sortedRatings.length > 0) {
+                                    return sortedRatings.map(rating => (
+                                        <RatingCard 
+                                            key={rating.id}
+                                            rating={rating}
+                                            userLikes={userLikes}
+                                            onToggleLike={onToggleLike}
+                                            onViewProfile={onViewProfile}
+                                            onLoginRequest={onLoginRequest}
+                                            onViewImage={setImageToView}
+                                            onViewPub={null} // Already on the pub page
+                                            loggedInUserProfile={loggedInUserProfile}
+                                            comments={commentsByRating.get(rating.id)}
+                                            isCommentsLoading={isCommentsLoading}
+                                            onFetchComments={onFetchComments}
+                                            onAddComment={onAddComment}
+                                            onDeleteComment={onDeleteComment}
+                                            onReportComment={onReportComment}
+                                            onOpenShareRatingModal={onOpenShareRatingModal}
+                                            fallbackLocationData={localPub}
+                                            highlightedCommentId={rating.id === highlightedRatingId ? highlightedCommentId : null}
+                                        />
+                                    ));
+                                } else {
+                                    return (
+                                        <div className="text-center p-4 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                                            <p>No community ratings yet. Be the first!</p>
+                                        </div>
+                                    );
+                                }
+                            })()
+                        }
+                    </div>
+                </Section>
+            </div>
         </main>
     </div>
     </>

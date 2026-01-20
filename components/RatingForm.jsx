@@ -83,21 +83,27 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
     ];
   }, [currencySymbol, isLondon, tiers]);
 
+  // This effect resets the main form fields when the rating being edited changes.
   useEffect(() => {
-    // Pre-fill the form if an existing rating is provided
     setPrice(existingRating?.price || 0);
     setQuality(existingRating?.quality || 0);
     setPriceInput(existingRating?.exact_price?.toString() || '');
     setMessage(existingRating?.message || '');
     setIsPrivate(existingIsPrivate || false);
-    setGuinnessZeroStatus('unknown'); // Always reset this, as it's a one-time report per rating submission
+    setGuinnessZeroStatus('unknown');
+    setValidationError(null);
+  }, [existingRating, existingIsPrivate]);
+
+  // This effect specifically handles resetting the image state when the source image changes.
+  // This prevents the user's new image selection from being overwritten on unrelated re-renders.
+  useEffect(() => {
     setImagePreview(existingImageUrl || null);
     setImageFile(null);
     setImageWasRemoved(false);
     setImageToCrop(null);
     setIsCropperOpen(false);
-    setValidationError(null); // Reset validation error on prop change
-  }, [existingRating, existingImageUrl, existingIsPrivate]);
+  }, [existingImageUrl]);
+
 
   // Clear validation error once the form becomes valid
   useEffect(() => {
@@ -127,9 +133,8 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
       });
       reader.readAsDataURL(file);
     }
-     // Reset both inputs to allow re-selecting the same file
-    if (cameraInputRef.current) cameraInputRef.current.value = "";
-    if (galleryInputRef.current) galleryInputRef.current.value = "";
+    // Reset the input value to allow re-selecting the same file.
+    e.target.value = null;
   };
 
   const handleCropComplete = (croppedFile) => {

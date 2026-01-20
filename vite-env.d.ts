@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_STRIPE_PUBLISHABLE_KEY: string;
   readonly VITE_GEMINI_API_KEY: string;
   readonly VITE_EXCHANGE_RATE_API_KEY: string;
+  readonly VITE_MAPBOX_ACCESS_TOKEN: string;
 }
 
 interface ImportMeta {

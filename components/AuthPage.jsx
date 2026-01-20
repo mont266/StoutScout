@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabase.js';
 import Icon from './Icon.jsx';
@@ -352,7 +353,11 @@ const AuthPage = ({ onClose }) => {
         <div className="text-center">
             <i className="fas fa-paper-plane text-amber-500 text-4xl mb-4"></i>
             <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Check your email</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">{message}</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">{message}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 mb-6 bg-yellow-50 dark:bg-yellow-900/50 p-3 rounded-md border border-yellow-200 dark:border-yellow-700">
+                <i className="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+                If you don't see the email within a few minutes, please check your spam or junk folder.
+            </p>
             <button
                 onClick={() => { resetFormState(); setView('signIn'); }}
                 className="w-full bg-amber-500 text-black font-bold py-2 px-4 rounded-lg hover:bg-amber-400 transition-colors"

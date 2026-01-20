@@ -1,12 +1,16 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
 import RatingCard from './RatingCard.jsx';
+import PostCard from './PostCard.jsx';
 import ScrollToTopButton from './ScrollToTopButton.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
+import CreatePostInput from './CreatePostInput.jsx';
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10; // Used when filtering to a single content type
+const RATINGS_PER_PAGE_MIXED = 7;
+const POSTS_PER_PAGE_MIXED = 3;
+
 
 const filterOptions = [
     { label: 'Newest', sortBy: 'created_at', timePeriod: 'all' },
@@ -17,10 +21,16 @@ const filterOptions = [
     { label: 'Top All Time', sortBy: 'likes', timePeriod: 'all' },
 ];
 
+const contentFilterOptions = [
+    { id: 'all', label: 'All', icon: 'fa-stream' },
+    { id: 'ratings', label: 'Ratings', icon: 'fa-star' },
+    { id: 'posts', label: 'Posts', icon: 'fa-comments' },
+];
+
 const PULL_THRESHOLD = 80;
 
-const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, onViewPub, filter, onFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs, onSetAppHeaderVisible, onSetTabBarVisible }) => {
-    const [ratings, setRatings] = useState([]);
+const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, onViewPub, filter, onFilterChange, contentFilter, onContentFilterChange, postSubFilter, onPostSubFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs, onMobileScroll, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal }) => {
+    const [feedItems, setFeedItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [page, setPage] = useState(1);
@@ -35,9 +45,9 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     const containerRef = useRef(null);
     const [showScrollTop, setShowScrollTop] = useState(false);
     const isDesktop = useIsDesktop();
-
-    const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+    
     const lastScrollY = useRef(0);
+    const [isFilterPanelVisible, setIsFilterPanelVisible] = useState(true);
 
     const isRefreshing = loading && page === 1;
 
@@ -45,121 +55,172 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         return new Map((dbPubs || []).map(p => [p.id, p]));
     }, [dbPubs]);
 
-    const fetchRatings = useCallback(async (pageNum) => {
+    const fetchFeedItems = useCallback(async (pageNum) => {
         setLoading(true);
         setError(null);
-        if (pageNum === 1) trackEvent('view_community_feed', { filter });
+        if (pageNum === 1) trackEvent('view_community_feed', { filter, content_filter: contentFilter, post_sub_filter: postSubFilter });
+    
+       try {
+            let ratingsQuery = contentFilter !== 'posts'
+                ? supabase.from('ratings').select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer), pub:pub_id!inner(id, name, address, lat, lng, country_code, country_name)`).eq('is_private', false).eq('user.is_banned', false)
+                : null;
+            let postsQuery = contentFilter !== 'ratings'
+                ? supabase.from('posts').select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))`).eq('user.is_banned', false)
+                : null;
 
-        try {
-            const { data, error: rpcError } = await supabase.rpc('get_community_feed', {
-                page_number: pageNum,
-                page_size: PAGE_SIZE,
-                sort_by: filter.sortBy,
-                time_period: filter.timePeriod,
-            });
-
-            if (rpcError) throw rpcError;
-
-            let finalRatingsData = [];
-            if (data && data.length > 0) {
-                const ratingIds = data.map(r => r.rating_id);
-                
-                // Fetch actual comment rows to count them manually, ensuring accuracy
-                const { data: commentsData, error: commentsError } = await supabase
-                    .from('comments')
-                    .select('rating_id')
-                    .in('rating_id', ratingIds);
-
-                if (commentsError) {
-                    console.warn("Could not fetch fresh comment counts, using potentially stale data from feed.", commentsError);
-                    finalRatingsData = data;
-                } else {
-                    const counts = {};
-                    commentsData.forEach(c => {
-                        counts[c.rating_id] = (counts[c.rating_id] || 0) + 1;
-                    });
-
-                    // Merge correct counts into rating data
-                    finalRatingsData = data.map(r => ({
-                        ...r,
-                        comment_count: counts[r.rating_id] || 0
-                    }));
+            // Handle time period filter
+            if (filter.timePeriod !== 'all') {
+                const now = new Date();
+                let startDate;
+                switch (filter.timePeriod) {
+                    case '1d': startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); break;
+                    case '7d': startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
+                    case '1M': startDate = new Date(new Date().setMonth(new Date().getMonth() - 1)); break;
+                    case '1Y': startDate = new Date(new Date().setFullYear(new Date().getFullYear() - 1)); break;
                 }
+                if (startDate) {
+                    if (ratingsQuery) ratingsQuery = ratingsQuery.gte('created_at', startDate.toISOString());
+                    if (postsQuery) postsQuery = postsQuery.gte('created_at', startDate.toISOString());
+                }
+            }
+            
+            // Handle sorting
+            const sortOptions = { ascending: false, nullsLast: true };
+            if (ratingsQuery) ratingsQuery = ratingsQuery.order(filter.sortBy, sortOptions);
+            if (postsQuery) {
+                postsQuery = postsQuery.order(filter.sortBy, sortOptions);
+                if (postSubFilter === 'announcements') {
+                    postsQuery = postsQuery.eq('is_announcement', true);
+                }
+            }
+            
+            const from = (pageNum - 1);
+            const promises = [];
+
+            // Handle pagination
+            if (ratingsQuery) {
+                const pageSize = contentFilter === 'ratings' ? PAGE_SIZE : RATINGS_PER_PAGE_MIXED;
+                promises.push(ratingsQuery.range(from * pageSize, from * pageSize + pageSize - 1));
             } else {
-                finalRatingsData = data || [];
+                promises.push(Promise.resolve({ data: [], error: null }));
             }
 
-            const formattedData = finalRatingsData.map(r => ({
-                id: r.rating_id, created_at: r.created_at, quality: r.quality, price: r.price,
-                exact_price: r.exact_price, image_url: r.image_url, like_count: r.like_count,
-                comment_count: r.comment_count,
-                message: r.message,
-                pub_id: r.pub_id,
-                pub_name: r.pub_name, pub_address: r.pub_address,
-                pub_country_code: r.pub_country_code,
-                pub_country_name: r.pub_country_name,
-                pub_lat: r.pub_lat,
-                pub_lng: r.pub_lng,
-                user: { id: r.uploader_id, username: r.uploader_username, avatar_id: r.uploader_avatar_id, level: r.uploader_level }
-            }));
+            if (postsQuery) {
+                const pageSize = contentFilter === 'posts' ? PAGE_SIZE : POSTS_PER_PAGE_MIXED;
+                promises.push(postsQuery.range(from * pageSize, from * pageSize + pageSize - 1));
+            } else {
+                promises.push(Promise.resolve({ data: [], error: null }));
+            }
             
-            setRatings(prev => {
-                const combined = pageNum === 1 ? formattedData : [...prev, ...formattedData];
-                const uniqueRatingsMap = new Map(combined.map(item => [item.id, item]));
-                return Array.from(uniqueRatingsMap.values());
-            });
-            if (finalRatingsData.length < PAGE_SIZE) setHasMore(false);
+            const [ratingsResult, postsResult] = await Promise.all(promises);
+    
+            if (ratingsResult.error) throw ratingsResult.error;
+            if (postsResult.error) throw postsResult.error;
+    
+            const newRatings = (ratingsResult.data || []).map(r => ({ ...r, item_type: 'rating' }));
+            const newPosts = (postsResult.data || []).map(p => ({ ...p, item_type: 'post' }));
 
+            const combined = [...newRatings, ...newPosts];
+            
+            setFeedItems(prev => {
+                const allItems = pageNum === 1 ? combined : [...prev, ...combined];
+                const uniqueItems = Array.from(new Map(allItems.map(item => [`${item.item_type}-${item.id}`, item])).values());
+                // Re-sort everything by creation date after merging
+                return uniqueItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));;
+            });
+    
+            if (contentFilter === 'ratings') setHasMore(newRatings.length === PAGE_SIZE);
+            else if (contentFilter === 'posts') setHasMore(newPosts.length === PAGE_SIZE);
+            else setHasMore(newRatings.length === RATINGS_PER_PAGE_MIXED || newPosts.length === POSTS_PER_PAGE_MIXED);
+     
         } catch (err) {
             console.error("Error fetching community feed:", err);
             setError(err.message || 'Could not load the community feed.');
         } finally {
             setLoading(false);
         }
-    }, [filter]);
+    }, [filter, contentFilter, postSubFilter]);
     
+    // This is the local optimistic update for the like count in the feed.
+    // It then calls the parent `onToggleLike` to handle the database and global `userLikes` state.
     const handleFeedToggleLike = (ratingToToggle) => {
-        setRatings(currentRatings => 
-            currentRatings.map(rating => {
-                if (rating.id === ratingToToggle.id) {
+        setFeedItems(currentItems => 
+            currentItems.map(item => {
+                if (item.item_type === 'rating' && item.id === ratingToToggle.id) {
                     const isLiked = userLikes.has(ratingToToggle.id);
-                    const newLikeCount = isLiked 
-                        ? (rating.like_count || 1) - 1 
-                        : (rating.like_count || 0) + 1;
-                    return { ...rating, like_count: newLikeCount };
+                    const newLikeCount = isLiked
+                        ? Math.max(0, (item.like_count || 1) - 1)
+                        : (item.like_count || 0) + 1;
+                    return { ...item, like_count: newLikeCount };
                 }
-                return rating;
+                return item;
             })
         );
         onToggleLike(ratingToToggle);
     };
+    
+    const handleFeedTogglePostLike = (postToToggle) => {
+        setFeedItems(currentItems => 
+            currentItems.map(item => {
+                if (item.item_type === 'post' && item.id === postToToggle.id) {
+                    const isLiked = userPostLikes.has(postToToggle.id);
+                    const newLikeCount = isLiked
+                        ? Math.max(0, (item.like_count || 1) - 1)
+                        : (item.like_count || 0) + 1;
+                    return { ...item, like_count: newLikeCount };
+                }
+                return item;
+            })
+        );
+        onTogglePostLike(postToToggle);
+    };
 
-    const handleFeedAddComment = async (ratingId, content) => {
-        const newCommentsList = await onAddComment(ratingId, content);
-        if (newCommentsList) {
-            setRatings(currentRatings => 
-                currentRatings.map(rating => {
-                    if (rating.id === ratingId) {
-                        return { ...rating, comment_count: (rating.comment_count || 0) + 1 };
-                    }
-                    return rating;
-                })
-            );
-        }
+    const handleFeedAddComment = async (ratingId, content, parentId) => {
+        await onAddComment(ratingId, content, parentId);
+        setFeedItems(currentItems => 
+            currentItems.map(item => {
+                if (item.item_type === 'rating' && item.id === ratingId) {
+                    return { ...item, comment_count: (item.comment_count || 0) + 1 };
+                }
+                return item;
+            })
+        );
+    };
+    
+    const handleFeedAddPostComment = async (postId, content, parentId) => {
+        await onAddPostComment(postId, content, parentId);
+        setFeedItems(currentItems =>
+            currentItems.map(item => {
+                if (item.item_type === 'post' && item.id === postId) {
+                    return { ...item, comment_count: (item.comment_count || 0) + 1 };
+                }
+                return item;
+            })
+        );
     };
 
     const handleFeedDeleteComment = async (commentId, ratingId) => {
-        const newCommentsList = await onDeleteComment(commentId, ratingId);
-        if (newCommentsList !== null) {
-            setRatings(currentRatings => 
-                currentRatings.map(rating => {
-                    if (rating.id === ratingId) {
-                        return { ...rating, comment_count: Math.max(0, (rating.comment_count || 1) - 1) };
-                    }
-                    return rating;
-                })
-            );
-        }
+        await onDeleteComment(commentId, ratingId);
+        setFeedItems(currentItems => 
+            currentItems.map(item => {
+                if (item.item_type === 'rating' && item.id === ratingId) {
+                    return { ...item, comment_count: Math.max(0, (item.comment_count || 1) - 1) };
+                }
+                return item;
+            })
+        );
+    };
+
+    const handleFeedDeletePostComment = async (commentId, postId) => {
+        await onDeletePostComment(commentId, postId);
+         setFeedItems(currentItems => 
+            currentItems.map(item => {
+                if (item.item_type === 'post' && item.id === postId) {
+                    return { ...item, comment_count: Math.max(0, (item.comment_count || 1) - 1) };
+                }
+                return item;
+            })
+        );
     };
 
     const handleRefresh = useCallback((method = 'button') => {
@@ -167,15 +228,15 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         trackEvent('refresh_feed', { feed_type: 'community', method });
         setPage(1);
         setHasMore(true);
-        fetchRatings(1);
-    }, [fetchRatings, loading]);
+        fetchFeedItems(1);
+    }, [fetchFeedItems, loading]);
 
     useEffect(() => {
         setPage(1);
         setHasMore(true);
-        setRatings([]);
-        fetchRatings(1);
-    }, [fetchRatings]);
+        setFeedItems([]);
+        fetchFeedItems(1);
+    }, [fetchFeedItems, postSuccessCount]);
 
     useEffect(() => {
         const observer = new IntersectionObserver(
@@ -194,8 +255,8 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     }, [loading, hasMore]);
 
     useEffect(() => {
-        if (page > 1) fetchRatings(page);
-    }, [page, fetchRatings]);
+        if (page > 1) fetchFeedItems(page);
+    }, [page, fetchFeedItems]);
     
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -248,33 +309,33 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     const handleScroll = useCallback((e) => {
         const scrollContainer = e.target;
         if (!scrollContainer) return;
-
-        setShowScrollTop(scrollContainer.scrollTop > 400);
-
+    
         const currentScrollY = scrollContainer.scrollTop;
-        const SCROLL_BUFFER = 50;
-        const SCROLL_DELTA = 10;
+    
+        // Handle scroll-to-top button visibility
+        setShowScrollTop(currentScrollY > 400);
 
-        if (Math.abs(currentScrollY - lastScrollY.current) <= SCROLL_DELTA && currentScrollY !== 0) {
-            return;
+        // Handle filter panel visibility
+        const filterScrollThreshold = 50; 
+        if (currentScrollY > lastScrollY.current && currentScrollY > filterScrollThreshold) {
+            // Scrolling down
+            setIsFilterPanelVisible(false);
+        } else if (currentScrollY < lastScrollY.current) {
+            // Scrolling up
+            setIsFilterPanelVisible(true);
         }
-        
-        const shouldBeVisible = (currentScrollY < lastScrollY.current) || (currentScrollY < SCROLL_BUFFER);
-
-        // Control feed header and main app header on all screen sizes
-        setIsHeaderVisible(shouldBeVisible);
-        if (onSetAppHeaderVisible) onSetAppHeaderVisible(shouldBeVisible);
-
-        // Only control tab bar visibility on mobile
+    
+        // Handle mobile-specific nav shrink (existing logic)
         if (!isDesktop) {
-            if (onSetTabBarVisible) onSetTabBarVisible(shouldBeVisible);
-        } else {
-            // On desktop, ensure tab bar is always visible as requested
-            if (onSetTabBarVisible) onSetTabBarVisible(true);
+            const navScrollThreshold = 10;
+            const scrollingDown = currentScrollY > lastScrollY.current && currentScrollY > navScrollThreshold;
+            if (onMobileScroll) {
+                onMobileScroll(scrollingDown);
+            }
         }
         
         lastScrollY.current = currentScrollY <= 0 ? 0 : currentScrollY;
-    }, [isDesktop, onSetAppHeaderVisible, onSetTabBarVisible]);
+    }, [isDesktop, onMobileScroll]);
 
     const handleScrollToTop = () => {
         if (containerRef.current) {
@@ -302,18 +363,18 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                  <div className="text-center text-red-500 p-6 bg-red-500/10 rounded-lg m-4">
                     <i className="fas fa-exclamation-triangle fa-2x mb-2"></i>
                     <p>{error}</p>
-                    <button onClick={() => fetchRatings(1)} className="mt-4 px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600">Retry</button>
+                    <button onClick={() => fetchFeedItems(1)} className="mt-4 px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600">Retry</button>
                 </div>
             );
         }
 
-        if (ratings.length === 0 && !loading) {
+        if (feedItems.length === 0 && !loading) {
             return (
                 <div className="p-4 h-full flex items-center justify-center text-center">
                     <div className="text-gray-500 dark:text-gray-400">
                         <i className="fas fa-ghost fa-3x mb-4"></i>
                         <h2 className="text-xl font-bold">It's quiet in here...</h2>
-                        <p className="mt-2">No ratings match the current filter. Try a different one!</p>
+                        <p className="mt-2">No content matches the current filter. Try a different one!</p>
                     </div>
                 </div>
             );
@@ -321,29 +382,56 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
 
         return (
             <div className="p-2 sm:p-4 space-y-4">
-                {ratings.map(rating => {
-                    const fallbackPubData = dbPubsMap.get(rating.pub_id);
-                    return (
-                        <RatingCard 
-                            key={rating.id}
-                            rating={rating}
-                            userLikes={userLikes}
-                            onToggleLike={loggedInUserProfile ? handleFeedToggleLike : null}
-                            onViewProfile={onViewProfile}
-                            onLoginRequest={onLoginRequest}
-                            onViewImage={onViewImage}
-                            onViewPub={onViewPub}
-                            loggedInUserProfile={loggedInUserProfile}
-                            comments={commentsByRating.get(rating.id)}
-                            isCommentsLoading={isCommentsLoading}
-                            onFetchComments={onFetchComments}
-                            onAddComment={handleFeedAddComment}
-                            onDeleteComment={handleFeedDeleteComment}
-                            onReportComment={onReportComment}
-                            onOpenShareRatingModal={onOpenShareRatingModal}
-                            fallbackLocationData={fallbackPubData}
-                        />
-                    );
+                {feedItems.map(item => {
+                    if (item.item_type === 'rating') {
+                        const fallbackPubData = dbPubsMap.get(item.pub_id);
+                        return (
+                            <RatingCard 
+                                key={`rating-${item.id}`}
+                                rating={item}
+                                userLikes={userLikes}
+                                onToggleLike={loggedInUserProfile ? handleFeedToggleLike : null}
+                                onViewProfile={onViewProfile}
+                                onLoginRequest={onLoginRequest}
+                                onViewImage={onViewImage}
+                                onViewPub={onViewPub}
+                                loggedInUserProfile={loggedInUserProfile}
+                                comments={commentsByRating.get(item.id)}
+                                isCommentsLoading={isCommentsLoading}
+                                onFetchComments={onFetchComments}
+                                onAddComment={handleFeedAddComment}
+                                onDeleteComment={handleFeedDeleteComment}
+                                onReportComment={onReportComment}
+                                onOpenShareRatingModal={onOpenShareRatingModal}
+                                fallbackLocationData={fallbackPubData}
+                            />
+                        );
+                    }
+                    if (item.item_type === 'post') {
+                        return (
+                             <PostCard 
+                                key={`post-${item.id}`}
+                                post={item}
+                                userPostLikes={userPostLikes}
+                                onToggleLike={loggedInUserProfile ? handleFeedTogglePostLike : null}
+                                onViewProfile={onViewProfile}
+                                onLoginRequest={onLoginRequest}
+                                onViewPub={onViewPub}
+                                commentsByPost={commentsByPost}
+                                isPostCommentsLoading={isPostCommentsLoading}
+                                onFetchCommentsForPost={onFetchCommentsForPost}
+                                onAddPostComment={handleFeedAddPostComment}
+                                onDeletePostComment={handleFeedDeletePostComment}
+                                onReportComment={onReportComment}
+                                onOpenSharePostModal={onOpenSharePostModal}
+                                loggedInUserProfile={loggedInUserProfile}
+                                pubScores={pubScores}
+                                onEditPost={onEditPost}
+                                onDeletePost={onDeletePost}
+                            />
+                        )
+                    }
+                    return null;
                 })}
                 <div ref={loaderRef} className="h-10 text-center">
                     {loading && page > 1 && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400 mx-auto mt-4"></div>}
@@ -354,10 +442,101 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     };
 
     return (
-        <div className="h-full relative">
+        <div className="h-full relative flex flex-col">
+            <div className="sticky top-0 z-10 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
+                <div className={`hidable-feed-header ${!isFilterPanelVisible ? 'hide' : ''}`}>
+                    <div className="p-3">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Community</h2>
+                            <div className="flex items-center gap-2">
+                                <div ref={filterMenuRef} className="relative">
+                                    <button 
+                                        onClick={() => setIsFilterMenuOpen(p => !p)}
+                                        className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 px-3 py-1.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-700"
+                                        aria-haspopup="true"
+                                        aria-expanded={isFilterMenuOpen}
+                                    >
+                                        <i className="fas fa-filter text-xs"></i>
+                                        <span>{activeFilterLabel}</span>
+                                    </button>
+                                    {isFilterMenuOpen && (
+                                        <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fade-in-down z-20">
+                                            <ul>
+                                                {filterOptions.map(opt => (
+                                                    <li key={opt.label}>
+                                                        <button 
+                                                            onClick={() => handleFilterSelect({ sortBy: opt.sortBy, timePeriod: opt.timePeriod })}
+                                                            className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter.sortBy === opt.sortBy && filter.timePeriod === opt.timePeriod ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                                        >
+                                                            {opt.label}
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => handleRefresh('button')}
+                                    disabled={isRefreshing}
+                                    className="w-10 h-10 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700/50 hover:bg-gray-300 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+                                    aria-label="Refresh feed"
+                                >
+                                    <i className={`fas fa-sync-alt ${isRefreshing ? 'animate-spin' : ''}`}></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="px-3 pb-3 space-y-2">
+                        <div className="flex items-center p-1 bg-gray-200 dark:bg-gray-700/50 rounded-full space-x-1 content-filter-bar">
+                            {contentFilterOptions.map(opt => (
+                                <button 
+                                    key={opt.id}
+                                    onClick={() => onContentFilterChange(opt.id)}
+                                    className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center justify-center space-x-2 ${
+                                        contentFilter === opt.id
+                                        ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-600/50'
+                                    }`}
+                                >
+                                    <i className={`fas ${opt.icon} w-4 text-center`}></i>
+                                    <span className="tab-label">{opt.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        {contentFilter === 'posts' && (
+                            <div className="flex items-center p-1 bg-gray-200/50 dark:bg-gray-900/50 rounded-full space-x-1 animate-fade-in-down">
+                                <button 
+                                    onClick={() => onPostSubFilterChange('all')}
+                                    className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center justify-center space-x-2 ${
+                                        postSubFilter === 'all'
+                                        ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-600/50'
+                                    }`}
+                                >
+                                    <i className="fas fa-comments w-4 text-center"></i>
+                                    <span>All Posts</span>
+                                </button>
+                                <button 
+                                    onClick={() => onPostSubFilterChange('announcements')}
+                                    className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center justify-center space-x-2 ${
+                                        postSubFilter === 'announcements'
+                                        ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-600/50'
+                                    }`}
+                                >
+                                    <i className="fas fa-bullhorn w-4 text-center"></i>
+                                    <span>Announcements</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
             <div 
                 ref={containerRef}
-                className="bg-gray-100 dark:bg-gray-900 h-full overflow-y-auto overscroll-y-contain"
+                className="bg-gray-100 dark:bg-gray-900 flex-grow overflow-y-auto overscroll-y-contain"
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
@@ -384,52 +563,12 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                             )}
                         </div>
                     </div>
-                    <div>
-                        <div className={`feed-header sticky top-0 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-3 border-b border-gray-200 dark:border-gray-700 ${!isHeaderVisible ? 'hide-header' : ''}`}>
-                            <div className="flex justify-between items-center">
-                                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Community Feed</h2>
-                                <div className="flex items-center gap-2">
-                                    <div ref={filterMenuRef} className="relative">
-                                        <button 
-                                            onClick={() => setIsFilterMenuOpen(p => !p)}
-                                            className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 px-3 py-1.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-700"
-                                            aria-haspopup="true"
-                                            aria-expanded={isFilterMenuOpen}
-                                        >
-                                            <i className="fas fa-filter text-xs"></i>
-                                            <span>{activeFilterLabel}</span>
-                                        </button>
-                                        {isFilterMenuOpen && (
-                                            <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fade-in-down z-20">
-                                                <ul>
-                                                    {filterOptions.map(opt => (
-                                                        <li key={opt.label}>
-                                                            <button 
-                                                                onClick={() => handleFilterSelect({ sortBy: opt.sortBy, timePeriod: opt.timePeriod })}
-                                                                className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter.sortBy === opt.sortBy && filter.timePeriod === opt.timePeriod ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                                                            >
-                                                                {opt.label}
-                                                            </button>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <button
-                                        onClick={() => handleRefresh('button')}
-                                        disabled={loading && page === 1}
-                                        className="w-10 h-10 flex-shrink-0 text-lg rounded-full flex items-center justify-center transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-wait"
-                                        aria-label="Refresh feed"
-                                        title="Refresh feed"
-                                    >
-                                        <i className={`fas fa-sync-alt ${loading && page === 1 ? 'animate-spin' : ''}`}></i>
-                                    </button>
-                                </div>
-                            </div>
+                    {loggedInUserProfile && (
+                        <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
+                            <CreatePostInput userProfile={loggedInUserProfile} onClick={() => onOpenCreatePostModal({ origin: 'community_feed' })} />
                         </div>
-                        {renderContent()}
-                    </div>
+                    )}
+                    {renderContent()}
                 </div>
             </div>
             <ScrollToTopButton show={showScrollTop} onClick={handleScrollToTop} isDesktop={isDesktop} />

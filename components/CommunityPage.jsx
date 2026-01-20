@@ -9,10 +9,11 @@ import useIsDesktop from '../hooks/useIsDesktop.js';
 import ReportImageModal from './ReportImageModal.jsx';
 import { supabase } from '../supabase.js';
 
-const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, allRatings, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onDeleteNotification, onOpenShareRatingModal, dbPubs, onSetAppHeaderVisible, setAlertInfo }) => {
+const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onDeleteNotification, onOpenShareRatingModal, dbPubs, onMobileScroll, setAlertInfo, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, isNavShrunk, onEditPost, onDeletePost, onOpenSharePostModal }) => {
     const [imageToView, setImageToView] = useState(null);
     const [feedFilter, setFeedFilter] = useState({ sortBy: 'created_at', timePeriod: 'all' });
-    const [isTabBarVisible, setIsTabBarVisible] = useState(true);
+    const [contentFilter, setContentFilter] = useState('all');
+    const [postSubFilter, setPostSubFilter] = useState('all'); // 'all' or 'announcements'
     const isDesktop = useIsDesktop();
     const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
 
@@ -40,10 +41,19 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
         setReportModalInfo({ isOpen: false, rating: null });
     };
 
+    const handleContentFilterChange = (newFilter) => {
+        setContentFilter(newFilter);
+        if (newFilter !== 'posts') {
+            setPostSubFilter('all'); // Reset sub-filter
+        }
+    };
+
     const handleTabChange = (tab) => {
-        // Reset filter when switching tabs to ensure a fresh start
+        // Reset filters when switching tabs to ensure a fresh start
         if (tab !== activeSubTab) {
             setFeedFilter({ sortBy: 'created_at', timePeriod: 'all' });
+            setContentFilter('all');
+            setPostSubFilter('all'); // Also reset post sub-filter
         }
         onSubTabChange(tab);
         trackEvent('change_community_subtab', { sub_tab: tab });
@@ -77,7 +87,7 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
         const ratingForModal = { ...rating, uploaderName: rating.user.username };
         setImageToView(ratingForModal);
     }
-
+    
     return (
         <>
             {imageToView && (
@@ -89,9 +99,9 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                 />
             )}
             {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
-            <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white">
+            <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-white relative">
                 {/* Responsive Tab Bar */}
-                <div className={`community-tabs-container flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${(!isTabBarVisible && !isDesktop) ? 'hide' : ''}`}>
+                <div className={`community-tabs-container z-20 flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm`}>
                     <nav className="flex justify-around -mb-px">
                         {subTabs.map(tab => {
                             const isActive = tab.id === activeSubTab;
@@ -107,10 +117,10 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                                     aria-current={isActive ? 'page' : undefined}
                                     aria-label={tab.label}
                                 >
-                                    {/* Responsive content container */}
-                                    <div className="flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2 py-2">
-                                        <i className={`fas ${tab.icon} text-lg md:text-base`}></i>
-                                        <span className="text-xs md:text-sm font-semibold">{tab.label}</span>
+                                    {/* Responsive content container - reduced padding */}
+                                    <div className="tab-button-inner flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2 py-3">
+                                        <i className={`tab-icon fas ${tab.icon} text-lg md:text-base`}></i>
+                                        <span className="tab-label text-xs md:text-sm font-semibold">{tab.label}</span>
                                     </div>
 
                                     {tab.notificationCount > 0 && (
@@ -125,9 +135,85 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                 </div>
 
                 {/* Content Area */}
-                <main className="flex-grow overflow-hidden">
-                    {activeSubTab === 'community' && <CommunityFeed onViewProfile={(id) => onViewProfile(id, 'community')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} onOpenShareRatingModal={onOpenShareRatingModal} dbPubs={dbPubs} onSetAppHeaderVisible={onSetAppHeaderVisible} onSetTabBarVisible={setIsTabBarVisible} />}
-                    {activeSubTab === 'friends' && <FriendsFeed onViewProfile={(id) => onViewProfile(id, 'friends')} userLikes={userLikes} onToggleLike={onToggleLike} onLoginRequest={onLoginRequest} onViewImage={handleViewImage} userProfile={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} allRatings={allRatings} onViewPub={onViewPub} filter={feedFilter} onFilterChange={setFeedFilter} loggedInUserProfile={userProfile} commentsByRating={commentsByRating} isCommentsLoading={isCommentsLoading} onFetchComments={onFetchComments} onAddComment={onAddComment} onDeleteComment={onDeleteComment} onReportComment={onReportComment} onOpenShareRatingModal={onOpenShareRatingModal} dbPubs={dbPubs} onSetAppHeaderVisible={onSetAppHeaderVisible} onSetTabBarVisible={setIsTabBarVisible} />}
+                <main className="flex-grow min-h-0">
+                    {activeSubTab === 'community' && <CommunityFeed 
+                        onViewProfile={(id) => onViewProfile(id, 'community')}
+                        userLikes={userLikes}
+                        onToggleLike={onToggleLike}
+                        onLoginRequest={onLoginRequest}
+                        onViewImage={handleViewImage}
+                        onViewPub={onViewPub}
+                        filter={feedFilter}
+                        onFilterChange={setFeedFilter}
+                        contentFilter={contentFilter}
+                        onContentFilterChange={handleContentFilterChange}
+                        postSubFilter={postSubFilter}
+                        onPostSubFilterChange={setPostSubFilter}
+                        loggedInUserProfile={userProfile}
+                        commentsByRating={commentsByRating}
+                        isCommentsLoading={isCommentsLoading}
+                        onFetchComments={onFetchComments}
+                        onAddComment={onAddComment}
+                        onDeleteComment={onDeleteComment}
+                        onReportComment={onReportComment}
+                        onOpenShareRatingModal={onOpenShareRatingModal}
+                        onOpenSharePostModal={onOpenSharePostModal}
+                        dbPubs={dbPubs}
+                        onMobileScroll={onMobileScroll}
+                        onOpenCreatePostModal={onOpenCreatePostModal}
+                        userPostLikes={userPostLikes}
+                        onTogglePostLike={onTogglePostLike}
+                        postSuccessCount={postSuccessCount}
+                        commentsByPost={commentsByPost}
+                        isPostCommentsLoading={isPostCommentsLoading}
+                        onFetchCommentsForPost={onFetchCommentsForPost}
+                        onAddPostComment={onAddPostComment}
+                        onDeletePostComment={onDeletePostComment}
+                        pubScores={pubScores}
+                        onEditPost={onEditPost}
+                        onDeletePost={onDeletePost}
+                    />}
+                    {activeSubTab === 'friends' && <FriendsFeed 
+                        onViewProfile={(id) => onViewProfile(id, 'friends')}
+                        userLikes={userLikes}
+                        onToggleLike={onToggleLike}
+                        onLoginRequest={onLoginRequest}
+                        onViewImage={handleViewImage}
+                        userProfile={userProfile}
+                        friendships={friendships}
+                        onFriendRequest={onFriendRequest}
+                        onFriendAction={onFriendAction}
+                        onViewPub={onViewPub}
+                        filter={feedFilter}
+                        onFilterChange={setFeedFilter}
+                        contentFilter={contentFilter}
+                        onContentFilterChange={handleContentFilterChange}
+                        postSubFilter={postSubFilter}
+                        onPostSubFilterChange={setPostSubFilter}
+                        loggedInUserProfile={userProfile}
+                        commentsByRating={commentsByRating}
+                        isCommentsLoading={isCommentsLoading}
+                        onFetchComments={onFetchComments}
+                        onAddComment={onAddComment}
+                        onDeleteComment={onDeleteComment}
+                        onReportComment={onReportComment}
+                        onOpenShareRatingModal={onOpenShareRatingModal}
+                        onOpenSharePostModal={onOpenSharePostModal}
+                        dbPubs={dbPubs}
+                        onMobileScroll={onMobileScroll}
+                        onOpenCreatePostModal={onOpenCreatePostModal}
+                        userPostLikes={userPostLikes}
+                        onTogglePostLike={onTogglePostLike}
+                        postSuccessCount={postSuccessCount}
+                        commentsByPost={commentsByPost}
+                        isPostCommentsLoading={isPostCommentsLoading}
+                        onFetchCommentsForPost={onFetchCommentsForPost}
+                        onAddPostComment={onAddPostComment}
+                        onDeletePostComment={onDeletePostComment}
+                        pubScores={pubScores}
+                        onEditPost={onEditPost}
+                        onDeletePost={onDeletePost}
+                    />}
                     {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} />}
                     {activeSubTab === 'notifications' && <NotificationsPage notifications={notifications} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'notifications')} onDataRefresh={onDataRefresh} onViewPub={onViewPub} friendships={friendships} onDeleteNotification={onDeleteNotification} />}
                 </main>

@@ -17,6 +17,7 @@ import TrophyModal from './TrophyModal.jsx';
 import ProfileStatsView from './ProfileStatsView.jsx';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+import PostCard from './PostCard.jsx';
 
 // Action sheet modal for profile editing options
 const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername, onEditBio, onEditSocials, onOpenUpdateDetailsModal, userProfile }) => {
@@ -389,7 +390,7 @@ const hasMetConditions = (trophy, stats) => {
     return conditionChecked;
 };
 
-const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen }) => {
+const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen, userPostLikes, onTogglePostLike, onViewProfile }) => {
     const isDesktop = useIsDesktop();
     const [isBanning, setIsBanning] = useState(false);
     const [isUnbanning, setIsUnbanning] = useState(false);
@@ -440,12 +441,6 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         scrollContainer.addEventListener('scroll', handleScroll);
         return () => scrollContainer.removeEventListener('scroll', handleScroll);
     }, [isDesktop]);
-
-    useEffect(() => {
-        if (!canViewStats && activeTab === 'stats') {
-            setActiveTab('ratings');
-        }
-    }, [canViewStats, activeTab]);
 
     const userStatsForTrophies = useMemo(() => ({
         ratingsCount: userRatings.length,
@@ -676,6 +671,120 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         if (is_early_bird) return 'border-green-500';
         return 'border-amber-400';
     };
+    
+    const TabButton = ({ tabId, label, isActive, onClick }) => (
+        <button
+            onClick={onClick}
+            className={`flex-grow py-3 text-sm font-bold transition-colors border-b-4 ${
+                isActive
+                ? 'border-amber-500 text-amber-500 dark:text-amber-400'
+                : 'border-transparent text-gray-500 hover:border-gray-300 dark:hover:border-gray-600'
+            }`}
+            role="tab"
+            aria-selected={isActive}
+        >
+            {label}
+        </button>
+    );
+    
+    const RatingsList = () => {
+        const ratingsToShow = userRatings.slice(0, visibleRatingsCount);
+        const hasMoreRatings = userRatings.length > visibleRatingsCount;
+
+        if (ratingsToShow.length === 0) {
+            return (
+                <div className="text-center text-gray-500 dark:text-gray-400 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                    <p>No ratings submitted yet.</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="space-y-3">
+                {ratingsToShow.map((r) => {
+                    const currencyInfo = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
+                    return (
+                        <li key={r.id} className="list-none bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+                            <div className="p-3">
+                                <div className="flex justify-between items-center mb-2">
+                                    <button onClick={() => onViewPub({ id: r.pubId, name: r.pubName, address: r.pubAddress, location: r.pubLocation, country_code: r.pubCountryCode, country_name: r.pubCountryName })} className="font-bold text-gray-800 dark:text-white hover:underline truncate" disabled={!onViewPub}>
+                                        {r.pubName}
+                                    </button>
+                                     {isViewingOwnProfile && (
+                                        <button onClick={() => requestDeleteRating(r)} disabled={deletingRatingId === r.id} className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 w-8 h-8 flex items-center justify-center rounded-full transition-colors disabled:opacity-50">
+                                            <i className="fas fa-trash-alt"></i>
+                                        </button>
+                                     )}
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{r.pubAddress}</p>
+                                {r.rating.message && (
+                                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md border-l-4 border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
+                                        "{r.rating.message}"
+                                    </p>
+                                )}
+                                <div className="flex items-center space-x-4 mt-2">
+                                    <div className="flex items-center space-x-1 text-sm"><i className="fas fa-tag text-green-500/80"></i><StarRating rating={r.rating.price} color="text-green-400" /></div>
+                                    <div className="flex items-center space-x-1 text-sm"><i className="fas fa-beer text-amber-500/80"></i><StarRating rating={r.rating.quality} color="text-amber-400" /></div>
+                                </div>
+                                 {r.rating.exact_price && (
+                                    <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">
+                                        Paid: <span className="font-bold text-gray-700 dark:text-white">{currencyInfo.symbol}{r.rating.exact_price.toFixed(2)}</span>
+                                    </p>
+                                 )}
+                                {r.image_url && (
+                                    <div className="mt-2">
+                                        <button onClick={() => setImageToView({ ...r, user: userProfile, uploaderName: username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
+                                            <img src={r.image_url} alt="Pint of Guinness" className="w-24 h-24 object-cover" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-1 text-right">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(r.timestamp)}</span>
+                            </div>
+                        </li>
+                    );
+                })}
+                {hasMoreRatings && (
+                    <div className="mt-4">
+                        <button 
+                            onClick={() => setVisibleRatingsCount(prev => prev + 5)}
+                            className="w-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                        >
+                            Load More
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const PostsList = () => {
+        if (!userPosts || userPosts.length === 0) {
+            return (
+                <div className="text-center text-gray-500 dark:text-gray-400 p-4">
+                    <p>No posts yet.</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="space-y-3">
+                {userPosts.map(post => (
+                    <PostCard
+                        key={post.id}
+                        post={post}
+                        userPostLikes={userPostLikes}
+                        onToggleLike={onTogglePostLike}
+                        onViewProfile={onViewProfile}
+                        onLoginRequest={() => {}} // User is already logged in to see their own profile
+                        onViewPub={onViewPub}
+                        pubScores={pubScores}
+                    />
+                ))}
+            </div>
+        );
+    };
 
     const ModerationTools = () => (
         canModerate && (
@@ -777,89 +886,32 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
         )
     );
 
-    const TabButton = ({ tabId, label, isActive, onClick }) => (
-        <button
-            onClick={onClick}
-            className={`w-1/2 py-3 text-sm font-bold transition-colors border-b-4 ${
-                isActive
-                ? 'border-amber-500 text-amber-500 dark:text-amber-400'
-                : 'border-transparent text-gray-500 hover:border-gray-300 dark:hover:border-gray-600'
-            }`}
-            role="tab"
-            aria-selected={isActive}
-        >
-            {label}
-        </button>
-    );
-
-    const ratingsToShow = userRatings.slice(0, visibleRatingsCount);
-    const hasMoreRatings = userRatings.length > visibleRatingsCount;
-
-    const RatingsList = () => (
-        <div className="space-y-3">
-            {ratingsToShow.length === 0 ? (
-                <div className="text-center text-gray-500 dark:text-gray-400 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                    <p>No ratings submitted yet.</p>
-                </div>
-            ) : (
-                ratingsToShow.map((r) => {
-                    const currencyInfo = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
-                    return (
-                        <li key={r.id} className="list-none bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-                            <div className="p-3">
-                                <div className="flex justify-between items-center mb-2">
-                                    <button onClick={() => onViewPub({ id: r.pubId, name: r.pubName, address: r.pubAddress, location: r.pubLocation, country_code: r.pubCountryCode, country_name: r.pubCountryName })} className="font-bold text-gray-800 dark:text-white hover:underline truncate" disabled={!onViewPub}>
-                                        {r.pubName}
-                                    </button>
-                                     {isViewingOwnProfile && (
-                                        <button onClick={() => requestDeleteRating(r)} disabled={deletingRatingId === r.id} className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 w-8 h-8 flex items-center justify-center rounded-full transition-colors disabled:opacity-50">
-                                            <i className="fas fa-trash-alt"></i>
-                                        </button>
-                                     )}
-                                </div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{r.pubAddress}</p>
-                                {r.rating.message && (
-                                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md border-l-4 border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
-                                        "{r.rating.message}"
-                                    </p>
-                                )}
-                                <div className="flex items-center space-x-4 mt-2">
-                                    <div className="flex items-center space-x-1 text-sm"><i className="fas fa-tag text-green-500/80"></i><StarRating rating={r.rating.price} color="text-green-400" /></div>
-                                    <div className="flex items-center space-x-1 text-sm"><i className="fas fa-beer text-amber-500/80"></i><StarRating rating={r.rating.quality} color="text-amber-400" /></div>
-                                </div>
-                                 {r.rating.exact_price && (
-                                    <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">
-                                        Paid: <span className="font-bold text-gray-700 dark:text-white">{currencyInfo.symbol}{r.rating.exact_price.toFixed(2)}</span>
-                                    </p>
-                                 )}
-                                {r.image_url && (
-                                    <div className="mt-2">
-                                        <button onClick={() => setImageToView({ ...r, user: userProfile, uploaderName: username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
-                                            <img src={r.image_url} alt="Pint of Guinness" className="w-24 h-24 object-cover" />
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-1 text-right">
-                                <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(r.timestamp)}</span>
-                            </div>
-                        </li>
-                    );
-                })
-            )}
-            {hasMoreRatings && (
-                <div className="mt-4">
-                    <button 
-                        onClick={() => setVisibleRatingsCount(prev => prev + 5)}
-                        className="w-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                    >
-                        Load More
+    if (isDesktop && isStatsModalOpen) {
+        return (
+            <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900 overflow-hidden">
+                <header className="flex items-center p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-800">
+                    <button onClick={() => onSetIsStatsModalOpen(false)} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg transition-colors">
+                        <i className="fas fa-arrow-left"></i>
+                        <span className="font-semibold whitespace-nowrap">Back to Profile</span>
                     </button>
+                </header>
+                <div className="flex-grow overflow-y-auto">
+                    <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Profile Stats for {userProfile.username}</h2>
+                    </div>
+                    <ProfileStatsView
+                        userRatings={userRatings}
+                        onViewPub={onViewPub}
+                        rankData={rankData}
+                        userProfile={userProfile}
+                        levelRequirements={levelRequirements}
+                        pubScores={pubScores}
+                    />
                 </div>
-            )}
-        </div>
-    );
-    
+            </div>
+        );
+    }
+
     return (
     <>
         {isBanModalOpen && <BanUserModal username={username} onClose={() => setIsBanModalOpen(false)} onConfirm={handleBanUser} />}
@@ -924,9 +976,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                     {/* Buttons over Cover Photo */}
                     <div className="absolute top-4 left-4 z-10">{onBack && <button onClick={onBack} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Back"><i className="fas fa-arrow-left"></i></button>}</div>
                     <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-                        {!isDesktop && canViewStats && (
-                            <button onClick={() => onSetIsStatsModalOpen(true)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="View stats"><i className="fas fa-chart-bar"></i></button>
-                        )}
+                        {canViewStats && <button onClick={() => onSetIsStatsModalOpen(true)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="View stats"><i className="fas fa-chart-bar"></i></button>}
                         {isViewingOwnProfile ? (
                             <>
                                 <button onClick={() => onOpenShareProfileModal(userProfile)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Share profile"><i className="fas fa-share-alt"></i></button>
@@ -1022,7 +1072,7 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                         <>
                                             <div className="flex bg-white dark:bg-gray-800 rounded-t-xl shadow-md border-b border-gray-200 dark:border-gray-700">
                                                 <TabButton tabId="ratings" label={`Ratings (${userRatings.length})`} isActive={activeTab === 'ratings'} onClick={() => setActiveTab('ratings')} />
-                                                {canViewStats && <TabButton tabId="stats" label="Stats" isActive={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />}
+                                                <TabButton tabId="posts" label={`Posts (${userPosts.length})`} isActive={activeTab === 'posts'} onClick={() => setActiveTab('posts')} />
                                             </div>
                                             <div className="bg-white dark:bg-gray-800 rounded-b-xl shadow-md">
                                                 {activeTab === 'ratings' && (
@@ -1030,13 +1080,23 @@ const ProfilePage = ({ userProfile, userRatings, userTrophies, allTrophies, onVi
                                                         <RatingsList />
                                                     </div>
                                                 )}
-                                                {activeTab === 'stats' && canViewStats && <ProfileStatsView userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />}
+                                                {activeTab === 'posts' && (
+                                                    <div className="p-4">
+                                                        <PostsList />
+                                                    </div>
+                                                )}
                                             </div>
                                         </>
                                     ) : (
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Ratings</h2>
-                                            <RatingsList />
+                                        <div className="space-y-6">
+                                            <div>
+                                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Ratings ({userRatings.length})</h2>
+                                                <RatingsList />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Posts ({userPosts.length})</h2>
+                                                <PostsList />
+                                            </div>
                                         </div>
                                     )}
                                 </div>

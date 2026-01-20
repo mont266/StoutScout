@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const DURATION_MS = 7000;
 
@@ -12,14 +13,26 @@ const TrophyUnlockedPopup = ({ trophies, onClose }) => {
 
   const isMultiple = trophies.length > 1;
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[1500] animate-modal-fade-in"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[99999] animate-modal-fade-in"
+      onClick={onClose}
       aria-live="polite"
       role="alertdialog"
       aria-labelledby="trophy-modal-title"
     >
-      <div className="relative bg-gradient-to-br from-gray-900 to-black border-4 border-amber-500 rounded-2xl shadow-2xl p-6 max-w-sm w-full overflow-hidden">
+      <div
+        className="relative bg-gradient-to-br from-gray-900 to-black border-4 border-amber-500 rounded-2xl shadow-2xl p-6 max-w-sm w-full overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+            onClick={onClose}
+            className="absolute top-2 right-2 z-10 text-gray-400 hover:text-white transition-colors w-10 h-10 flex items-center justify-center rounded-full"
+            aria-label="Close"
+        >
+            <i className="fas fa-times fa-lg"></i>
+        </button>
+
         <h2 id="trophy-modal-title" className="text-3xl font-extrabold tracking-tight text-white uppercase drop-shadow-lg mb-4 text-center">
           {isMultiple ? 'Trophies Unlocked!' : 'Trophy Unlocked!'}
         </h2>
@@ -53,6 +66,11 @@ const TrophyUnlockedPopup = ({ trophies, onClose }) => {
       </div>
     </div>
   );
+
+  const modalRoot = document.getElementById('modal-root');
+  if (!modalRoot) return null;
+
+  return createPortal(modalContent, modalRoot);
 };
 
 export default TrophyUnlockedPopup;

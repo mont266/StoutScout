@@ -88,7 +88,7 @@ const contentPackageSchema = {
         },
         brand_safety_issue: {
             type: Type.BOOLEAN,
-            description: "Set to true if the user's comment contains any profanity, negativity, or other content that would be unsafe to re-post."
+            description: "Set to true if the user's comment OR the uploaded image contains any profanity, negativity, nudity, offensive material, or other content that would be unsafe to re-post."
         },
         instagram_post_options: {
             type: Type.ARRAY,

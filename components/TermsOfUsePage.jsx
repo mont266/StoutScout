@@ -20,7 +20,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const TermsOfUsePage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Terms of Use" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: November 21, 2025</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: January 20, 2026</p>
             <p>Welcome to Stoutly! These Terms of Use ("Terms") govern your access to and use of the Stoutly web application and any related services (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Description of Service</h2>
@@ -38,7 +38,7 @@ const TermsOfUsePage = ({ onBack }) => {
             <p>You agree not to use the Service to:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li>Post ratings that are not made in good faith, are intentionally misleading, or are based on anything other than your own personal experience.</li>
-                <li>Post, upload, or share any content (including your bio, comments, and photos) that is illegal, defamatory, obscene, pornographic, harassing, hateful, graphically violent, infringing on third-party intellectual property rights, or invasive of another's privacy.</li>
+                <li>Post, upload, or share any content (including your bio, comments, posts, and photos) that is illegal, defamatory, obscene, pornographic, harassing, hateful, graphically violent, infringing on third-party intellectual property rights, or invasive of another's privacy.</li>
                 <li>Upload a profile picture that is not your own likeness or an appropriate avatar, or that contains nudity, violence, hate speech, or infringes on third-party copyrights (e.g., a cartoon character you do not have rights to use).</li>
                 <li>Upload photographs that are not of the pint of Guinness you are rating, or that contain inappropriate subject matter.</li>
                 <li>Engage in "review bombing," spamming, or other malicious activities intended to manipulate ratings or harass other users.</li>
@@ -48,7 +48,7 @@ const TermsOfUsePage = ({ onBack }) => {
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">4. User-Generated Content</h2>
             <ul className="list-disc list-inside space-y-2 pl-4">
-                <li><strong>Your Content:</strong> You retain ownership of the content you submit to the Service, including your ratings, comments, reviews, bio, profile pictures, photographs, and other materials (collectively, "User Content").</li>
+                <li><strong>Your Content:</strong> You retain ownership of the content you submit to the Service, including your ratings, comments, reviews, bio, profile pictures, photographs, posts, and other materials (collectively, "User Content").</li>
                 <li><strong>License to Us:</strong> By submitting User Content, you grant Stoutly a worldwide, non-exclusive, royalty-free, perpetual license to use, analyze, process (including through automated or third-party systems), display, reproduce, modify (for formatting), and distribute your User Content in connection with operating and promoting the Service. This allows us to, for example, show your rating on the Service, include you on the leaderboard, and feature your content in promotional materials. We will always credit your username when doing so.</li>
                 <li><strong>Public Display:</strong> You understand and agree that your username, avatar, rank, ratings, and comments will be publicly visible to other users of the Service.</li>
                 <li><strong>Content Warranty:</strong> You represent and warrant that you own or have the necessary licenses, rights, consents, and permissions to publish the User Content you submit. You further agree that the User Content you submit will not contain third-party copyrighted material, or material that is subject to other third-party proprietary rights, unless you have permission from the rightful owner of the material.</li>
@@ -66,6 +66,7 @@ const TermsOfUsePage = ({ onBack }) => {
                 <li>Monitor, screen, or remove any User Content at our sole discretion, including comments, profile pictures, or photographs that we deem inappropriate or in violation of these Terms.</li>
                 <li>Suspend or permanently terminate your account for any reason, without notice, especially for violations of these Terms. Our decisions on moderation and termination are final.</li>
             </ul>
+            <p className="pt-2"><strong>Termination by You:</strong> You may terminate your account at any time by requesting deletion via the "Contact Us" form in the app's settings or by emailing us directly at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a>. We will process your request in accordance with our Privacy Policy.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Disclaimers</h2>
             <p>The Service is provided "AS IS" and "AS AVAILABLE" without warranties of any kind. We do not warrant that the information provided (including pub locations or average ratings) is accurate, complete, or reliable. You rely on any information available through the Service at your own risk.</p>

@@ -1,21 +1,53 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Avatar from './Avatar.jsx';
 import { formatTimeAgo, getRankData } from '../utils.js';
 import ConfirmationModal from './ConfirmationModal.jsx';
-import useIsDesktop from '../hooks/useIsDesktop.js';
 import { trackEvent } from '../analytics.js';
+import CommentContent from './CommentContent.jsx';
+import { supabase } from '../supabase.js';
+import CommentForm from './CommentForm.jsx';
 
-const MAX_COMMENT_LENGTH = 150;
-const MAX_SUBMIT_LENGTH = 500;
-
-const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, onAddComment, onDeleteComment, onReportComment, onLoginRequest, onViewProfile }) => {
-    const [newComment, setNewComment] = useState('');
+const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, onAddComment, onDeleteComment, onReportComment, onLoginRequest, onViewProfile, highlightedCommentId }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [confirmation, setConfirmation] = useState({ isOpen: false, onConfirm: null, message: '' });
+    const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [expandedComments, setExpandedComments] = useState(new Set());
     const [openMenuId, setOpenMenuId] = useState(null);
-    const textareaRef = useRef(null);
-    const isDesktop = useIsDesktop();
+    const [replyingTo, setReplyingTo] = useState(null); // { id: commentId, username: string }
+
+    const highlightedCommentRef = useRef(null);
+
+    // Tree structure for comments
+    const commentTree = useMemo(() => {
+        if (!comments) return [];
+        const commentsById = new Map();
+        const topLevelComments = [];
+
+        comments.forEach(comment => {
+            commentsById.set(comment.id, { ...comment, children: [] });
+        });
+
+        commentsById.forEach(comment => {
+            if (comment.parent_comment_id && commentsById.has(comment.parent_comment_id)) {
+                commentsById.get(comment.parent_comment_id).children.push(comment);
+            } else {
+                topLevelComments.push(comment);
+            }
+        });
+        return topLevelComments;
+    }, [comments]);
+    
+     useEffect(() => {
+        if (highlightedCommentId && highlightedCommentRef.current) {
+            setTimeout(() => {
+                highlightedCommentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                highlightedCommentRef.current.classList.add('highlight-comment');
+                setTimeout(() => {
+                    highlightedCommentRef.current?.classList.remove('highlight-comment');
+                }, 2500);
+            }, 100);
+        }
+    }, [highlightedCommentId, comments]);
+
 
     useEffect(() => {
         const handleClickOutside = () => setOpenMenuId(null);
@@ -23,41 +55,51 @@ const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, on
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
 
-    const handleCommentChange = (e) => {
-        setNewComment(e.target.value);
-    };
-    
-    const handleKeyDown = (e) => {
-        if (e.shiftKey && e.key === 'Enter' && !isSubmitting) {
-             e.preventDefault();
-             handleCommentSubmit(e);
-        }
-    };
+    const handleViewProfileByUsername = async (username) => {
+        if (!onViewProfile) return;
 
-    const toggleExpanded = (commentId) => {
-        setExpandedComments(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(commentId)) {
-                newSet.delete(commentId);
+        // Efficiently check if the mentioned user has also commented on this post
+        const userInThread = comments?.find(c => c.user && c.user.username.toLowerCase() === username.toLowerCase())?.user;
+
+        if (userInThread) {
+            onViewProfile(userInThread.id, 'comment_mention');
+            return;
+        }
+
+        // If not in the thread, query the DB
+        try {
+            trackEvent('fetch_profile_by_mention', { username });
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('username', username)
+                .single();
+
+            if (error) throw error;
+
+            if (data) {
+                onViewProfile(data.id, 'comment_mention');
             } else {
-                newSet.add(commentId);
-                trackEvent('expand_comment', { rating_id: ratingId, comment_id: commentId });
+                alert(`User "${username}" not found.`);
             }
-            return newSet;
-        });
+        } catch (err) {
+            console.error("Error fetching user by username:", err);
+            alert(`Could not fetch profile for "${username}".`);
+        }
     };
 
-    const handleCommentSubmit = async (e) => {
-        e.preventDefault();
-        if (!newComment.trim() || !currentUserProfile || isSubmitting) return;
-        
+    const handleCommentSubmit = async (content) => {
+        if (!currentUserProfile) return;
         setIsSubmitting(true);
-        await onAddComment(ratingId, newComment.trim());
-        setNewComment('');
-        
-        if(textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-        }
+        await onAddComment(ratingId, content);
+        setIsSubmitting(false);
+    };
+
+    const handleReplySubmit = async (content) => {
+        if (!currentUserProfile || !replyingTo) return;
+        setIsSubmitting(true);
+        await onAddComment(ratingId, content, replyingTo.id);
+        setReplyingTo(null);
         setIsSubmitting(false);
     };
 
@@ -65,7 +107,7 @@ const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, on
         setConfirmation({
             isOpen: true,
             title: "Delete Comment?",
-            message: "Are you sure you want to permanently delete this comment?",
+            message: "Are you sure you want to permanently delete this comment? This will also delete all replies to it.",
             onConfirm: () => {
                 onDeleteComment(commentId, ratingId);
                 setConfirmation({ isOpen: false });
@@ -74,109 +116,95 @@ const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, on
             confirmText: 'Delete',
         });
     };
-
-    const renderComment = (comment) => {
+    
+    const renderCommentNode = (comment, level = 0) => {
         const isOwnComment = currentUserProfile?.id === comment.user.id;
         const isDeveloper = currentUserProfile?.is_developer;
         const canReport = currentUserProfile && !isOwnComment;
-
         const showDelete = isOwnComment || isDeveloper;
-        const showReport = canReport;
-        const showMenu = showDelete || showReport;
-
-        const isExpanded = expandedComments.has(comment.id);
-        const isLong = comment.content.length > MAX_COMMENT_LENGTH;
-        const contentToShow = isLong && !isExpanded ? `${comment.content.substring(0, MAX_COMMENT_LENGTH)}...` : comment.content;
-        
+        const showMenu = showDelete || canReport;
         const rankData = comment.user.level ? getRankData(comment.user.level) : null;
-        
-        return (
-            <li key={comment.id} id={`comment-${comment.id}`} className="flex items-start space-x-3 py-3">
-                <Avatar avatarId={comment.user.avatar_id} className="w-8 h-8 flex-shrink-0" />
-                <div className="flex-grow min-w-0">
-                    <div className="flex items-center justify-between gap-x-2">
-                        <div className="flex items-center gap-x-2 min-w-0">
-                             <button
-                                onClick={() => onViewProfile(comment.user.id, 'comment_author')}
-                                className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate hover:underline"
-                                disabled={!onViewProfile}
-                            >
-                                {comment.user.username}
-                            </button>
-                            {comment.user.is_developer && (
-                                <div className="w-1.5 h-1.5 bg-amber-400 rounded-full flex-shrink-0" title="Developer"></div>
-                            )}
-                            {rankData && (
-                                <i className={`fas ${rankData.icon} text-xs text-amber-500 dark:text-amber-400`} title={rankData.name}></i>
-                            )}
-                        </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">{formatTimeAgo(new Date(comment.created_at).getTime())}</span>
-                    </div>
-                    
-                    <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words whitespace-pre-wrap">
-                        {contentToShow}
-                    </p>
 
-                    {isLong && (
-                        <button onClick={() => toggleExpanded(comment.id)} className="text-xs text-amber-600 dark:text-amber-400 font-semibold hover:underline mt-1">
-                            {isExpanded ? 'Show less' : 'Show more'}
-                        </button>
-                    )}
-                </div>
-                <div className="flex-shrink-0 relative">
-                    {showMenu && (
-                        <>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(openMenuId === comment.id ? null : comment.id);
-                                }}
-                                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 w-6 h-6 rounded-full flex items-center justify-center"
-                                aria-haspopup="true"
-                                aria-expanded={openMenuId === comment.id}
-                                aria-label="Comment options"
-                            >
-                                <i className="fas fa-ellipsis-h"></i>
-                            </button>
-                            <div
-                                role="menu"
-                                className={`absolute top-full right-0 mt-1 w-28 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-10 transition-all duration-150 ease-in-out transform ${
-                                    openMenuId === comment.id 
-                                    ? 'opacity-100 scale-100 pointer-events-auto' 
-                                    : 'opacity-0 scale-95 pointer-events-none'
-                                }`}
-                            >
-                                {showDelete && (
-                                    <button
-                                        role="menuitem"
-                                        onClick={() => confirmDelete(comment.id)}
-                                        className={`w-full text-left text-sm px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600 ${showReport ? 'rounded-t-md' : 'rounded-md'}`}
-                                    >
-                                        Delete
-                                    </button>
-                                )}
-                                {showReport && (
-                                    <button
-                                        role="menuitem"
-                                        onClick={() => onReportComment(comment)}
-                                        className={`w-full text-left text-sm px-3 py-1.5 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 ${showDelete ? 'rounded-b-md' : 'rounded-md'}`}
-                                    >
-                                        Report
-                                    </button>
+        return (
+            <div key={comment.id} ref={comment.id === highlightedCommentId ? highlightedCommentRef : null}>
+                <div className={`flex items-start space-x-3 py-3 ${level > 0 ? 'ml-6 sm:ml-10' : ''}`}>
+                    <Avatar avatarId={comment.user.avatar_id} className="w-8 h-8 flex-shrink-0" />
+                    <div className="flex-grow min-w-0">
+                        <div className="flex items-center justify-between gap-x-2">
+                             <div className="flex items-center gap-x-2 min-w-0">
+                                <button
+                                    onClick={() => onViewProfile(comment.user.id, 'comment_author')}
+                                    className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate hover:underline"
+                                    disabled={!onViewProfile}
+                                >
+                                    {comment.user.username}
+                                </button>
+                                {rankData && (
+                                    <i className={`fas ${rankData.icon} text-xs text-amber-500 dark:text-amber-400`} title={rankData.name}></i>
                                 )}
                             </div>
-                        </>
-                    )}
+                            <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">{formatTimeAgo(new Date(comment.created_at).getTime())}</span>
+                        </div>
+                        
+                        <CommentContent
+                            content={comment.content}
+                            onViewProfileByUsername={handleViewProfileByUsername}
+                        />
+
+                        <div className="mt-2">
+                            <button
+                                onClick={() => currentUserProfile ? setReplyingTo({ id: comment.id, username: comment.user.username }) : onLoginRequest()}
+                                className="text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400"
+                            >
+                                Reply
+                            </button>
+                        </div>
+                    </div>
+                     <div className="flex-shrink-0 relative">
+                        {showMenu && (
+                            <>
+                                <button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === comment.id ? null : comment.id); }}
+                                    className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 w-6 h-6 rounded-full flex items-center justify-center"
+                                    aria-haspopup="true" aria-expanded={openMenuId === comment.id} aria-label="Comment options">
+                                    <i className="fas fa-ellipsis-h"></i>
+                                </button>
+                                {openMenuId === comment.id && (
+                                    <div role="menu" className="absolute top-full right-0 mt-1 w-28 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                                        {showDelete && <button role="menuitem" onClick={() => confirmDelete(comment.id)} className={`w-full text-left text-sm px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600 ${canReport ? 'rounded-t-md' : 'rounded-md'}`}>Delete</button>}
+                                        {canReport && <button role="menuitem" onClick={() => onReportComment(comment)} className={`w-full text-left text-sm px-3 py-1.5 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 ${showDelete ? 'rounded-b-md' : 'rounded-md'}`}>Report</button>}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
                 </div>
-            </li>
-        );
+                {replyingTo?.id === comment.id && (
+                    <div className={`pl-6 sm:pl-10`}>
+                        <CommentForm
+                            currentUserProfile={currentUserProfile}
+                            isSubmitting={isSubmitting}
+                            onSubmit={handleReplySubmit}
+                            placeholder={`Replying to ${replyingTo.username}...`}
+                            initialValue={`@${replyingTo.username} `}
+                            onCancel={() => setReplyingTo(null)}
+                            autoFocus={true}
+                        />
+                    </div>
+                )}
+                {comment.children.length > 0 && (
+                    <div>
+                        {comment.children.map(reply => renderCommentNode(reply, level + 1))}
+                    </div>
+                )}
+            </div>
+        )
     };
 
     return (
         <div className="bg-gray-100 dark:bg-gray-900/50 p-3">
             {confirmation.isOpen && <ConfirmationModal {...confirmation} onClose={() => setConfirmation({isOpen: false})} />}
             
-            <ul className="divide-y divide-gray-200 dark:divide-gray-700/50">
+            <div className="divide-y divide-gray-200 dark:divide-gray-700/50">
                 {isLoading && !comments && (
                     <div className="space-y-3 py-3 animate-pulse">
                         {[...Array(2)].map((_, i) => (
@@ -190,43 +218,19 @@ const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, on
                         ))}
                     </div>
                 )}
-                {!isLoading && comments?.length === 0 && (
+                {!isLoading && commentTree.length === 0 && (
                     <p className="text-sm text-center text-gray-500 dark:text-gray-400 py-4">No comments yet. Be the first!</p>
                 )}
-                {comments?.map(renderComment)}
-            </ul>
+                {commentTree.map(comment => renderCommentNode(comment))}
+            </div>
             
-            <div className="relative mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50">
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50">
                 {currentUserProfile ? (
-                    <form onSubmit={handleCommentSubmit} className="flex items-start space-x-2">
-                        <Avatar avatarId={currentUserProfile.avatar_id} className="w-8 h-8 flex-shrink-0 mt-1" />
-                        <div className="flex-grow">
-                             <textarea
-                                ref={textareaRef}
-                                value={newComment}
-                                onChange={handleCommentChange}
-                                onKeyDown={handleKeyDown}
-                                placeholder={isDesktop ? "Add a comment... Shift+Enter to send" : "Add a comment..."}
-                                maxLength={MAX_SUBMIT_LENGTH}
-                                className="w-full px-3 py-1.5 bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
-                                rows="1"
-                                onInput={(e) => {
-                                    e.target.style.height = 'auto';
-                                    e.target.style.height = `${e.target.scrollHeight}px`;
-                                }}
-                            />
-                            <div className="text-xs text-gray-400 dark:text-gray-500 text-right mt-1">
-                                {newComment.length}/{MAX_SUBMIT_LENGTH}
-                            </div>
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={!newComment.trim() || isSubmitting}
-                            className="bg-amber-500 text-black font-bold py-1.5 px-3 rounded-lg hover:bg-amber-400 transition-colors disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed self-center h-8 w-10 flex items-center justify-center"
-                        >
-                            {isSubmitting ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-black"></div> : <i className="fas fa-paper-plane"></i>}
-                        </button>
-                    </form>
+                     <CommentForm
+                        currentUserProfile={currentUserProfile}
+                        isSubmitting={isSubmitting}
+                        onSubmit={handleCommentSubmit}
+                    />
                 ) : (
                     <div className="text-center">
                         <button onClick={onLoginRequest} className="text-sm font-semibold text-amber-600 dark:text-amber-400 hover:underline">

@@ -4,8 +4,14 @@ import StarRating from './StarRating.jsx';
 import { RANK_DETAILS } from '../constants.js';
 
 // A reusable card component for consistent styling
-const StatCard = ({ icon, title, children, className = '' }) => (
-    <div className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md ${className}`}>
+const StatCard = ({ icon, title, children, className = '', onClick }) => (
+    <div
+        onClick={onClick}
+        className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md ${onClick ? 'cursor-pointer transition-transform hover:scale-105' : ''} ${className}`}
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); } : undefined}
+    >
         <div className="flex items-center space-x-3 mb-2">
             <i className={`fas ${icon} text-amber-500 dark:text-amber-400 w-5 text-center`}></i>
             <h3 className="font-bold text-gray-800 dark:text-white">{title}</h3>
@@ -443,37 +449,38 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
                             {bestValuePints.map(pint => {
                                 const currency = getCurrencyInfo({ country_code: pint.pubCountryCode, country_name: pint.pubCountryName });
                                 return (
-                                    <button
-                                        key={pint.id}
-                                        onClick={() => onViewPub({
-                                            id: pint.pubId,
-                                            name: pint.pubName,
-                                            address: pint.pubAddress,
-                                            location: pint.pubLocation,
-                                            country_code: pint.pubCountryCode,
-                                            country_name: pint.pubCountryName
-                                        })}
-                                        className="flex-shrink-0 w-56 text-left focus:outline-none focus:ring-2 focus:ring-green-500 rounded-lg"
-                                    >
-                                        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-green-400/50 dark:border-green-500/50 h-full flex flex-col transition-transform hover:scale-105">
-                                            <div className="flex justify-between items-start">
-                                                <p className="font-bold text-base pr-8 truncate">{pint.pubName}</p>
-                                                <p className="font-bold text-xl text-green-500 dark:text-green-400">
-                                                    {currency.symbol}{pint.rating.exact_price.toFixed(2)}
-                                                </p>
+                                <button
+                                    key={pint.id}
+                                    onClick={() => onViewPub({
+                                        id: pint.pubId,
+                                        name: pint.pubName,
+                                        address: pint.pubAddress,
+                                        location: pint.pubLocation,
+                                        country_code: pint.pubCountryCode,
+                                        country_name: pint.pubCountryName
+                                    })}
+                                    className="flex-shrink-0 w-56 text-left focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg"
+                                >
+                                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-green-400/50 dark:border-green-500/50 h-full flex flex-col transition-transform hover:scale-105">
+                                        <p className="font-bold text-base pr-8 truncate">{pint.pubName}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{new Date(pint.timestamp).toLocaleDateString()}</p>
+                                        
+                                        <div className="mt-auto space-y-1 text-sm">
+                                            <div className="flex justify-between items-center">
+                                                <span className="font-semibold text-xs text-gray-600 dark:text-gray-300">Price Paid</span>
+                                                <span className="font-bold text-lg text-green-600 dark:text-green-400">{currency.symbol}{pint.rating.exact_price.toFixed(2)}</span>
                                             </div>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{new Date(pint.timestamp).toLocaleDateString()}</p>
-                                            <div className="mt-auto flex justify-between items-center text-sm">
+                                            <div className="flex justify-between items-center">
                                                 <span className="font-semibold text-xs text-gray-600 dark:text-gray-300">Quality</span>
                                                 <StarRating rating={pint.rating.quality} />
                                             </div>
                                         </div>
-                                    </button>
-                                );
-                            })}
+                                    </div>
+                                </button>
+                            )})}
                         </div>
                         {canScrollValue.right && (
-                            <button
+                             <button
                                 onClick={() => scroll(valueCarouselRef, 1)}
                                 className="absolute top-1/2 -translate-y-1/2 -right-2 z-10 w-8 h-8 rounded-full bg-white/50 dark:bg-black/50 backdrop-blur-sm text-gray-700 dark:text-white shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                 aria-label="Scroll right"
@@ -483,10 +490,9 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
                         )}
                     </div>
                 ) : (
-                    <p className="text-sm text-gray-500">No prices recorded yet.</p>
+                    <p className="text-sm text-gray-500">No ratings with exact prices yet.</p>
                 )}
             </StatCard>
-
         </div>
     );
 };

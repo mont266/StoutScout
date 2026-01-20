@@ -6,19 +6,15 @@
   html,
   body,
   #root {
-    @apply h-full;
+    @apply h-full w-full;
     /* This ensures a consistent height chain for the app to fill the viewport */
-  }
-
-  html {
-    /* Prevent horizontal scrollbars which can cause unwanted white space */
-    overflow-x: hidden;
+    position: fixed; /* Lock the viewport to prevent scrolling on the body */
+    overflow: hidden; /* Prevent the root elements themselves from scrolling */
+    overscroll-behavior: contain; /* Prevent "bounce" or "pull-to-refresh" */
   }
 
   body {
     @apply bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans antialiased;
-    /* Prevent the browser's native pull-to-refresh action */
-    overscroll-behavior-y: contain;
     /* Add padding for device notches and system UI (status bar, home indicator) */
     padding-top: env(safe-area-inset-top);
     padding-left: env(safe-area-inset-left);
@@ -33,29 +29,26 @@
   }
 
   /*
-    Adds a colored strip at the bottom for native Android to provide spacing
-    for the system navigation bar. This is needed because the webview does not
-    respect safe-area-insets reliably for the bottom navigation bar.
-    This is achieved using a flexbox pseudo-element (`::after`) within the
-    main container. This method contains the spacing *within* the viewport height,
-    preventing unwanted vertical scrolling.
+    Adds padding to the bottom of the tab bar on native Android devices
+    to prevent it from being obscured by the system navigation controls.
+    This replaces the previous `::after` pseudo-element approach.
   */
-  .native-android .mobile-layout-container::after {
-    content: '';
-    display: block;
-    height: 1rem; /* Creates the space at the bottom */
-    flex-shrink: 0;
-    background-color: #ffffff; /* Matches light mode Header/TabBar */
+  .native-android .main-tab-bar {
+    padding-bottom: 1.5rem;
   }
-
-  .dark.native-android .mobile-layout-container::after {
-    background-color: #1f2937; /* Matches dark mode Header/TabBar (gray-800) */
+  
+  /*
+    Adds extra padding to the bottom of the tab bar on native iOS devices
+    to prevent it from overlapping with the home indicator area.
+  */
+  .native-ios .main-tab-bar {
+    padding-bottom: 1rem;
   }
   
   /* New class to adjust scroll-to-top button on native Android */
   .native-android .scroll-to-top-android-fix {
-    /* bottom-24 is 6rem. Add 2rem for the android nav bar padding. 8rem is bottom-32. */
-    bottom: 8rem;
+    /* bottom-24 is 6rem. Add 1.5rem for the android nav bar padding. 7.5rem is bottom-30. */
+    bottom: 7.5rem;
   }
 
 
@@ -84,22 +77,58 @@
     100% { transform: rotate(90deg); }
   }
 
-  .app-header, .community-header, .feed-header {
+  .community-header {
     transition: transform 0.3s ease-in-out;
   }
-  .app-header.hide-header, .community-header.hide-header, .feed-header.hide-header {
+  .community-header.hide-header {
       transform: translateY(-100%);
   }
-
-  .community-tabs-container {
-    transition: all 0.3s ease-in-out;
-    max-height: 6rem; /* A safe large value */
-    overflow: hidden;
+  
+  .feed-header {
+    /* This is now sticky inside CommunityFeed.jsx */
   }
-  .community-tabs-container.hide {
-      max-height: 0;
-      border-bottom-width: 0;
-      opacity: 0;
+  
+  .create-post-container {
+    transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out, opacity 0.3s ease-in-out;
+    max-height: 10rem; /* A safe large value to not clip content */
+    overflow: hidden;
+    opacity: 1;
+  }
+  .create-post-container.hide {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+  }
+  
+  /* Hides the community/friends feed header on scroll */
+  .hidable-feed-header {
+    transition: max-height 0.3s ease-out, opacity 0.2s ease-out, margin-top 0.3s ease-out, padding-top 0.3s ease-out, padding-bottom 0.3s ease-out;
+    max-height: 20rem; /* A safe large value to contain all header parts */
+    overflow: hidden;
+    opacity: 1;
+  }
+  .hidable-feed-header.hide {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Styles for accordion transitions */
+  .accordion-content {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s ease-out, opacity 0.2s ease-out;
+    opacity: 0.5;
+  }
+  .accordion-content.expanded {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  .accordion-content > div {
+    overflow: hidden;
   }
 
   /* St. Paddy's Day Theme Overrides */
@@ -139,6 +168,59 @@
   .st-paddys-mode .text-amber-700 { color: #15803d; }
   .st-paddys-mode .dark\:text-amber-300 { color: #86efac; }
   .st-paddys-mode .border-amber-400 { border-color: var(--st-paddys-green-400); }
+
+  .st-paddys-mode .map-tiles-paddys {
+    filter: sepia(0.5) hue-rotate(80deg) saturate(1.2) contrast(0.9);
+  }
+
+  /* Custom styles for Mapbox Navigation Control */
+  .mapboxgl-ctrl-group {
+    @apply bg-white shadow-md rounded-md border border-gray-200;
+  }
+  .mapboxgl-ctrl-group button {
+    @apply bg-white text-gray-700 transition-colors;
+  }
+  .mapboxgl-ctrl-group button:hover {
+    @apply bg-gray-100;
+  }
+  .mapboxgl-ctrl-group button + button {
+    @apply border-t border-gray-200;
+  }
+
+  /* Dark mode overrides for Mapbox Navigation Control */
+  .dark .mapboxgl-ctrl-group {
+    @apply bg-gray-800 border-gray-700;
+  }
+  .dark .mapboxgl-ctrl-group button {
+    @apply bg-gray-800 text-gray-300;
+  }
+  .dark .mapboxgl-ctrl-group button:hover {
+    @apply bg-gray-700;
+  }
+  .dark .mapboxgl-ctrl-group button + button {
+    @apply border-t border-gray-700;
+  }
+  .dark .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon {
+    /* This filter converts the default dark gray icon (#333) to amber (#FBBF24) */
+    filter: brightness(0) saturate(100%) invert(80%) sepia(21%) saturate(3015%) hue-rotate(320deg) brightness(101%) contrast(96%);
+  }
+  .dark .mapboxgl-ctrl-compass-arrow {
+    /* In dark mode, the default compass arrow is hard to see.
+       This filter makes it a stoutly amber color. */
+    /* This filter converts the default black icon to amber (#FBBF24) */
+    filter: invert(82%) sepia(34%) saturate(5429%) hue-rotate(322deg) brightness(100%) contrast(96%);
+  }
+
+  /* Styles for map loading overlay */
+  .map-loading-overlay {
+    @apply absolute inset-0 z-[1000] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm transition-opacity duration-300;
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 }
 
 /* Show overlay and hide app only on mobile devices in landscape.
@@ -178,4 +260,30 @@
 
 .progress-bar-animate {
   animation: shrink-width linear forwards;
+}
+
+.animate-pulse-blue-dot {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: .5;
+  }
+}
+
+@media (max-width: 767px) {
+  .mapboxgl-ctrl-top-left .mapboxgl-ctrl {
+    margin-top: 4.5rem; /* Push controls down below filter bar on mobile */
+  }
+}
+
+/* Specific fix for Mapbox controls on native Android to ensure they are below the filter bar */
+.native-android .mapboxgl-ctrl-top-left .mapboxgl-ctrl {
+  margin-top: 6rem;
+}
+
+/* Specific fix for Mapbox controls on native iOS to ensure they sit below the header and filter bar */
+.native-ios .mapboxgl-ctrl-top-left .mapboxgl-ctrl {
+  margin-top: 6rem;
 }

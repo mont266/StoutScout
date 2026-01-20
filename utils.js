@@ -41,188 +41,79 @@ export const getRankData = (level) => {
 };
 
 /**
- * Extracts a UK-style postcode from an address string.
- * This is a simplified regex. It normalizes the postcode by removing spaces and uppercasing.
- * @param {string} address The address string.
- * @returns {string|null} The extracted, normalized postcode or null.
- */
-export const extractPostcode = (address) => {
-    if (!address) return null;
-    // This regex looks for patterns like SG1 1NA, SG11NA, W1A 0AX etc.
-    const postcodeMatch = address.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i);
-    return postcodeMatch ? postcodeMatch[0].toUpperCase().replace(/\s+/g, '') : null;
-};
-
-/**
  * Normalizes a pub name for easier comparison.
- * This is an aggressive normalization function.
- * It removes possessives, all punctuation, common pub-related words, and all whitespace.
+ * This function removes possessives, punctuation, common pub-related words, and all whitespace.
+ * If removing common words results in an empty string, it reverts to the name before their removal.
  * @param {string} name The original pub name.
  * @returns {string} The normalized name.
  */
 export const normalizePubNameForComparison = (name) => {
   if (!name) return '';
-  return name
+  // Step 1: Basic normalization (lowercase, remove possessives and special chars)
+  const initialNormalization = name
     .toLowerCase()
     .trim()
     .replace(/'s\b/g, '') // e.g., "kavanagh's" -> "kavanagh"
-    .replace(/[^a-z0-9\s]/g, '') // Remove all non-alphanumeric characters except spaces
-    // Remove a comprehensive list of common pub suffixes and articles
-    .replace(/\b(the|inn|tavern|pub|bar|arms|house|hotel|lounge)\b/g, '') 
-    .replace(/\s+/g, '');      // Remove all remaining whitespace
-};
+    .replace(/[^a-z0-9\s]/g, ''); // Remove all non-alphanumeric characters except spaces
 
+  // Step 2: Attempt to remove common pub words
+  const withoutCommonWords = initialNormalization.replace(/\b(the|inn|tavern|pub|bar|arms|house|hotel|lounge)\b/g, '');
 
-/**
- * Creates a clean, formatted address string from a Nominatim address object.
- * @param {object} addressObj The 'address' object from a Nominatim or Overpass API response.
- * @returns {string} A formatted address string.
- */
-export const formatNominatimAddress = (addressObj) => {
-    if (!addressObj) return 'Address unknown';
+  // Step 3: Remove all whitespace from the result
+  const final = withoutCommonWords.replace(/\s+/g, '');
 
-    const street = [addressObj.house_number, addressObj.road || addressObj.street].filter(Boolean).join(' ');
-    
-    // Build address from most specific to least specific, avoiding duplicates.
-    const parts = [
-        street,
-        addressObj.suburb || addressObj.neighbourhood || addressObj.village,
-        addressObj.town || addressObj.city_district || addressObj.city,
-        addressObj.county || addressObj.state,
-        addressObj.postcode,
-        addressObj.country
-    ];
-    
-    // Filter out undefined/null/empty parts, then remove duplicates.
-    const uniqueParts = [...new Set(parts.filter(p => p && String(p).trim() !== ''))];
-    
-    if (uniqueParts.length === 0) return 'Address unknown';
-
-    // Special handling to avoid ", Country" if it's the only other part.
-    if (uniqueParts.length === 2 && uniqueParts[1] === addressObj.country) {
-        return uniqueParts.join(', ');
-    }
-    
-    // Remove country if there are plenty of other details, which is common for local results.
-    if (uniqueParts.length > 3) {
-        const countryIndex = uniqueParts.indexOf(addressObj.country);
-        if (countryIndex > -1) {
-            uniqueParts.splice(countryIndex, 1);
-        }
-    }
-
-    return uniqueParts.join(', ');
+  // The previous logic was too aggressive, causing different pub names to be incorrectly flagged as duplicates.
+  // This new logic is safer: if removing common words results in a non-empty string, we use that.
+  // Otherwise, we fall back to the original name to avoid incorrect matches.
+  if (withoutCommonWords.trim().length > 0) {
+    return final;
+  }
+  
+  // Fallback for names like "The Pub" which would otherwise become empty.
+  return initialNormalization.replace(/\s+/g, '');
 };
 
 /**
- * Normalizes a result from the Nominatim API into the app's internal Pub object format.
- * @param {object} nominatimResult A single result object from the Nominatim API.
- * @returns {object} A pub object `{id, name, address, location, country_code, country_name}`.
+ * Normalizes a result from the Nominatim (OpenStreetMap) search API into the app's internal Pub object format.
+ * @param {object} nominatimResult A single result object from the Nominatim search API.
+ * @returns {object|null} A pub object `{id, name, address, location, ...}` or null if invalid.
  */
 export const normalizeNominatimResult = (nominatimResult) => {
-    const { osm_id, display_name, lat, lon, address } = nominatimResult;
-    
-    const name = display_name.split(',')[0];
-    
-    // First, try to build an address from the structured 'address' object.
-    let formattedAddress = formatNominatimAddress(address);
-    
-    // If the structured address is missing or too short (e.g., just "United Kingdom"),
-    // use the rest of the display_name as a more descriptive fallback.
-    if (formattedAddress === 'Address unknown' || formattedAddress.split(',').length < 2) {
-        const addressPartsFromDisplay = display_name.split(',').slice(1);
-        if (addressPartsFromDisplay.length > 0) {
-            formattedAddress = addressPartsFromDisplay.join(',').trim();
-        }
+    if (!nominatimResult || !nominatimResult.osm_id) {
+        return null;
     }
-
+    
+    // Prioritize specific name tags if they exist in the address object, which we get from `addressdetails=1`
+    const name = nominatimResult.address?.pub || 
+                 nominatimResult.address?.bar || 
+                 nominatimResult.address?.brewery ||
+                 // Fallback to parsing the full display_name
+                 nominatimResult.display_name.split(',')[0].trim();
+    
     return {
-        id: `osm-${osm_id}`,
+        id: `osm-${nominatimResult.osm_id}`,
         name: name,
-        // If all else fails, ensure we don't have an empty string.
-        address: formattedAddress || 'Address unknown',
-        // Add postcode, trying the structured object first, then falling back to parsing the name.
-        postcode: address?.postcode ? address.postcode.toUpperCase().replace(/\s+/g, '') : extractPostcode(display_name),
-        // Add country code and name for better data quality and stats
-        country_code: address?.country_code,
-        country_name: address?.country,
+        address: nominatimResult.display_name,
         location: {
-            lat: parseFloat(lat),
-            lng: parseFloat(lon),
+            lat: parseFloat(nominatimResult.lat),
+            lng: parseFloat(nominatimResult.lon),
         },
-    };
-};
-
-/**
- * Creates a clean, formatted address string from Overpass API address tags.
- * @param {object} tags The 'tags' object from an Overpass API response element.
- * @returns {string} A formatted address string.
- */
-export const formatOverpassAddress = (tags) => {
-    if (!tags) return 'Address unknown';
-    const streetAddress = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
-    const parts = [
-        streetAddress || tags['addr:road'],
-        tags['addr:suburb'],
-        tags['addr:city'],
-        tags['addr:county'],
-        tags['addr:postcode'],
-        tags['addr:country']
-    ];
-    const uniqueParts = [...new Set(parts.filter(p => p && p.trim() !== ''))];
-    if (uniqueParts.length === 0) return 'Address unknown';
-    return uniqueParts.join(', ');
-};
-
-/**
- * Normalizes a result from the Overpass API into the app's internal Pub object format.
- * @param {object} element A single result object from the Overpass API `elements` array.
- * @returns {object | null} A pub object, or null if it's invalid (e.g., no name).
- */
-export const normalizeOverpassResult = (element) => {
-    if (!element.tags || !element.tags.name) {
-        return null;
-    }
-
-    const { id, type, tags } = element;
-    const location = type === 'node' 
-        ? { lat: element.lat, lng: element.lon }
-        : { lat: element.center?.lat, lng: element.center?.lon };
-
-    // If a way or relation has no center point, we can't use it.
-    if (!location || location.lat === undefined || location.lng === undefined) {
-        return null;
-    }
-
-    const address = formatOverpassAddress(tags);
-
-    // Use the buggy `osm-${id}` format to maintain compatibility with existing pub IDs in the database.
-    const uniqueId = `osm-${id}`;
-
-    return {
-        id: uniqueId,
-        name: tags.name,
-        address: address,
-        postcode: tags['addr:postcode'] ? tags['addr:postcode'].toUpperCase().replace(/\s+/g, '') : null,
-        // Overpass `addr:country` is typically the 2-letter code
-        country_code: tags['addr:country'],
-        // We don't get the full country name reliably from Overpass
-        country_name: null, 
-        location: location,
+        country_code: nominatimResult.address?.country_code,
+        country_name: nominatimResult.address?.country,
     };
 };
 
 
 /**
- * Normalizes a result from the Nominatim /reverse endpoint into a clean address string.
- * @param {object} reverseGeocodeResult A single result object from the reverse geocode API.
+ * Normalizes a result from the Mapbox /reverse endpoint into a clean address string.
+ * @param {object} mapboxReverseGeocodeResult A single result object from the reverse geocode API's `features` array.
  * @returns {string} A formatted address string.
  */
-export const normalizeReverseGeocodeResult = (reverseGeocodeResult) => {
-    if (!reverseGeocodeResult?.address) return 'Address unknown';
-    // Use the existing robust address formatter
-    return formatNominatimAddress(reverseGeocodeResult.address);
+export const normalizeReverseGeocodeResult = (mapboxReverseGeocodeResult) => {
+    if (!mapboxReverseGeocodeResult?.place_name) return 'Address unknown';
+    return mapboxReverseGeocodeResult.place_name;
 };
+
 
 /**
  * Defines the approximate geographical bounding box for Greater London.

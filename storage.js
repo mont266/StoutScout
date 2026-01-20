@@ -1,5 +1,3 @@
-
-
 import { DEFAULT_RADIUS_MI, MILES_TO_METERS } from './constants.js';
 
 const SETTINGS_STORAGE_KEY = 'stoutly-settings';
@@ -14,6 +12,9 @@ export const loadSettings = () => {
     radius: DEFAULT_RADIUS_MI * MILES_TO_METERS,
     theme: 'dark',
     developerMode: false,
+    isShopEnabled: false,
+    showSearchRadius: true,
+    showSearchOrigin: false,
   };
 
   try {

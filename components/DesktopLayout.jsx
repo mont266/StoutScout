@@ -25,75 +25,99 @@ import MapSearchBar from './MapSearchBar.jsx';
 import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import SocialContentHub from './SocialContentHub.jsx';
+import ActiveCrawlTracker from './ActiveCrawlTracker.jsx';
+import ShopPage from './ShopPage.jsx';
 
 const DesktopLayout = (props) => {
     const {
+        isDesktop,
         isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
-        activeTab, handleTabChange, locationError, settings, filter, handleFilterChange,
+        activeTab, handleTabChange, locationError, settings, handleSettingsChange, filter, handleFilterChange,
         filterGuinnessZero, onFilterGuinnessZeroChange,
-        handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
-        handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, handleNominatimResults, handleMapMove,
-        refreshTrigger, handleFindCurrentPub, getDistance,
-        getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
-        profilePage, session, userProfile, handleViewProfile,
-        handleSettingsChange, handleLogout,
+        handleRefresh, isRefreshing, isInitialDataLoading, sortedPubs, userLocation, mapCenter, searchOrigin,
+        handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, highlightedPostId,
+        handleMapMove,
+        handleFindCurrentPub, getDistance,
+        getAverageRating, resultsAreCapped,
+        profilePage, session, userProfile, onLogout,
         selectedPub, existingUserRatingForSelectedPub, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
-        handleUpdateAvatar, viewedProfile, legalPageView, handleViewLegal, handleDataRefresh,
-        installPromptEvent, setInstallPromptEvent, setIsIosInstallModalOpen,
+        handleUpdateAvatar, viewedProfile, handleViewProfile, legalPageView, handleViewLegal, handleDataRefresh,
+        installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
         showSearchAreaButton, handleSearchThisArea,
         searchOnNextMoveEnd, handleSearchAfterMove,
-        handleAddPubClick, pubPlacementState, finalPlacementLocation, isConfirmingLocation,
+        pubPlacementState, finalPlacementLocation, isConfirmingLocation,
         handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
         handleFindPlace,
+        onPubSelected,
+        searchRadius,
+        showSearchRadius,
+        showSearchOrigin,
         levelRequirements,
         locationPermissionStatus, onRequestPermission,
-        mapTileRefreshKey,
-        // Community props
-        CommunityPage, friendships, userLikes, onToggleLike, onFriendRequest, handleFriendAction, allRatings, communitySubTab, setCommunitySubTab,
-        // Friends List props
+        CommunityPage,
+        friendships, userLikes, onToggleLike, onFriendRequest, onFriendAction,
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
         deleteConfirmationInfo,
-        // Stats props
-        ShopPage,
         settingsSubView, handleViewAdminPage,
         onOpenScoreExplanation,
-        // "Suggest Edit" handlers
+        isPubScoreModalOpen, onSetIsPubScoreModalOpen,
         onOpenSuggestEditModal,
         unreadNotificationsCount,
-        // Comments and notifications
         notifications, onMarkNotificationsAsRead, onDeleteNotification,
         commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment,
+        commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment,
         reportCommentInfo, onCloseReportCommentModal, onSubmitReportComment,
-        // Moderation
         reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
         userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote,
-        setAlertInfo,
         showAllDbPubs, onToggleShowAllDbPubs,
-        onOpenShareModal, onOpenShareRatingModal,
+        onOpenShareModal,
+        onOpenShareRatingModal,
+        onOpenSharePostModal,
         scrollToSection, onScrollComplete,
-        setConfettiState,
-        // Password change
+        confettiState, setConfettiState,
         isChangingPassword, handleChangePassword,
-        userTrophies,
-        allTrophies,
+        userTrophies, allTrophies,
         dbPubs,
-        isBackfilling, onBackfillCountryData,
+        onViewSocialHub,
         geocodingPubIds,
-        isDesktopSidebarCollapsed,
-        setIsDesktopSidebarCollapsed,
-        // Event Mode Toggles
-        systemFlags,
-        localStPaddysOverride,
-        onToggleGlobalStPaddysMode,
-        onToggleLocalStPaddysMode,
+        isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed,
         isStPaddysModeActive,
+        top10PubIds,
+        systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode,
+        isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner,
+        PubCrawlPage,
+        activeCrawl, onStartCrawl, onEndCrawl, onToggleCrawlStop, onReorderStops,
+        pubScores,
+        onEnterCrawlMode,
+        handleAddPubClick,
+        isBackfilling, onBackfillCountryData,
+        onTestTrophyPopup,
+        onTestDonationPopup,
+        mapRef, onMapLoad,
+        communitySubTab, setCommunitySubTab,
+        isAppHeaderVisible, onMobileScroll, isNavShrunk,
+        // Changelog handlers
+        hasUnreadChangelog,
+        onViewChangelog,
+        onManageChangelog,
+        // Post handlers
+        isCreatePostModalOpen,
+        createPostModalOrigin,
+        onOpenCreatePostModal,
+        postToEdit,
+        onEditPost,
+        onDeletePost,
+        userPostLikes,
+        onTogglePostLike,
+        postSuccessCount,
+        panelHeight, setPanelHeight, COLLAPSED_PANEL_HEIGHT,
+        handleDonationSuccess,
     } = props;
     
-    const isInitialDataLoading = !isDbPubsLoaded || !initialSearchComplete;
     const isSocialHubFullScreen = activeTab === 'settings' && settingsSubView === 'social';
 
     const renderContentPanel = () => {
@@ -106,7 +130,7 @@ const DesktopLayout = (props) => {
                     isLoading={isFetchingFriendsList}
                     onBack={() => handleBackFromFriendsList()}
                     onViewProfile={handleViewProfile}
-                    onFriendAction={handleFriendAction}
+                    onFriendAction={onFriendAction}
                 />
             );
         }
@@ -154,7 +178,8 @@ const DesktopLayout = (props) => {
                         onClearGuinnessZeroVote={onClearGuinnessZeroVote}
                         onOpenShareModal={onOpenShareModal}
                         onOpenShareRatingModal={onOpenShareRatingModal}
-                        setAlertInfo={setAlertInfo}
+                        setAlertInfo={props.setAlertInfo}
+                        top10PubIds={top10PubIds}
                     />
                 );
             }
@@ -164,7 +189,7 @@ const DesktopLayout = (props) => {
                         <MapSearchBar
                             onPlaceSelected={handleFindPlace}
                             userProfile={userProfile}
-                            onPubSelected={handleSelectPub}
+                            onPubSelected={onPubSelected}
                         />
                     </div>
                     <FilterControls
@@ -193,12 +218,10 @@ const DesktopLayout = (props) => {
                             getAverageRating={getAverageRating}
                             getDistance={(loc) => getDistance(loc, searchOrigin)}
                             distanceUnit={settings.unit}
-                            isExpanded={true}
-                            showToggleHeader={false}
-                            onToggle={() => {}}
                             resultsAreCapped={resultsAreCapped}
                             searchRadius={settings.radius}
-                            isLoading={isInitialDataLoading || isRefreshing}
+                            isInitialLoading={isInitialDataLoading}
+                            isRefreshing={isRefreshing}
                             onOpenScoreExplanation={onOpenScoreExplanation}
                             geocodingPubIds={geocodingPubIds}
                         />
@@ -229,11 +252,10 @@ const DesktopLayout = (props) => {
                     onViewProfile={handleViewProfile}
                     friendships={friendships}
                     onFriendRequest={onFriendRequest}
-                    onFriendAction={handleFriendAction}
+                    onFriendAction={onFriendAction}
                     userLikes={userLikes}
                     onToggleLike={onToggleLike}
                     onLoginRequest={() => setIsAuthOpen(true)}
-                    allRatings={allRatings}
                     onDataRefresh={handleDataRefresh}
                     activeSubTab={communitySubTab}
                     onSubTabChange={setCommunitySubTab}
@@ -248,16 +270,29 @@ const DesktopLayout = (props) => {
                     onAddComment={onAddComment}
                     onDeleteComment={onDeleteComment}
                     onReportComment={onReportComment}
+                    commentsByPost={commentsByPost}
+                    isPostCommentsLoading={isPostCommentsLoading}
+                    onFetchCommentsForPost={onFetchCommentsForPost}
+                    onAddPostComment={onAddPostComment}
+                    onDeletePostComment={onDeletePostComment}
                     onOpenShareRatingModal={onOpenShareRatingModal}
+                    onOpenSharePostModal={onOpenSharePostModal}
                     dbPubs={dbPubs}
-                    setAlertInfo={setAlertInfo}
+                    setAlertInfo={props.setAlertInfo}
+                    onOpenCreatePostModal={onOpenCreatePostModal}
+                    userPostLikes={userPostLikes}
+                    onTogglePostLike={onTogglePostLike}
+                    postSuccessCount={postSuccessCount}
+                    pubScores={pubScores}
+                    onEditPost={onEditPost}
+                    onDeletePost={onDeletePost}
                 />
             );
         }
 
         if (activeTab === 'settings') {
             if (settingsSubView === 'moderation') {
-                return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} />;
+                return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} onAdminDeleteComment={onAdminDeleteComment} />;
             }
             if (settingsSubView === 'social') {
                 return <SocialContentHub onBack={() => handleViewAdminPage(null)} userProfile={userProfile} />;
@@ -276,16 +311,16 @@ const DesktopLayout = (props) => {
                             userProfile={userProfile} 
                             session={session}
                             onViewProfile={handleViewProfile}
-                            onLogout={handleLogout}
+                            onLogout={onLogout}
                             onViewLegal={handleViewLegal}
                             onViewModeration={() => handleViewAdminPage('moderation')}
-                            onViewSocialHub={() => handleViewAdminPage('social')}
-                            onDataRefresh={handleDataRefresh}
+                            onViewSocialHub={onViewSocialHub}
+                            onDonationSuccess={handleDonationSuccess}
                             installPromptEvent={installPromptEvent}
                             setInstallPromptEvent={setInstallPromptEvent}
                             onShowIosInstall={() => setIsIosInstallModalOpen(true)}
                             onMarketingConsentChange={handleMarketingConsentChange}
-                            setAlertInfo={setAlertInfo}
+                            setAlertInfo={props.setAlertInfo}
                             showAllDbPubs={showAllDbPubs}
                             onToggleShowAllDbPubs={onToggleShowAllDbPubs}
                             onLoginRequest={() => setIsAuthOpen(true)}
@@ -302,6 +337,13 @@ const DesktopLayout = (props) => {
                             localStPaddysOverride={localStPaddysOverride}
                             onToggleGlobalStPaddysMode={onToggleGlobalStPaddysMode}
                             onToggleLocalStPaddysMode={onToggleLocalStPaddysMode}
+                            isPubCrawlPlannerEnabled={isPubCrawlPlannerEnabled}
+                            onTogglePubCrawlPlanner={onTogglePubCrawlPlanner}
+                            onTestTrophyPopup={onTestTrophyPopup}
+                            onTestDonationPopup={onTestDonationPopup}
+                            onViewChangelog={onViewChangelog}
+                            onManageChangelog={onManageChangelog}
+                            hasUnreadChangelog={hasUnreadChangelog}
                         />
                     </div>
                 </div>
@@ -311,19 +353,20 @@ const DesktopLayout = (props) => {
         return null;
     };
     
-    const isFullScreenTab = ['moderation', 'profile', 'shop'].includes(activeTab) || (activeTab === 'settings' && !!settingsSubView);
+    const isFullScreenTab = ['moderation', 'profile', 'shop', 'pub_crawl'].includes(activeTab) || (activeTab === 'settings' && !!settingsSubView);
 
     return (
         <div className="w-full h-dvh flex">
             <DesktopNav
                 activeTab={activeTab}
                 onTabChange={handleTabChange}
-                onLogout={handleLogout}
+                onLogout={onLogout}
                 userProfile={userProfile}
                 levelRequirements={levelRequirements}
                 onLoginRequest={() => setIsAuthOpen(true)}
                 unreadNotificationsCount={unreadNotificationsCount}
                 settings={settings}
+                isPubCrawlPlannerEnabled={isPubCrawlPlannerEnabled}
             />
 
             {/* Main Content Area */}
@@ -346,13 +389,20 @@ const DesktopLayout = (props) => {
                             >
                                 <i className={`fas ${isDesktopSidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'} text-gray-600 dark:text-gray-300`}></i>
                             </button>
+                            {activeCrawl && (
+                                <ActiveCrawlTracker
+                                    activeCrawl={activeCrawl}
+                                    onEnterCrawlMode={onEnterCrawlMode}
+                                    onEndCrawl={onEndCrawl}
+                                />
+                            )}
                             <MapComponent
                                 pubs={sortedPubs} userLocation={userLocation}
                                 center={mapCenter}
                                 onSelectPub={handleSelectPub} selectedPubId={selectedPubId}
-                                onNominatimResults={handleNominatimResults} theme={settings.theme}
+                                theme={settings.theme}
                                 onMapMove={handleMapMove}
-                                refreshTrigger={refreshTrigger}
+                                onMapLoad={onMapLoad}
                                 showSearchAreaButton={showSearchAreaButton}
                                 onSearchThisArea={handleSearchThisArea}
                                 searchOnNextMoveEnd={searchOnNextMoveEnd}
@@ -361,11 +411,13 @@ const DesktopLayout = (props) => {
                                 finalPlacementLocation={finalPlacementLocation}
                                 onPlacementPinMove={handlePlacementPinMove}
                                 isDesktop={props.isDesktop}
-                                mapTileRefreshKey={mapTileRefreshKey}
                                 searchOrigin={searchOrigin}
-                                radius={settings.radius}
                                 isSidebarCollapsed={isDesktopSidebarCollapsed}
                                 isStPaddysModeActive={isStPaddysModeActive}
+                                searchRadius={searchRadius}
+                                showSearchRadius={showSearchRadius}
+                                showSearchOrigin={showSearchOrigin}
+                                isRefreshing={isRefreshing}
                             />
                             {(locationError && locationPermissionStatus !== 'denied') && 
                                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
@@ -395,6 +447,7 @@ const DesktopLayout = (props) => {
                             reportedComments={reportedComments} 
                             onFetchReportedComments={onFetchReportedComments} 
                             onResolveCommentReport={onResolveCommentReport} 
+                            onAdminDeleteComment={onAdminDeleteComment}
                         />
                     </div>
 
@@ -406,6 +459,25 @@ const DesktopLayout = (props) => {
                     {/* Full Screen Profile Page */}
                     <div className={`absolute inset-0 ${activeTab === 'profile' ? '' : 'hidden'}`}>
                         {profilePage}
+                    </div>
+
+                    {/* Full Screen Pub Crawl Planner */}
+                    <div className={`absolute inset-0 ${activeTab === 'pub_crawl' ? '' : 'hidden'}`}>
+                        <PubCrawlPage 
+                            userProfile={userProfile} 
+                            setAlertInfo={props.setAlertInfo} 
+                            handleSelectPub={handleSelectPub}
+                            activeCrawl={activeCrawl}
+                            onStartCrawl={onStartCrawl}
+                            onEndCrawl={onEndCrawl}
+                            onToggleCrawlStop={onToggleCrawlStop}
+                            onReorderStops={onReorderStops}
+                            settings={settings}
+                            pubScores={pubScores}
+                            userLocation={userLocation}
+                            locationPermissionStatus={locationPermissionStatus}
+                            onRequestPermission={onRequestPermission}
+                        />
                     </div>
                 </div>
             </div>

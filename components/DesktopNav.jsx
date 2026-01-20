@@ -7,7 +7,7 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
   const isActive = activeTab === tab.id;
 
   const handleClick = () => {
-    if ((tab.id === 'profile' || tab.id === 'moderation' || tab.id === 'shop') && !userProfile) {
+    if ((tab.id === 'profile' || tab.id === 'moderation' || tab.id === 'shop' || tab.id === 'pub_crawl') && !userProfile) {
       onLoginRequest();
     } else {
       onTabChange(tab.id);
@@ -44,13 +44,17 @@ const NavButton = ({ tab, activeTab, onTabChange, onLoginRequest, userProfile, t
   );
 };
 
-const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements, unreadNotificationsCount, settings, handleChangePassword }) => {
+const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequest, levelRequirements, unreadNotificationsCount, settings, handleChangePassword, isPubCrawlPlannerEnabled }) => {
   const region = useRegion();
 
   const mainTabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
   ];
+
+  if (isPubCrawlPlannerEnabled) {
+      mainTabs.splice(2, 0, { id: 'pub_crawl', icon: 'fa-route', label: 'Pub Crawl' });
+  }
   
   const shopTab = { id: 'shop', icon: 'fa-shopping-bag', label: 'Shop' };
 
@@ -76,7 +80,7 @@ const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequ
         />
       ))}
 
-      {(userProfile?.is_developer && settings?.developerMode && region === 'gb') && (
+      {(userProfile?.is_developer && settings?.developerMode && settings?.isShopEnabled) && (
           <NavButton
             key={shopTab.id}
             tab={shopTab}

@@ -22,7 +22,7 @@ const CARD_ELEMENT_OPTIONS = {
     },
 };
 
-const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allTrophies, onLoginRequest }) => {
+const DonationForm = ({ userProfile, onSuccess, userTrophies, allTrophies, onLoginRequest }) => {
     const stripe = useStripe();
     const elements = useElements();
     
@@ -78,6 +78,9 @@ const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allT
         if (!stripe || !elements || isLoading || succeeded) {
             return;
         }
+
+        const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
+        const previouslyHadTrophy = userProfile && userTrophies && userTrophies.some(t => t.trophy_id === PATRON_TROPHY_ID);
 
         setIsLoading(true);
         setError(null);
@@ -144,36 +147,7 @@ const DonationForm = ({ userProfile, setAlertInfo, onSuccess, userTrophies, allT
             setSucceeded(true);
             trackEvent('purchase', { transaction_id: paymentIntent.id, value: amount / 100, currency: currencyInfo.code, is_anonymous: !userProfile });
             
-            onSuccess(); // Trigger confetti and data refresh
-
-            if (userProfile) {
-                const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
-                const alreadyHasPatronTrophy = userTrophies && userTrophies.some(t => t.trophy_id === PATRON_TROPHY_ID);
-                
-                if (alreadyHasPatronTrophy) {
-                    setAlertInfo({
-                        isOpen: true,
-                        title: 'Thank You!',
-                        message: "Your continued support means the world. Thank you for your donation and for helping us keep Stoutly running and ad-free. Cheers!",
-                        theme: 'success',
-                    });
-                } else {
-                    setAlertInfo({
-                        isOpen: true,
-                        title: 'Trophy Unlocked!',
-                        message: "You've unlocked the 'Stoutly Patron' trophy! Thank you so much for your donation and for supporting the development of Stoutly.",
-                        theme: 'success',
-                        customIcon: 'fa-hand-holding-heart',
-                    });
-                }
-            } else {
-                 setAlertInfo({
-                    isOpen: true,
-                    title: 'Thank You!',
-                    message: "Your generous support helps keep Stoutly running and ad-free. Cheers!",
-                    theme: 'success',
-                });
-            }
+            onSuccess(previouslyHadTrophy);
 
         } catch (err) {
             setError(err.message);
