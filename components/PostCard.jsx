@@ -4,6 +4,7 @@ import { getRankData, formatTimeAgo } from '../utils.js';
 import CommentsSection from './CommentsSection.jsx';
 
 const COLLAPSED_LIMIT = 3;
+const CONTENT_TRUNCATION_LENGTH = 250;
 
 const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginRequest, onViewPub, loggedInUserProfile, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, onReportComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal }) => {
     const { user, title, content, created_at, like_count, comment_count, attached_pubs, is_announcement } = post;
@@ -11,6 +12,7 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef(null);
+    const [isContentExpanded, setIsContentExpanded] = useState(false);
 
     const isLiked = userPostLikes && userPostLikes.has(post.id);
     const rankData = user.level ? getRankData(user.level) : null;
@@ -18,6 +20,8 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
 
     const hasMorePubs = attached_pubs && attached_pubs.length > COLLAPSED_LIMIT;
     const pubsToShow = hasMorePubs && !isPubsExpanded ? attached_pubs.slice(0, COLLAPSED_LIMIT) : attached_pubs;
+    
+    const isLongPost = content && content.length > CONTENT_TRUNCATION_LENGTH;
     
     const getScoreColorClasses = (s) => {
         if (s === null || s === undefined) return 'bg-gray-400 dark:bg-gray-600 text-white dark:text-gray-200';
@@ -103,7 +107,17 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
             )}
             {content && (
                 <div className={`px-4 pb-3 ${title ? 'pt-2' : ''}`}>
-                    <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{content}</p>
+                    <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                        {isLongPost && !isContentExpanded ? `${content.substring(0, CONTENT_TRUNCATION_LENGTH)}...` : content}
+                    </p>
+                    {isLongPost && (
+                        <button
+                            onClick={() => setIsContentExpanded(!isContentExpanded)}
+                            className="text-sm font-semibold text-amber-600 dark:text-amber-400 hover:underline mt-2"
+                        >
+                            {isContentExpanded ? 'Show less' : 'Show more'}
+                        </button>
+                    )}
                 </div>
             )}
 
