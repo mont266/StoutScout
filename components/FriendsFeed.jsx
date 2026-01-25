@@ -14,11 +14,11 @@ const POSTS_PER_PAGE_MIXED = 3;
 
 const filterOptions = [
     { label: 'Newest', sortBy: 'created_at', timePeriod: 'all' },
-    { label: 'Top Today', sortBy: 'likes', timePeriod: '1d' },
-    { label: 'Top This Week', sortBy: 'likes', timePeriod: '7d' },
-    { label: 'Top This Month', sortBy: 'likes', timePeriod: '1M' },
-    { label: 'Top This Year', sortBy: 'likes', timePeriod: '1Y' },
-    { label: 'Top All Time', sortBy: 'likes', timePeriod: 'all' },
+    { label: 'Top Today', sortBy: 'like_count', timePeriod: '1d' },
+    { label: 'Top This Week', sortBy: 'like_count', timePeriod: '7d' },
+    { label: 'Top This Month', sortBy: 'like_count', timePeriod: '1M' },
+    { label: 'Top This Year', sortBy: 'like_count', timePeriod: '1Y' },
+    { label: 'Top All Time', sortBy: 'like_count', timePeriod: 'all' },
 ];
 
 const contentFilterOptions = [
@@ -181,7 +181,8 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
     const isDesktop = useIsDesktop();
 
     const lastScrollY = useRef(0);
-    const [isFilterPanelVisible, setIsFilterPanelVisible] = useState(true);
+    const [isScrolled, setIsScrolled] = useState(false);
+    const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
 
     const isRefreshing = loading && page === 1;
     const hasFriends = friendships.some(f => f.status === 'accepted');
@@ -450,14 +451,18 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         if (!scrollContainer) return;
     
         const currentScrollY = scrollContainer.scrollTop;
+        const isScrollingDown = currentScrollY > lastScrollY.current;
     
         setShowScrollTop(currentScrollY > 400);
 
-        const filterScrollThreshold = 50; 
-        if (currentScrollY > lastScrollY.current && currentScrollY > filterScrollThreshold) {
-            setIsFilterPanelVisible(false);
-        } else if (currentScrollY < lastScrollY.current) {
-            setIsFilterPanelVisible(true);
+        // New logic for filter panel
+        const scrolled = currentScrollY > 5; // Use a small threshold
+        setIsScrolled(scrolled);
+
+        if (currentScrollY === 0) {
+            setIsFiltersExpanded(true); // Always expand at top
+        } else if (isScrollingDown && isFiltersExpanded) {
+            setIsFiltersExpanded(false); // Auto-collapse when scrolling down
         }
     
         if (!isDesktop) {
@@ -469,7 +474,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         }
         
         lastScrollY.current = currentScrollY <= 0 ? 0 : currentScrollY;
-    }, [isDesktop, onMobileScroll]);
+    }, [isDesktop, onMobileScroll, isFiltersExpanded]);
 
 
     const handleScrollToTop = () => {
@@ -608,8 +613,8 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
 
     return (
         <div className="h-full relative flex flex-col">
-            <div className="sticky top-0 z-10 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
-                <div className={`hidable-feed-header ${!isFilterPanelVisible ? 'hide' : ''}`}>
+            <div className="community-feed-header">
+                <div className={`community-filters-content ${!isFiltersExpanded ? 'collapsed' : ''}`}>
                     <div className="p-3">
                         <div className="flex justify-between items-center">
                             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Friends</h2>
@@ -625,7 +630,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                                         <span>{activeFilterLabel}</span>
                                     </button>
                                     {isFilterMenuOpen && (
-                                        <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fade-in-down z-20">
+                                        <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fade-in-down z-30">
                                             <ul>
                                                 {filterOptions.map(opt => (
                                                     <li key={opt.label}>
@@ -696,6 +701,12 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                             </div>
                         )}
                     </div>
+                </div>
+                <div className={`community-filters-toggle-tab ${isScrolled && !isFiltersExpanded ? 'visible' : ''}`}>
+                    <button onClick={() => setIsFiltersExpanded(true)} className="bg-white dark:bg-gray-800 shadow-md rounded-b-lg px-4 py-1 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 border-x border-b border-gray-200 dark:border-gray-700">
+                        <i className="fas fa-sliders-h mr-2"></i>
+                        Filters
+                    </button>
                 </div>
             </div>
             <div 
