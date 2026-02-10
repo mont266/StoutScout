@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,78 +12,87 @@ serve(async (req) => {
   }
 
   try {
-    // Authenticate the user making the request
-    const supabaseClient = createClient(
-      process.env.SUPABASE_URL ?? '',
-      process.env.SUPABASE_ANON_KEY ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    )
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not found. You must be logged in.');
+    const supabaseUrl = process.env.SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!supabaseUrl || !serviceKey) {
+      throw new Error('Server configuration error: Missing Supabase credentials.')
+    }
 
-    // Create an admin client to perform privileged operations
-    const supabaseAdmin = createClient(
-      process.env.SUPABASE_URL ?? '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-    );
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey)
 
-    // Verify the user is a developer
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+       return new Response(JSON.stringify({ error: 'Authentication required: Missing Authorization header.' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    const jwt = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(jwt)
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: `Authentication failed: ${userError?.message || 'User not found.'}` }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     const { data: adminProfile, error: adminError } = await supabaseAdmin
       .from('profiles')
       .select('is_developer')
       .eq('id', user.id)
-      .single();
+      .single()
 
     if (adminError || !adminProfile?.is_developer) {
-      throw new Error('Permission denied. User is not an admin.');
+      return new Response(JSON.stringify({ error: 'Permission denied: Admin privileges required.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Parse request body
-    const { rating_id } = await req.json();
+    const { rating_id } = await req.json()
     if (!rating_id) {
-        throw new Error('rating_id is required.');
+      return new Response(JSON.stringify({ error: 'Invalid request: `rating_id` is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
     
-    // 1. Get the rating to find image_url and uploader_id
     const { data: ratingData, error: ratingError } = await supabaseAdmin
-        .from('ratings')
-        .select('image_url, user_id')
-        .eq('id', rating_id)
-        .single();
+      .from('ratings')
+      .select('image_url, user_id')
+      .eq('id', rating_id)
+      .single()
 
-    if (ratingError) throw new Error(`Rating not found: ${ratingError.message}`);
-    if (!ratingData.image_url) throw new Error('The selected rating does not have an image to remove.');
+    if (ratingError) throw new Error(`Database query failed: ${ratingError.message}`)
+    if (!ratingData) throw new Error('Rating not found.')
+    if (!ratingData.image_url) throw new Error('The selected rating does not have an image to remove.')
     
-    const uploader_id = ratingData.user_id;
-
-    // 2. Delete the image from storage
-    const imagePath = new URL(ratingData.image_url).pathname.split('/pint-images/')[1];
+    // 1. Delete image from storage
+    const imagePath = new URL(ratingData.image_url).pathname.split('/pint-images/')[1]
     if (imagePath) {
-        const { error: storageError } = await supabaseAdmin.storage.from('pint-images').remove([imagePath]);
-        // Don't throw on storage error, as we still want to clear the URL from the DB.
-        // The image might become an orphan, but the user experience is not broken.
-        if (storageError) console.error("Failed to delete image from storage:", storageError.message);
+      await supabaseAdmin.storage.from('pint-images').remove([imagePath])
     }
 
-    // 3. Set image_url to NULL in the ratings table
-    const { error: updateRatingError } = await supabaseAdmin
-        .from('ratings')
-        .update({ image_url: null })
-        .eq('id', rating_id);
-    if (updateRatingError) throw updateRatingError;
-    
-    // 4. Increment removed_image_count for the uploader
-    const { error: rpcError } = await supabaseAdmin.rpc('increment_removed_image_count', { user_id_to_update: uploader_id });
-    if (rpcError) throw rpcError;
+    // 2. Set image_url in ratings table to null
+    await supabaseAdmin
+      .from('ratings')
+      .update({ image_url: null })
+      .eq('id', rating_id)
+
+    // 3. Increment removed_image_count on the uploader's profile
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('removed_image_count')
+      .eq('id', ratingData.user_id)
+      .single()
+
+    if (profileError) {
+      console.error(`Could not fetch profile for count increment: ${profileError.message}`)
+    } else {
+      const newCount = (profileData.removed_image_count || 0) + 1
+      await supabaseAdmin
+        .from('profiles')
+        .update({ removed_image_count: newCount })
+        .eq('id', ratingData.user_id)
+    }
 
     return new Response(JSON.stringify({ message: 'Image removed successfully by admin' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
   } catch (error) {
+    console.error('Edge Function Error:', error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+      status: 500,
     })
   }
 })

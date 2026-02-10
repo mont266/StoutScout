@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,95 +12,85 @@ serve(async (req) => {
   }
 
   try {
-    // Authenticate the user making the request
-    const supabaseClient = createClient(
-      process.env.SUPABASE_URL ?? '',
-      process.env.SUPABASE_ANON_KEY ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    )
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not found');
+    const supabaseUrl = process.env.SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!supabaseUrl || !serviceKey) {
+      throw new Error('Server configuration error: Missing Supabase credentials.')
+    }
+    
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey)
+    
+    // 1. Authenticate the moderator
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    const jwt = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(jwt)
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: `Authentication failed: ${userError?.message}` }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
 
-    // Create an admin client to perform privileged operations
-    const supabaseAdmin = createClient(
-      process.env.SUPABASE_URL ?? '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-    );
-
-    // Verify the user is a developer
-    const { data: adminProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('is_developer')
-      .eq('id', user.id)
-      .single();
-
+    const { data: adminProfile } = await supabaseAdmin.from('profiles').select('is_developer').eq('id', user.id).single()
     if (!adminProfile?.is_developer) {
-      throw new Error('Permission denied. User is not an admin.');
+      return new Response(JSON.stringify({ error: 'Permission denied: Moderator role required.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Parse request body
-    const { report_id, action, rating_id, uploader_id } = await req.json();
-    if (!report_id || !action || !rating_id) {
-        throw new Error('report_id, rating_id, and action are required.');
+    // 2. Validate request body
+    const { report_id, action } = await req.json()
+    if (!report_id || !['dismiss', 'remove'].includes(action)) {
+      throw new Error('Invalid request: `report_id` and a valid `action` ("dismiss" or "remove") are required.')
     }
 
-    if (action === 'allow') {
-      const { error } = await supabaseAdmin
-        .from('reported_images')
-        .update({ status: 'resolved_allowed', resolved_at: new Date().toISOString(), resolver_id: user.id })
-        .eq('id', report_id);
-      if (error) throw error;
-
-    } else if (action === 'remove') {
-      if (!uploader_id) throw new Error('uploader_id is required to remove an image.');
-
-      // 1. Get the image URL from the rating
-      const { data: ratingData, error: ratingError } = await supabaseAdmin
-        .from('ratings')
-        .select('image_url')
-        .eq('id', rating_id)
-        .single();
-      if (ratingError) throw new Error(`Rating not found: ${ratingError.message}`);
+    // 3. Fetch the report to get content details
+    const { data: report, error: reportError } = await supabaseAdmin
+      .from('reports')
+      .select('content_id, content_type')
+      .eq('id', report_id)
+      .single()
       
-      // 2. If an image URL exists, delete the image from storage
-      if (ratingData.image_url) {
-        const imagePath = new URL(ratingData.image_url).pathname.split('/pint-images/')[1];
-        if (imagePath) {
-          const { error: storageError } = await supabaseAdmin.storage.from('pint-images').remove([imagePath]);
-          if (storageError) console.error("Failed to delete image from storage:", storageError.message);
+    if (reportError || !report) throw new Error(`Could not find report with ID ${report_id}.`)
+    
+    // 4. Perform the 'remove' action if requested
+    if (action === 'remove') {
+      let deleteError;
+      if (report.content_type === 'rating') {
+        const { error } = await supabaseAdmin.from('ratings').delete().eq('id', report.content_id);
+        deleteError = error;
+      } else if (report.content_type === 'post') {
+        const { error } = await supabaseAdmin.from('posts').delete().eq('id', report.content_id);
+        deleteError = error;
+      } else {
+        throw new Error(`Unsupported content type for removal: ${report.content_type}`);
+      }
+      
+      if (deleteError) {
+        // If content is already deleted (e.g., by user), it's not a fatal error for resolving the report.
+        if (deleteError.code !== '23503' && !deleteError.message.includes('not present')) {
+            console.error(`Failed to delete content (type: ${report.content_type}, id: ${report.content_id}): ${deleteError.message}`);
+            throw new Error(`Failed to delete content: ${deleteError.message}`);
         }
       }
-
-      // 3. Set image_url to NULL in the ratings table
-      const { error: updateRatingError } = await supabaseAdmin
-        .from('ratings')
-        .update({ image_url: null })
-        .eq('id', rating_id);
-      if (updateRatingError) throw updateRatingError;
-      
-      // 4. Increment removed_image_count for the uploader using an RPC call
-      const { error: rpcError } = await supabaseAdmin.rpc('increment_removed_image_count', { user_id_to_update: uploader_id });
-      if (rpcError) throw rpcError;
-      
-      // 5. Update the report status to "resolved_removed"
-      const { error: updateReportError } = await supabaseAdmin
-        .from('reported_images')
-        .update({ status: 'resolved_removed', resolved_at: new Date().toISOString(), resolver_id: user.id })
-        .eq('id', report_id);
-      if (updateReportError) throw updateReportError;
-
-    } else {
-        throw new Error('Invalid action provided.');
     }
+    
+    // 5. Update the report's status to resolved
+    const status = action === 'dismiss' ? 'resolved_dismissed' : 'resolved_removed';
+    const { error: updateError } = await supabaseAdmin
+      .from('reports')
+      .update({ status: 'resolved_removed', resolved_at: new Date().toISOString(), resolver_id: user.id })
+      .eq('id', report_id)
+    
+    if (updateError) throw new Error(`Failed to update report status: ${updateError.message}`)
 
     return new Response(JSON.stringify({ message: `Report resolved with action: ${action}` }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
   } catch (error) {
+    console.error('Edge Function Error:', error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+      status: 500,
     })
   }
 })

@@ -1,6 +1,5 @@
-
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,76 +7,78 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle preflight requests for CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Create a Supabase client with the Auth context of the logged-in user.
-    const supabaseClient = createClient(
-      process.env.SUPABASE_URL ?? '',
-      process.env.SUPABASE_ANON_KEY ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    )
-
-    // Get the current user from the request's authorization header.
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        throw new Error('User not found. You must be logged in to perform this action.');
+    const supabaseUrl = process.env.SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!supabaseUrl || !serviceKey) {
+      throw new Error('Server configuration error: Missing Supabase credentials.')
     }
 
-    // Create a client with the service_role key to bypass RLS for admin checks.
-    const supabaseAdmin = createClient(
-      process.env.SUPABASE_URL ?? '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-    );
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey)
 
-    // Verify that the calling user is a developer/admin.
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Authentication required: Missing Authorization header.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      })
+    }
+    const jwt = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(jwt)
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: `Authentication failed: ${userError?.message || 'User not found.'}` }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      })
+    }
+
     const { data: adminProfile, error: adminError } = await supabaseAdmin
       .from('profiles')
       .select('is_developer')
       .eq('id', user.id)
-      .single();
+      .single()
 
     if (adminError || !adminProfile?.is_developer) {
-      return new Response(JSON.stringify({ error: 'Permission denied. User is not an admin.' }), {
+      return new Response(JSON.stringify({ error: 'Permission denied: Admin privileges required.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 403,
-      });
+      })
     }
 
-    const { user_id, reason } = await req.json();
-
+    const { user_id, reason } = await req.json()
     if (!user_id || !reason) {
-        throw new Error('Invalid parameters. Both user_id and reason are required.');
-    }
-    
-    // Admins cannot ban themselves.
-    if (user.id === user_id) {
-        throw new Error('Admins cannot ban themselves.');
+      return new Response(JSON.stringify({ error: 'Invalid request: `user_id` and `reason` are required.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      })
     }
 
-    // Update the target user's profile to set the ban status.
     const { error: updateError } = await supabaseAdmin
       .from('profiles')
-      .update({ 
-          is_banned: true,
-          ban_reason: reason,
-          banned_at: new Date().toISOString()
-       })
-      .eq('id', user_id);
+      .update({
+        is_banned: true,
+        ban_reason: reason,
+        banned_at: new Date().toISOString(),
+      })
+      .eq('id', user_id)
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      throw new Error(`Database error: ${updateError.message}`)
+    }
 
     return new Response(JSON.stringify({ message: 'User banned successfully' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
   } catch (error) {
+    console.error('Edge Function Error:', error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+      status: 500,
     })
   }
 })
