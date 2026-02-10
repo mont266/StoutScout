@@ -10,12 +10,15 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 // Capacitor-specific initialization for native platforms
 if (Capacitor.isNativePlatform()) {
   try {
-    // Add a class to the HTML root element if we're on native Android.
-    // This allows for platform-specific CSS fixes.
+    // Add platform-specific CSS classes for native Android and iOS.
+    // This allows for targeted styling fixes.
     (async () => {
       const platform = Capacitor.getPlatform();
       if (platform === 'android') {
         document.documentElement.classList.add('native-android');
+      }
+      if (platform === 'ios') {
+        document.documentElement.classList.add('native-ios');
       }
     })();
 

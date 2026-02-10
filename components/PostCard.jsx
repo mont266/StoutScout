@@ -6,7 +6,7 @@ import CommentsSection from './CommentsSection.jsx';
 const COLLAPSED_LIMIT = 3;
 const CONTENT_TRUNCATION_LENGTH = 250;
 
-const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginRequest, onViewPub, loggedInUserProfile, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, onReportComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal }) => {
+const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginRequest, onViewPub, loggedInUserProfile, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent }) => {
     const { user, title, content, created_at, like_count, comment_count, attached_pubs, is_announcement } = post;
     const [isPubsExpanded, setIsPubsExpanded] = useState(false);
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
@@ -17,6 +17,7 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
     const isLiked = userPostLikes && userPostLikes.has(post.id);
     const rankData = user.level ? getRankData(user.level) : null;
     const isOwner = loggedInUserProfile?.id === user.id;
+    const canReport = loggedInUserProfile && !isOwner;
 
     const hasMorePubs = attached_pubs && attached_pubs.length > COLLAPSED_LIMIT;
     const pubsToShow = hasMorePubs && !isPubsExpanded ? attached_pubs.slice(0, COLLAPSED_LIMIT) : attached_pubs;
@@ -79,7 +80,7 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(new Date(created_at).getTime())}</p>
                 </div>
-                {isOwner && (
+                {(isOwner || canReport) && (
                     <div ref={menuRef} className="relative flex-shrink-0">
                         <button
                             onClick={() => setIsMenuOpen(prev => !prev)}
@@ -91,8 +92,27 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
                         </button>
                         {isMenuOpen && (
                             <div className="absolute top-full right-0 mt-1 w-28 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                                <button onClick={() => { onEditPost(post); setIsMenuOpen(false); }} className="w-full text-left text-sm px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-t-md">Edit</button>
-                                <button onClick={() => { onDeletePost(post); setIsMenuOpen(false); }} className="w-full text-left text-sm px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-b-md">Delete</button>
+                                {isOwner ? (
+                                    <>
+                                        <button onClick={() => { onEditPost(post); setIsMenuOpen(false); }} className="w-full text-left text-sm px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-t-md">Edit</button>
+                                        <button onClick={() => { onDeletePost(post); setIsMenuOpen(false); }} className="w-full text-left text-sm px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-b-md">Delete</button>
+                                    </>
+                                ) : canReport ? (
+                                    <button
+                                        onClick={() => {
+                                            onReportContent({
+                                                contentId: post.id,
+                                                contentType: 'post',
+                                                contentCreatorUsername: user.username
+                                            });
+                                            setIsMenuOpen(false);
+                                        }}
+                                        className="w-full text-left text-sm px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md flex items-center space-x-2"
+                                    >
+                                        <i className="fas fa-flag w-4"></i>
+                                        <span>Report</span>
+                                    </button>
+                                ) : null}
                             </div>
                         )}
                     </div>
@@ -210,9 +230,10 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
                     currentUserProfile={loggedInUserProfile}
                     onAddComment={onAddPostComment}
                     onDeleteComment={onDeletePostComment}
-                    onReportComment={onReportComment}
+                    onReportContent={onReportContent}
                     onLoginRequest={onLoginRequest}
                     onViewProfile={onViewProfile}
+                    onFetchComments={onFetchCommentsForPost}
                 />
             )}
         </div>

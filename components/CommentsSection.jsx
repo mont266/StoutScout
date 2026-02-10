@@ -7,7 +7,7 @@ import CommentContent from './CommentContent.jsx';
 import { supabase } from '../supabase.js';
 import CommentForm from './CommentForm.jsx';
 
-const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, onAddComment, onDeleteComment, onReportComment, onLoginRequest, onViewProfile, highlightedCommentId }) => {
+const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, onAddComment, onDeleteComment, onReportContent, onLoginRequest, onViewProfile, highlightedCommentId }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [expandedComments, setExpandedComments] = useState(new Set());
@@ -171,7 +171,7 @@ const CommentsSection = ({ ratingId, comments, isLoading, currentUserProfile, on
                                 {openMenuId === comment.id && (
                                     <div role="menu" className="absolute top-full right-0 mt-1 w-28 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                                         {showDelete && <button role="menuitem" onClick={() => confirmDelete(comment.id)} className={`w-full text-left text-sm px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600 ${canReport ? 'rounded-t-md' : 'rounded-md'}`}>Delete</button>}
-                                        {canReport && <button role="menuitem" onClick={() => onReportComment(comment)} className={`w-full text-left text-sm px-3 py-1.5 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 ${showDelete ? 'rounded-b-md' : 'rounded-md'}`}>Report</button>}
+                                        {canReport && <button role="menuitem" onClick={() => onReportContent({ contentId: comment.id, contentType: 'comment', contentCreatorUsername: comment.user.username })} className={`w-full text-left text-sm px-3 py-1.5 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 ${showDelete ? 'rounded-b-md' : 'rounded-md'}`}>Report</button>}
                                     </div>
                                 )}
                             </>

@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import Avatar from './Avatar.jsx';
 import StarRating from './StarRating.jsx';
 import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import CommentsSection from './CommentsSection.jsx';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 
-const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, fallbackLocationData = null, highlightedCommentId }) => {
+const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onOpenShareRatingModal, fallbackLocationData = null, highlightedCommentId, onReportContent }) => {
 
     const { user, image_url, created_at, updated_at, quality, price, like_count, id, exact_price, comment_count, message } = rating;
     
@@ -20,6 +20,11 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
 
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
     const { rates: exchangeRates } = useContext(ExchangeRatesContext);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const menuRef = useRef(null);
+    const isOwner = loggedInUserProfile?.id === user.id;
+    const canReport = loggedInUserProfile && !isOwner;
+    const showMenu = isOwner || canReport;
 
     const isLiked = userLikes && userLikes.has(id);
 
@@ -31,6 +36,16 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
     
     const currencyInfo = getCurrencyInfo(effectiveLocationData);
     const rankData = user.level ? getRankData(user.level) : null;
+    
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setIsMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         if (highlightedCommentId) {
@@ -78,6 +93,21 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
         onOpenShareRatingModal(enrichedRating);
     };
 
+    const handleEdit = () => {
+        setIsMenuOpen(false);
+        if (!onViewPub) return;
+        
+        const pubForSelection = {
+            id: pubId,
+            name: pubName,
+            address: pubAddress,
+            location: (pubLat && pubLng) ? { lat: pubLat, lng: pubLng } : null,
+            country_code: pubCountryCode,
+            country_name: pubCountryName,
+        };
+        onViewPub(pubForSelection, { expandRatingForm: true, highlightRatingId: rating.id });
+    };
+
     const userHomeCurrency = getCurrencyInfo(loggedInUserProfile || { country_code: 'gb' });
     let convertedPriceText = null;
     if (
@@ -110,21 +140,65 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                             <i className={`fas ${rankData.icon} text-sm text-amber-500 dark:text-amber-400`} title={rankData.name}></i>
                         )}
                     </div>
-                    {onViewPub && (
+                    {pubName && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 break-words" title={pubName}>
                             rated a pint at{' '}
                             <button
                                 onClick={handlePubClick}
-                                disabled={!onViewPub || !pubLat || !pubLng}
-                                className="font-medium hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded disabled:no-underline disabled:cursor-default"
+                                disabled={!pubLat || !pubLng}
+                                className="font-medium text-amber-600 dark:text-amber-400 hover:underline focus:outline-none focus:ring-1 focus:ring-amber-500 rounded disabled:no-underline disabled:cursor-not-allowed"
                             >
                                 {pubName}
                             </button>
                         </p>
                     )}
                 </div>
-                 <div className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
-                    <span>{formatTimeAgo(new Date(created_at).getTime())}</span>
+                 <div className="flex-shrink-0 flex items-center gap-2">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <span>{formatTimeAgo(new Date(created_at).getTime())}</span>
+                    </div>
+                    {showMenu && (
+                        <div ref={menuRef} className="relative">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setIsMenuOpen(prev => !prev); }}
+                                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                aria-haspopup="true"
+                                aria-expanded={isMenuOpen}
+                                aria-label="Rating options"
+                            >
+                                <i className="fas fa-ellipsis-h"></i>
+                            </button>
+                            {isMenuOpen && (
+                                <div className="absolute top-full right-0 mt-1 w-36 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                                    {isOwner && (
+                                        <button 
+                                            onClick={handleEdit} 
+                                            className={`w-full text-left text-sm px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 ${canReport ? 'rounded-t-md' : 'rounded-md'}`}
+                                        >
+                                            <i className="fas fa-pencil-alt w-4"></i>
+                                            <span>Edit Rating</span>
+                                        </button>
+                                    )}
+                                    {canReport && (
+                                        <button
+                                            onClick={() => {
+                                                onReportContent({
+                                                    contentId: rating.id,
+                                                    contentType: 'rating',
+                                                    contentCreatorUsername: user.username,
+                                                });
+                                                setIsMenuOpen(false);
+                                            }}
+                                            className={`w-full text-left text-sm px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 ${isOwner ? 'rounded-b-md' : 'rounded-md'}`}
+                                        >
+                                            <i className="fas fa-flag w-4"></i>
+                                            <span>Report</span>
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -208,13 +282,13 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
 
             {isCommentsVisible && (
                 <CommentsSection 
-                    ratingId={id}
+                    ratingId={id} // CommentsSection uses `ratingId` prop internally for any entity
                     comments={comments}
                     isLoading={isCommentsLoading}
                     currentUserProfile={loggedInUserProfile}
                     onAddComment={onAddComment}
                     onDeleteComment={onDeleteComment}
-                    onReportComment={onReportComment}
+                    onReportContent={onReportContent}
                     onLoginRequest={onLoginRequest}
                     onViewProfile={onViewProfile}
                     highlightedCommentId={highlightedCommentId}

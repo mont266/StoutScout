@@ -115,6 +115,7 @@ const AuthPage = ({ onClose }) => {
 
   const [countryCode, setCountryCode] = useState('');
   const [acceptsMarketing, setAcceptsMarketing] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [ageValidationError, setAgeValidationError] = useState('');
@@ -150,6 +151,7 @@ const AuthPage = ({ onClose }) => {
     setShowResendLink(false);
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setAgreedToTerms(false);
     // keep email and username for convenience
   };
 
@@ -344,8 +346,8 @@ const AuthPage = ({ onClose }) => {
   const isSignupButtonDisabled = useMemo(() => {
     if (loading) return true;
     if (view !== 'signUp') return false;
-    return !username || !email || !password || !confirmPassword || !dob || !countryCode || !!ageValidationError;
-  }, [loading, view, username, email, password, confirmPassword, dob, countryCode, ageValidationError]);
+    return !username || !email || !password || !confirmPassword || !dob || !countryCode || !!ageValidationError || !agreedToTerms;
+  }, [loading, view, username, email, password, confirmPassword, dob, countryCode, ageValidationError, agreedToTerms]);
 
   const renderContent = () => {
     if (message) {
@@ -519,6 +521,21 @@ const AuthPage = ({ onClose }) => {
                                 />
                                 <span className="text-sm text-gray-600 dark:text-gray-400">
                                 Be the first to know! Notify me about new features, community events, and exclusive Stoutly news.
+                                </span>
+                            </label>
+                        </div>
+                        <div className="pt-2">
+                            <label htmlFor="agreed-to-terms" className="flex items-start space-x-3 cursor-pointer">
+                                <input
+                                id="agreed-to-terms"
+                                type="checkbox"
+                                checked={agreedToTerms}
+                                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                                className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-500 text-amber-600 focus:ring-amber-500"
+                                required
+                                />
+                                <span className="text-sm text-gray-600 dark:text-gray-400">
+                                I agree to the <a href="/?page=terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-amber-600 dark:text-amber-400 hover:underline">Terms of Use</a> and <a href="/?page=privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-amber-600 dark:text-amber-400 hover:underline">Privacy Policy</a>.
                                 </span>
                             </label>
                         </div>

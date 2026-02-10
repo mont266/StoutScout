@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { trackEvent } from '../analytics.js';
 import LeaderboardPage from './LeaderboardPage.jsx';
@@ -9,7 +11,9 @@ import useIsDesktop from '../hooks/useIsDesktop.js';
 import ReportImageModal from './ReportImageModal.jsx';
 import { supabase } from '../supabase.js';
 
-const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onDeleteNotification, onOpenShareRatingModal, dbPubs, onMobileScroll, setAlertInfo, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, isNavShrunk, onEditPost, onDeletePost, onOpenSharePostModal }) => {
+const EMPTY_SET = new Set();
+
+const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onDeleteNotification, onOpenShareRatingModal, dbPubs, setAlertInfo, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, isNavShrunk, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent, blockList = EMPTY_SET, socialsUpdateCount }) => {
     const [imageToView, setImageToView] = useState(null);
     const [feedFilter, setFeedFilter] = useState({ sortBy: 'created_at', timePeriod: 'all' });
     const [contentFilter, setContentFilter] = useState('all');
@@ -135,7 +139,7 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                 </div>
 
                 {/* Content Area */}
-                <main className="flex-grow min-h-0">
+                <div className="flex-grow min-h-0">
                     {activeSubTab === 'community' && <CommunityFeed 
                         onViewProfile={(id) => onViewProfile(id, 'community')}
                         userLikes={userLikes}
@@ -155,15 +159,15 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                         onFetchComments={onFetchComments}
                         onAddComment={onAddComment}
                         onDeleteComment={onDeleteComment}
-                        onReportComment={onReportComment}
+                        onReportContent={onReportContent}
                         onOpenShareRatingModal={onOpenShareRatingModal}
                         onOpenSharePostModal={onOpenSharePostModal}
                         dbPubs={dbPubs}
-                        onMobileScroll={onMobileScroll}
                         onOpenCreatePostModal={onOpenCreatePostModal}
                         userPostLikes={userPostLikes}
                         onTogglePostLike={onTogglePostLike}
                         postSuccessCount={postSuccessCount}
+                        socialsUpdateCount={socialsUpdateCount}
                         commentsByPost={commentsByPost}
                         isPostCommentsLoading={isPostCommentsLoading}
                         onFetchCommentsForPost={onFetchCommentsForPost}
@@ -172,6 +176,7 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                         pubScores={pubScores}
                         onEditPost={onEditPost}
                         onDeletePost={onDeletePost}
+                        blockList={blockList}
                     />}
                     {activeSubTab === 'friends' && <FriendsFeed 
                         onViewProfile={(id) => onViewProfile(id, 'friends')}
@@ -196,15 +201,15 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                         onFetchComments={onFetchComments}
                         onAddComment={onAddComment}
                         onDeleteComment={onDeleteComment}
-                        onReportComment={onReportComment}
+                        onReportContent={onReportContent}
                         onOpenShareRatingModal={onOpenShareRatingModal}
                         onOpenSharePostModal={onOpenSharePostModal}
                         dbPubs={dbPubs}
-                        onMobileScroll={onMobileScroll}
                         onOpenCreatePostModal={onOpenCreatePostModal}
                         userPostLikes={userPostLikes}
                         onTogglePostLike={onTogglePostLike}
                         postSuccessCount={postSuccessCount}
+                        socialsUpdateCount={socialsUpdateCount}
                         commentsByPost={commentsByPost}
                         isPostCommentsLoading={isPostCommentsLoading}
                         onFetchCommentsForPost={onFetchCommentsForPost}
@@ -213,10 +218,11 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                         pubScores={pubScores}
                         onEditPost={onEditPost}
                         onDeletePost={onDeletePost}
+                        blockList={blockList}
                     />}
                     {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} />}
                     {activeSubTab === 'notifications' && <NotificationsPage notifications={notifications} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'notifications')} onDataRefresh={onDataRefresh} onViewPub={onViewPub} friendships={friendships} onDeleteNotification={onDeleteNotification} />}
-                </main>
+                </div>
 
             </div>
         </>

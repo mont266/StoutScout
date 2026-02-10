@@ -184,7 +184,8 @@
   .st-paddys-mode .dark\:text-amber-300 { color: #86efac; }
   .st-paddys-mode .border-amber-400 { border-color: var(--st-paddys-green-400); }
 
-  .st-paddys-mode .map-tiles-paddys {
+  /* Apply St Paddy's filter to map tiles if active */
+  .st-paddys-mode .mapboxgl-canvas {
     filter: sepia(0.5) hue-rotate(80deg) saturate(1.2) contrast(0.9);
   }
 
@@ -216,14 +217,12 @@
     @apply border-t border-gray-700;
   }
   .dark .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon {
-    /* This filter converts the default dark gray icon (#333) to amber (#FBBF24) */
-    filter: brightness(0) saturate(100%) invert(80%) sepia(21%) saturate(3015%) hue-rotate(320deg) brightness(101%) contrast(96%);
+    /* This filter converts the default dark gray icon (#333) to Stoutly amber (#F59E0B) */
+    filter: invert(29%) sepia(96%) saturate(2471%) hue-rotate(24deg) brightness(101%) contrast(94%);
   }
   .dark .mapboxgl-ctrl-compass-arrow {
-    /* In dark mode, the default compass arrow is hard to see.
-       This filter makes it a stoutly amber color. */
-    /* This filter converts the default black icon to amber (#FBBF24) */
-    filter: invert(82%) sepia(34%) saturate(5429%) hue-rotate(322deg) brightness(100%) contrast(96%);
+    /* This filter now correctly converts the default dark gray arrow (#333) to Stoutly amber (#F59E0B) for consistency. */
+    filter: invert(29%) sepia(96%) saturate(2471%) hue-rotate(24deg) brightness(101%) contrast(94%);
   }
 
   /* Styles for map loading overlay */
@@ -250,7 +249,8 @@
   }
 }
 
-.map-tiles-dark {
+/* Apply dark mode filter to map tiles, but NOT if St Paddy's mode is also active */
+.dark:not(.st-paddys-mode) .mapboxgl-canvas {
   filter: brightness(1.4) contrast(0.9) saturate(0.9);
 }
 
@@ -289,16 +289,16 @@
 
 @media (max-width: 767px) {
   .mapboxgl-ctrl-top-left .mapboxgl-ctrl {
-    margin-top: 4.5rem; /* Push controls down below filter bar on mobile */
+    margin-top: 4.0rem; /* Push controls down below filter bar on mobile */
   }
 }
 
 /* Specific fix for Mapbox controls on native Android to ensure they are below the filter bar */
 .native-android .mapboxgl-ctrl-top-left .mapboxgl-ctrl {
-  margin-top: 6rem;
+  margin-top: 4.0rem;
 }
 
 /* Specific fix for Mapbox controls on native iOS to ensure they sit below the header and filter bar */
 .native-ios .mapboxgl-ctrl-top-left .mapboxgl-ctrl {
-  margin-top: 6rem;
+  margin-top: 4.0rem;
 }

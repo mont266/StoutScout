@@ -17,18 +17,18 @@ const StatCard = ({ label, value }) => (
 const ShareProfileModal = ({ user, onClose }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy Link');
 
-    // Base URL without UTM params
+    // Base URL for native share and copy link
     const productionUrl = 'https://www.stoutly.co.uk';
     const origin = Capacitor.isNativePlatform() ? productionUrl : window.location.origin;
     const baseUrl = `${origin}/?user_id=${user.id}`;
-    
-    // URL for the Share button and Copy Link button
     const shareUrl = `${baseUrl}&utm_source=stoutly_app&utm_medium=profile_share&utm_campaign=user_profile_share`;
-    // URL specifically for the QR code
-    const qrTextUrl = `${baseUrl}&utm_source=stoutly_app&utm_medium=profile_qr&utm_campaign=user_profile_share`;
+    
+    // Specific, public base URL for the QR code to ensure it's always scannable and points to the live app
+    const qrBaseUrl = `https://app.stoutly.co.uk/?user_id=${user.id}`;
+    const qrTextUrl = `${qrBaseUrl}&utm_source=stoutly_app&utm_medium=profile_qr&utm_campaign=user_profile_share`;
 
     // Use a publicly accessible URL for the icon so quickchart.io can access it.
-    const centerImageUrl = 'https://stoutly.co.uk/icons/icon-192x192.png';
+    const centerImageUrl = 'https://app.stoutly.co.uk/icons/icon-192.png';
     const encodedCenterImageUrl = encodeURIComponent(centerImageUrl);
     
     const qrCodeUrl = `https://quickchart.io/qr?text=${encodeURIComponent(qrTextUrl)}&dark=${encodeURIComponent('#1A120F')}&light=${encodeURIComponent('#FFFFFF')}&qrEyeForegroundColor=${encodeURIComponent('#F59E0B')}&ecLevel=H&margin=1&size=150&centerImageUrl=${encodedCenterImageUrl}`;

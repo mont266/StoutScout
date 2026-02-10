@@ -1,3 +1,5 @@
+
+
 import React, { useMemo, useRef, useEffect } from 'react';
 import Map, { Marker, NavigationControl, Source, Layer } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -37,7 +39,7 @@ const ClosedPubIcon = () => (
 
 const PlacementIcon = () => (
     <div className="w-12 h-12 relative flex items-center justify-center animate-pulse cursor-grab">
-      <svg viewBox="0 0 24 24" fill="#FBBF24" stroke="#1A202C" strokeWidth="1.5" className="w-full h-full drop-shadow-2xl">
+      <svg viewBox="0 0 24 24" fill="#F59E0B" stroke="#1A202C" strokeWidth="1.5" className="w-full h-full drop-shadow-2xl">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
       </svg>
       <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-3 pointer-events-none">
@@ -81,21 +83,28 @@ const createGeoJSONCircle = (center, radiusInMeters, points = 64) => {
 };
 
 
-const MapComponent = ({
-  pubs, userLocation, center, onMapMove, onMapLoad, onSearchAfterMove, onSelectPub, selectedPubId, theme,
-  showSearchAreaButton, onSearchThisArea, searchOnNextMoveEnd,
-  pubPlacementState, finalPlacementLocation, onPlacementPinMove, isStPaddysModeActive,
-  isDesktop,
-  isSidebarCollapsed,
-  isListExpanded,
-  searchOrigin, searchRadius, showSearchRadius, showSearchOrigin,
-  isRefreshing,
-}) => {
+const MapComponent = (props) => {
+  const {
+    pubs, userLocation, center, mapCenter, onMapLoad, onSelectPub, selectedPubId, theme,
+    showSearchAreaButton, onSearchThisArea, searchOnNextMoveEnd,
+    pubPlacementState, finalPlacementLocation, onPlacementPinMove, isStPaddysModeActive,
+    isDesktop,
+    isSidebarCollapsed,
+    isListExpanded,
+    searchOrigin, searchRadius, showSearchRadius, showSearchOrigin,
+    isRefreshing,
+  } = props;
+  
+  // Handle inconsistent prop naming from different layouts
+  const onMapMove = props.onMapMove || props.handleMapMove;
+  const onSearchAfterMove = props.onSearchAfterMove || props.handleSearchAfterMove;
+
   const mapRef = useRef(null);
+  const effectiveCenter = center || mapCenter; // Gracefully handle inconsistent prop names
   
   const viewState = {
-    longitude: center.lng,
-    latitude: center.lat,
+    longitude: effectiveCenter.lng,
+    latitude: effectiveCenter.lat,
     zoom: 14,
   };
   
@@ -116,14 +125,13 @@ const MapComponent = ({
     : 'mapbox://styles/mapbox/streets-v12';
 
   const icons = useMemo(() => {
-    const mainColor = '#F59E0B';
-    const selectedColor = '#FBBF24';
+    const stoutlyAmber = '#F59E0B';
     const unratedColor = '#6B7280';
 
     return {
       unrated: () => <PubIcon color={unratedColor} />,
-      rated: () => <PubIcon color={mainColor} />,
-      selected: () => <PubIcon color={selectedColor} />,
+      rated: () => <PubIcon color={stoutlyAmber} />,
+      selected: () => <PubIcon color={stoutlyAmber} />,
       closed: <ClosedPubIcon />,
     };
   }, []);
@@ -167,7 +175,7 @@ const MapComponent = ({
     id: 'search-radius',
     type: 'line',
     paint: {
-      'line-color': theme === 'dark' ? '#FBBF24' : '#4285F4', // amber-400 or a blue
+      'line-color': theme === 'dark' ? '#F59E0B' : '#4285F4', // Stoutly amber or a blue
       'line-opacity': 0.4,
       'line-width': 2,
       'line-dasharray': [2, 2],
@@ -175,18 +183,18 @@ const MapComponent = ({
   };
 
   return (
-    <div className={`w-full h-full relative ${isStPaddysModeActive ? 'map-tiles-paddys' : ''}`}>
+    <div className="w-full h-full relative">
       {isRefreshing && (
         <div className="map-loading-overlay">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-amber-400"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-amber-500"></div>
         </div>
       )}
       <Map
         ref={mapRef}
         initialViewState={viewState}
-        onMove={evt => onMapMove(evt.viewState)}
-        onLoad={() => onMapLoad(mapRef.current)}
-        onMoveEnd={() => searchOnNextMoveEnd && onSearchAfterMove()}
+        onMove={evt => onMapMove && onMapMove(evt.viewState)}
+        onLoad={() => onMapLoad && onMapLoad(mapRef.current)}
+        onMoveEnd={() => searchOnNextMoveEnd && onSearchAfterMove && onSearchAfterMove()}
         style={{ width: '100%', height: '100%' }}
         mapStyle={mapStyle}
         attributionControl={false}
@@ -229,11 +237,12 @@ const MapComponent = ({
         )}
 
       </Map>
-       {showSearchAreaButton && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[1000]">
+       {/* Desktop version of the "Search This Area" button. Mobile version is in MobileLayout.jsx */}
+      {isDesktop && showSearchAreaButton && !selectedPubId && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
           <button
             onClick={onSearchThisArea}
-            className={`bg-amber-500 text-black font-bold rounded-full shadow-lg hover:bg-amber-400 transition-colors flex items-center animate-fade-in-down ${isDesktop ? 'px-4 py-2 space-x-2' : 'px-3 py-1.5 text-sm space-x-1.5'}`}
+            className="bg-amber-500 text-black font-bold rounded-full shadow-lg hover:bg-amber-400 transition-colors flex items-center animate-fade-in-down px-4 py-2 space-x-2"
           >
             <i className="fas fa-search-location"></i>
             <span>Search This Area</span>

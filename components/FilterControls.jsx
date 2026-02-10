@@ -1,3 +1,5 @@
+
+
 import React, { useState, useRef, useEffect } from 'react';
 import { FilterType } from '../types.js';
 import useIsDesktop from '../hooks/useIsDesktop.js';
@@ -65,7 +67,7 @@ const FilterModal = ({ isOpen, onClose, onSelectFilter, currentFilter, filterGui
     );
 };
 
-const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing, filterGuinnessZero, onFilterGuinnessZeroChange }) => {
+const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing, filterGuinnessZero, onFilterGuinnessZeroChange, onSearchClick }) => {
     const isDesktop = useIsDesktop();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const filterMenuRef = useRef(null);
@@ -86,7 +88,7 @@ const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing
     if (!isDesktop) {
         return (
             <>
-                <div className="p-2 bg-gray-100 dark:bg-gray-900 flex justify-center flex-shrink-0">
+                <div className="absolute top-0 left-0 right-0 z-10 p-2 bg-gray-100/90 dark:bg-gray-900/90 backdrop-blur-sm flex justify-center flex-shrink-0 shadow-md">
                     <div className="flex justify-between items-center w-full px-2 space-x-2">
                         <button
                             onClick={() => setIsModalOpen(true)}
@@ -97,6 +99,13 @@ const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing
                                 <span className="font-bold ml-1 text-gray-800 dark:text-white">{currentFilterLabel}</span>
                             </div>
                             <i className="fas fa-chevron-down text-gray-400 dark:text-gray-500 text-xs"></i>
+                        </button>
+                        <button
+                            onClick={onSearchClick}
+                            className="flex-shrink-0 w-11 h-11 text-lg font-semibold rounded-full transition-all duration-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 shadow-sm"
+                            aria-label="Search"
+                        >
+                            <i className="fas fa-search"></i>
                         </button>
                         <button
                             onClick={onRefresh}

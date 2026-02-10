@@ -21,7 +21,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const PrivacyPolicyPage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Privacy Policy" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: January 20, 2026</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: February 9, 2026</p>
             <p>Your privacy is important to us. This Privacy Policy explains how Stoutly ("we," "us," or "our") collects, uses, and shares information about you when you use our Service.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Information We Collect</h2>
@@ -89,7 +89,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 <li><strong>Content Management:</strong> You can delete a comment you've posted, a post you've created, or a rating you have submitted at any time. This will remove it from public view and our primary database.</li>
                 <li><strong>Marketing Preferences:</strong> You can opt-in or opt-out of receiving marketing emails from us at any time via the toggle in the "Settings" section.</li>
                 <li><strong>Location Information:</strong> You can control location permissions through your device or browser settings. Disabling location will limit the functionality of map and distance-based features.</li>
-                <li><strong>Account Deletion (Right to Erasure):</strong> You can request the permanent deletion of your account and personal data by contacting us at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a>. In accordance with data protection regulations such as GDPR, we will process your request <strong>without undue delay and at the latest within one calendar month.</strong> When your account is deleted, your profile, social links, and the direct link between you and your content will be permanently removed. To maintain the integrity of our community-driven pub scores, the numerical scores from your ratings will be retained in an anonymized form, but your username, comments, photos, posts, and any other personal identifiers will be permanently erased.</li>
+                <li><strong>Account Deletion (Right to Erasure):</strong> You can permanently delete your account at any time through the "Danger Zone" section in the app's Settings. For security, you will be required to confirm this action by typing your username. Alternatively, you can request deletion by contacting us at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a>. In accordance with data protection regulations such as GDPR, we will process your request <strong>without undue delay and at the latest within one calendar month.</strong> When your account is deleted, your profile, social links, and the direct link between you and your content will be permanently removed. To maintain the integrity of our community-driven pub scores, the numerical scores from your ratings will be retained in an anonymized form, but your username, comments, photos, posts, and any other personal identifiers will be permanently erased.</li>
             </ul>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">5. Data Retention</h2>

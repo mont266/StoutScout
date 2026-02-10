@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import DesktopNav from './DesktopNav.jsx';
 import FilterControls from './FilterControls.jsx';
@@ -22,7 +22,6 @@ import FriendsListPage from './FriendsListPage.jsx';
 import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
-import ReportCommentModal from './ReportCommentModal.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import SocialContentHub from './SocialContentHub.jsx';
 import ActiveCrawlTracker from './ActiveCrawlTracker.jsx';
@@ -38,12 +37,12 @@ const DesktopLayout = (props) => {
         handleSelectPub, selectedPubId, highlightedRatingId, highlightedCommentId, highlightedPostId,
         handleMapMove,
         handleFindCurrentPub, getDistance,
-        getAverageRating, resultsAreCapped,
+        getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
         profilePage, session, userProfile, onLogout,
-        selectedPub, existingUserRatingForSelectedPub, handleRatePub,
+        selectedPub, existingUserRating, handleRatePub,
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
-        handleUpdateAvatar, viewedProfile, handleViewProfile, legalPageView, handleViewLegal, handleDataRefresh,
+        handleUpdateAvatar, viewedProfile, onViewProfile, legalPageView, handleViewLegal, handleDataRefresh,
         installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
         showSearchAreaButton, handleSearchThisArea,
         searchOnNextMoveEnd, handleSearchAfterMove,
@@ -66,10 +65,9 @@ const DesktopLayout = (props) => {
         onOpenSuggestEditModal,
         unreadNotificationsCount,
         notifications, onMarkNotificationsAsRead, onDeleteNotification,
-        commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment,
+        commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onReportContent,
         commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment,
-        reportCommentInfo, onCloseReportCommentModal, onSubmitReportComment,
-        reportedComments, onFetchReportedComments, onResolveCommentReport, onAdminDeleteComment,
+        reports, onFetchReports, onResolveReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
         userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote,
@@ -98,7 +96,8 @@ const DesktopLayout = (props) => {
         onTestTrophyPopup,
         onTestDonationPopup,
         mapRef, onMapLoad,
-        communitySubTab, setCommunitySubTab,
+        activeSubTab: communitySubTab, 
+        onSubTabChange: setCommunitySubTab,
         isAppHeaderVisible, onMobileScroll, isNavShrunk,
         // Changelog handlers
         hasUnreadChangelog,
@@ -116,6 +115,14 @@ const DesktopLayout = (props) => {
         postSuccessCount,
         panelHeight, setPanelHeight, COLLAPSED_PANEL_HEIGHT,
         handleDonationSuccess,
+        isEditRatingFlow,
+        // Block handlers
+        blockList,
+        blockedUsersProfiles,
+        handleBlockUser,
+        handleUnblockUser,
+        socialsUpdateCount,
+        onDeleteAccountRequest,
     } = props;
     
     const isSocialHubFullScreen = activeTab === 'settings' && settingsSubView === 'social';
@@ -129,8 +136,10 @@ const DesktopLayout = (props) => {
                     friendsList={friendsList}
                     isLoading={isFetchingFriendsList}
                     onBack={() => handleBackFromFriendsList()}
-                    onViewProfile={handleViewProfile}
+                    onViewProfile={onViewProfile}
                     onFriendAction={onFriendAction}
+                    blockedUsersProfiles={blockedUsersProfiles}
+                    onUnblockUser={handleUnblockUser}
                 />
             );
         }
@@ -150,36 +159,10 @@ const DesktopLayout = (props) => {
             if (props.selectedPub) {
                 return (
                     <PubDetails 
+                        {...props}
+                        loggedInUserProfile={props.userProfile}
                         pub={props.selectedPub} 
                         onClose={() => handleSelectPub(null)}
-                        onRate={handleRatePub}
-                        getAverageRating={getAverageRating}
-                        existingUserRating={existingUserRatingForSelectedPub}
-                        session={session}
-                        onLoginRequest={() => setIsAuthOpen(true)}
-                        onViewProfile={handleViewProfile}
-                        loggedInUserProfile={userProfile}
-                        onDataRefresh={handleDataRefresh}
-                        userLikes={userLikes}
-                        onToggleLike={onToggleLike}
-                        isSubmittingRating={isSubmittingRating}
-                        onOpenScoreExplanation={onOpenScoreExplanation}
-                        onOpenSuggestEditModal={onOpenSuggestEditModal}
-                        commentsByRating={commentsByRating}
-                        isCommentsLoading={isCommentsLoading}
-                        onFetchComments={onFetchComments}
-                        onAddComment={onAddComment}
-                        onDeleteComment={onDeleteComment}
-                        onReportComment={onReportComment}
-                        highlightedRatingId={highlightedRatingId}
-                        highlightedCommentId={highlightedCommentId}
-                        userZeroVotes={userZeroVotes}
-                        onGuinnessZeroVote={onGuinnessZeroVote}
-                        onClearGuinnessZeroVote={onClearGuinnessZeroVote}
-                        onOpenShareModal={onOpenShareModal}
-                        onOpenShareRatingModal={onOpenShareRatingModal}
-                        setAlertInfo={props.setAlertInfo}
-                        top10PubIds={top10PubIds}
                     />
                 );
             }
@@ -247,52 +230,13 @@ const DesktopLayout = (props) => {
 
         if (activeTab === 'community') {
             return (
-                <CommunityPage 
-                    userProfile={userProfile}
-                    onViewProfile={handleViewProfile}
-                    friendships={friendships}
-                    onFriendRequest={onFriendRequest}
-                    onFriendAction={onFriendAction}
-                    userLikes={userLikes}
-                    onToggleLike={onToggleLike}
-                    onLoginRequest={() => setIsAuthOpen(true)}
-                    onDataRefresh={handleDataRefresh}
-                    activeSubTab={communitySubTab}
-                    onSubTabChange={setCommunitySubTab}
-                    onViewPub={handleSelectPub}
-                    unreadNotificationsCount={unreadNotificationsCount}
-                    notifications={notifications}
-                    onMarkNotificationsAsRead={onMarkNotificationsAsRead}
-                    onDeleteNotification={onDeleteNotification}
-                    commentsByRating={commentsByRating}
-                    isCommentsLoading={isCommentsLoading}
-                    onFetchComments={onFetchComments}
-                    onAddComment={onAddComment}
-                    onDeleteComment={onDeleteComment}
-                    onReportComment={onReportComment}
-                    commentsByPost={commentsByPost}
-                    isPostCommentsLoading={isPostCommentsLoading}
-                    onFetchCommentsForPost={onFetchCommentsForPost}
-                    onAddPostComment={onAddPostComment}
-                    onDeletePostComment={onDeletePostComment}
-                    onOpenShareRatingModal={onOpenShareRatingModal}
-                    onOpenSharePostModal={onOpenSharePostModal}
-                    dbPubs={dbPubs}
-                    setAlertInfo={props.setAlertInfo}
-                    onOpenCreatePostModal={onOpenCreatePostModal}
-                    userPostLikes={userPostLikes}
-                    onTogglePostLike={onTogglePostLike}
-                    postSuccessCount={postSuccessCount}
-                    pubScores={pubScores}
-                    onEditPost={onEditPost}
-                    onDeletePost={onDeletePost}
-                />
+                <CommunityPage {...props} />
             );
         }
 
         if (activeTab === 'settings') {
             if (settingsSubView === 'moderation') {
-                return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={handleViewProfile} onDataRefresh={handleDataRefresh} reportedComments={reportedComments} onFetchReportedComments={onFetchReportedComments} onResolveCommentReport={onResolveCommentReport} onAdminDeleteComment={onAdminDeleteComment} />;
+                return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={onViewProfile} onDataRefresh={handleDataRefresh} reports={reports} onFetchReports={onFetchReports} onResolveReport={onResolveReport} onAdminDeleteComment={onAdminDeleteComment} />;
             }
             if (settingsSubView === 'social') {
                 return <SocialContentHub onBack={() => handleViewAdminPage(null)} userProfile={userProfile} />;
@@ -307,15 +251,15 @@ const DesktopLayout = (props) => {
                 <div className="h-full flex flex-col">
                     <div className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-800/50">
                         <SettingsPage
-                            settings={settings} onSettingsChange={handleSettingsChange}
+                            settings={settings} handleSettingsChange={handleSettingsChange}
                             userProfile={userProfile} 
                             session={session}
-                            onViewProfile={handleViewProfile}
+                            onViewProfile={onViewProfile}
                             onLogout={onLogout}
-                            onViewLegal={handleViewLegal}
+                            handleViewLegal={handleViewLegal}
                             onViewModeration={() => handleViewAdminPage('moderation')}
                             onViewSocialHub={onViewSocialHub}
-                            onDonationSuccess={handleDonationSuccess}
+                            handleDonationSuccess={handleDonationSuccess}
                             installPromptEvent={installPromptEvent}
                             setInstallPromptEvent={setInstallPromptEvent}
                             onShowIosInstall={() => setIsIosInstallModalOpen(true)}
@@ -344,6 +288,7 @@ const DesktopLayout = (props) => {
                             onViewChangelog={onViewChangelog}
                             onManageChangelog={onManageChangelog}
                             hasUnreadChangelog={hasUnreadChangelog}
+                            onDeleteAccountRequest={onDeleteAccountRequest}
                         />
                     </div>
                 </div>
@@ -442,11 +387,11 @@ const DesktopLayout = (props) => {
                     {/* Moderation Page (when accessed from main nav) */}
                     <div className={`absolute inset-0 ${activeTab === 'moderation' ? '' : 'hidden'}`}>
                         <ModerationPage 
-                            onViewProfile={handleViewProfile} 
+                            onViewProfile={onViewProfile} 
                             onDataRefresh={handleDataRefresh} 
-                            reportedComments={reportedComments} 
-                            onFetchReportedComments={onFetchReportedComments} 
-                            onResolveCommentReport={onResolveCommentReport} 
+                            reports={reports} 
+                            onFetchReports={onFetchReports} 
+                            onResolveReport={onResolveReport} 
                             onAdminDeleteComment={onAdminDeleteComment}
                         />
                     </div>
@@ -486,7 +431,6 @@ const DesktopLayout = (props) => {
             <SubmittingRatingModal isVisible={isSubmittingRating} />
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
-            {reportCommentInfo.isOpen && <ReportCommentModal comment={reportCommentInfo.comment} onClose={onCloseReportCommentModal} onSubmit={onSubmitReportComment} />}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
             {updateConfirmationInfo && <UpdateConfirmationPopup key={updateConfirmationInfo.key} />}
             {deleteConfirmationInfo && <DeleteConfirmationPopup key={deleteConfirmationInfo.key} />}

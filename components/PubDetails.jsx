@@ -16,8 +16,8 @@ import CertifiedExplanationModal from './CertifiedExplanationModal.jsx';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 
-const Section = ({ title, children, ...props }) => (
-    <section {...props} aria-labelledby={title ? `section-title-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined}>
+const Section = React.forwardRef(({ title, children, ...props }, ref) => (
+    <section ref={ref} {...props} aria-labelledby={title ? `section-title-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined}>
         {title && (
             <h3 id={`section-title-${title.replace(/\s+/g, '-').toLowerCase()}`} className="text-xl font-bold text-gray-900 dark:text-white mb-3">
                 {title}
@@ -25,7 +25,7 @@ const Section = ({ title, children, ...props }) => (
         )}
         {children}
     </section>
-);
+));
 
 const ScoreGauge = ({ score }) => {
   if (score === null || score === undefined) return null;
@@ -90,15 +90,16 @@ const PintGallery = ({ ratings, onViewImage }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [] }) => {
+const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [], onReportContent, onViewPub, isEditRatingFlow }) => {
   const [localPub, setLocalPub] = useState(pub);
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
-  const [isRatingFormExpanded, setIsRatingFormExpanded] = useState(!existingUserRating && !!session);
+  const [isRatingFormExpanded, setIsRatingFormExpanded] = useState((isEditRatingFlow && !!existingUserRating) || (!existingUserRating && !!session));
   const [confirmation, setConfirmation] = useState({ isOpen: false });
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [visibleComments, setVisibleComments] = useState({});
   const ratingsListRef = useRef(null);
+  const yourRatingSectionRef = useRef(null);
   const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
   const [isCertifiedModalOpen, setIsCertifiedModalOpen] = useState(false);
   const { rates: exchangeRates } = useContext(ExchangeRatesContext);
@@ -124,7 +125,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
             const fetchFullPubData = async () => {
                 const { data, error } = await supabase
                     .from('pubs')
-                    .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since, is_closed')
+                    .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since, is_closed, guinness_zero_confirmations, guinness_zero_denials')
                     .eq('id', pub.id)
                     .single();
                 if (data && !error) {
@@ -162,6 +163,15 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
         }
     }
   }, [pub]);
+  
+    useEffect(() => {
+        // Scroll to the rating form if it was opened via the "Edit" flow
+        if (isEditRatingFlow && existingUserRating && yourRatingSectionRef.current) {
+            setTimeout(() => {
+                yourRatingSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 400); // A short delay for the panel animation to finish
+        }
+    }, [isEditRatingFlow, existingUserRating]);
 
   useEffect(() => {
     if (highlightedRatingId && ratingsListRef.current) {
@@ -393,10 +403,10 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                         <button
                             onClick={() => onClearGuinnessZeroVote(localPub.id)}
                             disabled={currentUserVote === undefined}
-                            className={`w-1/3 py-2 text-sm rounded-lg font-bold transition-colors flex items-center justify-center space-x-2 disabled:cursor-not-allowed ${
-                                currentUserVote === undefined
-                                ? 'bg-gray-500 text-white shadow'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            className={`w-1/3 py-2 text-sm rounded-lg font-bold transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                currentUserVote !== undefined
+                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                : 'bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-500' // Inactive and disabled style
                             }`}
                         >
                              <i className="fas fa-question"></i>
@@ -430,7 +440,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
     
     if (existingUserRating) {
         return (
-            <Section title="Your Rating">
+            <Section title="Your Rating" ref={yourRatingSectionRef}>
                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">
                     {!isRatingFormExpanded && (
                          <button 
@@ -463,7 +473,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
 
     // New rating, form is inside a collapsible section
     return (
-        <Section title="Your Rating">
+        <Section title="Your Rating" ref={yourRatingSectionRef}>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">
                 {!isRatingFormExpanded && (
                     <button 
@@ -499,7 +509,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
     {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={isActionLoading} onClose={() => setConfirmation({ isOpen: false })} />}
     {isCertifiedModalOpen && <CertifiedExplanationModal isOpen={isCertifiedModalOpen} onClose={() => setIsCertifiedModalOpen(false)} />}
 
-    <div className="flex flex-col bg-gray-100 dark:bg-gray-900 min-h-full">
+    <div className="flex flex-col bg-gray-100 dark:bg-gray-900 h-full">
         <header className="sticky top-0 p-4 bg-white dark:bg-gray-800 shadow-md z-10 flex-shrink-0">
             <div className="flex items-center space-x-2">
                 <button
@@ -541,7 +551,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
             </div>
         </header>
 
-        <main className="flex-grow">
+        <main className="flex-grow overflow-y-auto">
             <div className={`w-full ${isDesktop ? 'max-w-3xl mx-auto' : ''} p-4 space-y-6`}>
                 {isDevInfoVisible && isDeveloper && (
                     <Section>
@@ -680,7 +690,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                                             onViewProfile={onViewProfile}
                                             onLoginRequest={onLoginRequest}
                                             onViewImage={setImageToView}
-                                            onViewPub={null} // Already on the pub page
+                                            onViewPub={onViewPub}
                                             loggedInUserProfile={loggedInUserProfile}
                                             comments={commentsByRating.get(rating.id)}
                                             isCommentsLoading={isCommentsLoading}
@@ -688,6 +698,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                                             onAddComment={onAddComment}
                                             onDeleteComment={onDeleteComment}
                                             onReportComment={onReportComment}
+                                            onReportContent={onReportContent}
                                             onOpenShareRatingModal={onOpenShareRatingModal}
                                             fallbackLocationData={localPub}
                                             highlightedCommentId={rating.id === highlightedRatingId ? highlightedCommentId : null}

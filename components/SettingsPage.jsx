@@ -51,20 +51,22 @@ const DevSubheading = ({ children }) => (
 );
 
 
-const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogout, onViewLegal, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode, onViewModeration, isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner, onTestTrophyPopup, onViewChangelog, onManageChangelog, hasUnreadChangelog, onDonationSuccess, onTestDonationPopup }) => {
+const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, onLogout, handleViewLegal, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode, onViewModeration, isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner, onTestTrophyPopup, onViewChangelog, onManageChangelog, hasUnreadChangelog, handleDonationSuccess, onTestDonationPopup, onDeleteAccountRequest }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [confirmation, setConfirmation] = useState({ isOpen: false });
   const isDesktop = useIsDesktop();
   
+  const isNativeIos = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+
   const handleThemeChange = (theme) => {
-    onSettingsChange({ ...settings, theme });
+    handleSettingsChange({ ...settings, theme });
     trackEvent('change_setting', { setting_name: 'theme', value: theme });
   };
   
   const handleRadiusChange = (e) => {
     const radiusInMiles = parseFloat(e.target.value);
-    onSettingsChange({ ...settings, radius: radiusInMiles * MILES_TO_METERS });
+    handleSettingsChange({ ...settings, radius: radiusInMiles * MILES_TO_METERS });
   };
   
   useEffect(() => {
@@ -191,12 +193,12 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
             <SettingsItem icon="fa-ruler-horizontal" label="Distance Unit">
               <div className="flex rounded-lg bg-gray-200 dark:bg-gray-900 p-1" role="group">
                 <button
-                  onClick={() => onSettingsChange({ ...settings, unit: 'mi' })}
+                  onClick={() => handleSettingsChange({ ...settings, unit: 'mi' })}
                   className={`w-20 py-1 rounded-md font-bold text-sm transition-colors ${settings.unit === 'mi' ? 'bg-amber-500 text-black' : 'text-gray-600 dark:text-gray-300'}`}
                   aria-pressed={settings.unit === 'mi'}
                 >Miles</button>
                 <button
-                  onClick={() => onSettingsChange({ ...settings, unit: 'km' })}
+                  onClick={() => handleSettingsChange({ ...settings, unit: 'km' })}
                   className={`w-20 py-1 rounded-md font-bold text-sm transition-colors ${settings.unit === 'km' ? 'bg-amber-500 text-black' : 'text-gray-600 dark:text-gray-300'}`}
                   aria-pressed={settings.unit === 'km'}
                 >Km</button>
@@ -221,7 +223,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                         id="show-radius-toggle" type="checkbox" className="sr-only peer"
                         checked={settings.showSearchRadius}
                         onChange={(e) => {
-                            onSettingsChange({ ...settings, showSearchRadius: e.target.checked });
+                            handleSettingsChange({ ...settings, showSearchRadius: e.target.checked });
                             trackEvent('change_setting', { setting_name: 'show_search_radius', value: e.target.checked });
                         }}
                     />
@@ -235,7 +237,6 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
           <SettingsSection title="Account">
             {session ? (
               <>
-                <SettingsItem icon="fa-user-circle" label="My Profile" onClick={() => onViewProfile(userProfile.id, 'settings')} />
                 <SettingsItem icon="fa-key" label="Change Password">
                   <button
                     onClick={handleChangePassword}
@@ -246,9 +247,9 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                   </button>
                 </SettingsItem>
                  <SettingsItem icon="fa-envelope" label="Marketing Emails">
-                    <label htmlFor="marketing-toggle" className="relative cursor-pointer">
+                    <label className="relative cursor-pointer">
                         <input
-                            id="marketing-toggle" type="checkbox" className="sr-only peer"
+                            type="checkbox" className="sr-only peer"
                             checked={userProfile.accepts_marketing}
                             onChange={(e) => onMarketingConsentChange(e.target.checked)}
                         />
@@ -269,18 +270,20 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
           </SettingsSection>
 
           {/* Support Section */}
-          <SettingsSection title="Support Stoutly" id="support-section">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-                Stoutly is a passion project, and every donation helps cover server costs and fuels future development. Thank you for your support!
-            </p>
-            <DonationForm 
-                userProfile={userProfile} 
-                onSuccess={onDonationSuccess}
-                userTrophies={userTrophies}
-                allTrophies={allTrophies}
-                onLoginRequest={onLoginRequest}
-            />
-          </SettingsSection>
+          {!isNativeIos && (
+            <SettingsSection title="Support Stoutly" id="support-section">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Stoutly is a passion project, and every donation helps cover server costs and fuels future development. Thank you for your support!
+              </p>
+              <DonationForm 
+                  userProfile={userProfile} 
+                  onSuccess={handleDonationSuccess}
+                  userTrophies={userTrophies}
+                  allTrophies={allTrophies}
+                  onLoginRequest={onLoginRequest}
+              />
+            </SettingsSection>
+          )}
 
           {/* About Stoutly Section */}
           <SettingsSection title="About Stoutly">
@@ -291,8 +294,8 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
 
           {/* Legal Section */}
           <SettingsSection title="Legal">
-            <SettingsItem icon="fa-file-alt" label="Terms of Use" onClick={() => onViewLegal('terms')} />
-            <SettingsItem icon="fa-shield-alt" label="Privacy Policy" onClick={() => onViewLegal('privacy')} />
+            <SettingsItem icon="fa-file-alt" label="Terms of Use" onClick={() => handleViewLegal('terms')} />
+            <SettingsItem icon="fa-shield-alt" label="Privacy Policy" onClick={() => handleViewLegal('privacy')} />
           </SettingsSection>
 
           {/* Developer Section */}
@@ -344,7 +347,7 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                         <input
                             id="show-origin-toggle" type="checkbox" className="sr-only peer"
                             checked={settings.showSearchOrigin}
-                            onChange={(e) => onSettingsChange({ ...settings, showSearchOrigin: e.target.checked })}
+                            onChange={(e) => handleSettingsChange({ ...settings, showSearchOrigin: e.target.checked })}
                         />
                         <div className="block w-11 h-6 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
                         <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
@@ -377,6 +380,25 @@ const SettingsPage = ({ settings, onSettingsChange, userProfile, session, onLogo
                     </div>
                 </SettingsItem>
             </SettingsSection>
+          )}
+
+          {/* Danger Zone */}
+          {session && (
+            <div id="danger-zone-section" className="border-2 border-red-500 rounded-xl p-4 space-y-2">
+                <h3 className="text-lg font-bold text-red-500 dark:text-red-400">Danger Zone</h3>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="font-semibold text-gray-800 dark:text-white">Delete My Account</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Permanently erase all your data.</p>
+                    </div>
+                    <button
+                        onClick={onDeleteAccountRequest}
+                        className="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors text-sm"
+                    >
+                        Delete Account
+                    </button>
+                </div>
+            </div>
           )}
 
         </div>

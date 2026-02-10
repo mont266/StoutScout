@@ -29,6 +29,8 @@ const contentFilterOptions = [
 
 const PULL_THRESHOLD = 80;
 
+const EMPTY_SET = new Set();
+
 const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFriendAction }) => {
     const { friendship_status, friendship_id, action_user_id } = targetUser;
     
@@ -161,8 +163,7 @@ const UserSearch = ({ onBack, onViewProfile, userProfile, onFriendRequest, onFri
     );
 };
 
-
-const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, userProfile, friendships, onFriendRequest, onFriendAction, onViewPub, filter, onFilterChange, contentFilter, onContentFilterChange, postSubFilter, onPostSubFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs, onMobileScroll, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal }) => {
+const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, userProfile, friendships, onFriendRequest, onFriendAction, onViewPub, filter, onFilterChange, contentFilter, onContentFilterChange, postSubFilter, onPostSubFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onOpenShareRatingModal, dbPubs, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent, blockList = EMPTY_SET, socialsUpdateCount, onViewImage }) => {
     const [view, setView] = useState('feed');
     const [feedItems, setFeedItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -267,9 +268,12 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
             const newPosts = (postsResult.data || []).map(p => ({ ...p, item_type: 'post' }));
 
             const combined = [...newRatings, ...newPosts];
+
+            // Client-side filtering as a safeguard against RLS issues
+            const filtered = combined.filter(item => item.user && !blockList.has(item.user.id));
     
             setFeedItems(prev => {
-                const allItems = pageNum === 1 ? combined : [...prev, ...combined];
+                const allItems = pageNum === 1 ? filtered : [...prev, ...filtered];
                 const uniqueItems = Array.from(new Map(allItems.map(item => [`${item.item_type}-${item.id}`, item])).values());
                 return uniqueItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             });
@@ -284,9 +288,13 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         } finally {
             setLoading(false);
         }
-    }, [userProfile, friendships, filter, contentFilter, postSubFilter]);
-    
+    }, [userProfile, friendships, filter, contentFilter, postSubFilter, blockList]);
+
     const handleFeedToggleLike = (ratingToToggle) => {
+        if (!loggedInUserProfile) {
+            onToggleLike(ratingToToggle); // Use the passed-in handler which already checks for auth
+            return;
+        }
         setFeedItems(currentItems => 
             currentItems.map(item => {
                 if (item.item_type === 'rating' && item.id === ratingToToggle.id) {
@@ -301,6 +309,10 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
     };
 
     const handleFeedTogglePostLike = (postToToggle) => {
+        if (!loggedInUserProfile) {
+            onTogglePostLike(postToToggle);
+            return;
+        }
         setFeedItems(currentItems => 
             currentItems.map(item => {
                 if (item.item_type === 'post' && item.id === postToToggle.id) {
@@ -375,7 +387,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         setHasMore(true);
         setFeedItems([]);
         fetchFeedItems(1);
-    }, [fetchFeedItems, postSuccessCount]);
+    }, [fetchFeedItems, postSuccessCount, socialsUpdateCount]);
 
     useEffect(() => {
         if (!hasFriends) return;
@@ -464,17 +476,9 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
         } else if (isScrollingDown && isFiltersExpanded) {
             setIsFiltersExpanded(false); // Auto-collapse when scrolling down
         }
-    
-        if (!isDesktop) {
-            const scrollThreshold = 10;
-            const scrollingDown = currentScrollY > lastScrollY.current && currentScrollY > scrollThreshold;
-            if (onMobileScroll) {
-                onMobileScroll(scrollingDown);
-            }
-        }
         
         lastScrollY.current = currentScrollY <= 0 ? 0 : currentScrollY;
-    }, [isDesktop, onMobileScroll, isFiltersExpanded]);
+    }, [isFiltersExpanded]);
 
 
     const handleScrollToTop = () => {
@@ -560,7 +564,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                                 key={`rating-${item.id}`}
                                 rating={item}
                                 userLikes={userLikes}
-                                onToggleLike={loggedInUserProfile ? handleFeedToggleLike : null}
+                                onToggleLike={handleFeedToggleLike}
                                 onViewProfile={onViewProfile}
                                 onLoginRequest={onLoginRequest}
                                 onViewImage={onViewImage}
@@ -571,7 +575,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                                 onFetchComments={onFetchComments}
                                 onAddComment={handleFeedAddComment}
                                 onDeleteComment={handleFeedDeleteComment}
-                                onReportComment={onReportComment}
+                                onReportContent={onReportContent}
                                 onOpenShareRatingModal={onOpenShareRatingModal}
                                 fallbackLocationData={fallbackPubData}
                             />
@@ -583,7 +587,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                                 key={`post-${item.id}`}
                                 post={item}
                                 userPostLikes={userPostLikes}
-                                onToggleLike={loggedInUserProfile ? handleFeedTogglePostLike : null}
+                                onToggleLike={handleFeedTogglePostLike}
                                 onViewProfile={onViewProfile}
                                 onLoginRequest={onLoginRequest}
                                 onViewPub={onViewPub}
@@ -592,7 +596,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, o
                                 onFetchCommentsForPost={onFetchCommentsForPost}
                                 onAddPostComment={handleFeedAddPostComment}
                                 onDeletePostComment={handleFeedDeletePostComment}
-                                onReportComment={onReportComment}
+                                onReportContent={onReportContent}
                                 onOpenSharePostModal={onOpenSharePostModal}
                                 loggedInUserProfile={loggedInUserProfile}
                                 pubScores={pubScores}

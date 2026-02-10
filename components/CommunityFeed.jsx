@@ -29,7 +29,9 @@ const contentFilterOptions = [
 
 const PULL_THRESHOLD = 80;
 
-const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, onViewImage, onViewPub, filter, onFilterChange, contentFilter, onContentFilterChange, postSubFilter, onPostSubFilterChange, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, onOpenShareRatingModal, dbPubs, onMobileScroll, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal }) => {
+const EMPTY_SET = new Set();
+
+const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onOpenShareRatingModal, dbPubs, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent, blockList = EMPTY_SET, socialsUpdateCount, filter, onFilterChange, contentFilter, onContentFilterChange, postSubFilter, onPostSubFilterChange, onViewImage, onViewPub }) => {
     const [feedItems, setFeedItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -122,9 +124,12 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
             const newPosts = (postsResult.data || []).map(p => ({ ...p, item_type: 'post' }));
 
             const combined = [...newRatings, ...newPosts];
+
+            // Client-side filtering as a safeguard against RLS issues
+            const filtered = combined.filter(item => item.user && !blockList.has(item.user.id));
             
             setFeedItems(prev => {
-                const allItems = pageNum === 1 ? combined : [...prev, ...combined];
+                const allItems = pageNum === 1 ? filtered : [...prev, ...filtered];
                 const uniqueItems = Array.from(new Map(allItems.map(item => [`${item.item_type}-${item.id}`, item])).values());
                 // Re-sort everything by creation date after merging
                 return uniqueItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));;
@@ -140,11 +145,13 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         } finally {
             setLoading(false);
         }
-    }, [filter, contentFilter, postSubFilter]);
-    
-    // This is the local optimistic update for the like count in the feed.
-    // It then calls the parent `onToggleLike` to handle the database and global `userLikes` state.
+    }, [filter, contentFilter, postSubFilter, blockList]);
+
     const handleFeedToggleLike = (ratingToToggle) => {
+        if (!loggedInUserProfile) {
+            onToggleLike(ratingToToggle); // Use the passed-in handler which already checks for auth
+            return;
+        }
         setFeedItems(currentItems => 
             currentItems.map(item => {
                 if (item.item_type === 'rating' && item.id === ratingToToggle.id) {
@@ -161,6 +168,10 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     };
     
     const handleFeedTogglePostLike = (postToToggle) => {
+        if (!loggedInUserProfile) {
+            onTogglePostLike(postToToggle);
+            return;
+        }
         setFeedItems(currentItems => 
             currentItems.map(item => {
                 if (item.item_type === 'post' && item.id === postToToggle.id) {
@@ -237,7 +248,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         setHasMore(true);
         setFeedItems([]);
         fetchFeedItems(1);
-    }, [fetchFeedItems, postSuccessCount]);
+    }, [fetchFeedItems, postSuccessCount, socialsUpdateCount]);
 
     useEffect(() => {
         const observer = new IntersectionObserver(
@@ -327,17 +338,8 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
             setIsFiltersExpanded(false); // Auto-collapse when scrolling down
         }
     
-        // Handle mobile-specific nav shrink (existing logic)
-        if (!isDesktop) {
-            const navScrollThreshold = 10;
-            const scrollingDown = currentScrollY > lastScrollY.current && currentScrollY > navScrollThreshold;
-            if (onMobileScroll) {
-                onMobileScroll(scrollingDown);
-            }
-        }
-        
         lastScrollY.current = currentScrollY <= 0 ? 0 : currentScrollY;
-    }, [isDesktop, onMobileScroll, isFiltersExpanded]);
+    }, [isFiltersExpanded]);
 
     const handleScrollToTop = () => {
         if (containerRef.current) {
@@ -392,7 +394,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                                 key={`rating-${item.id}`}
                                 rating={item}
                                 userLikes={userLikes}
-                                onToggleLike={loggedInUserProfile ? handleFeedToggleLike : null}
+                                onToggleLike={handleFeedToggleLike}
                                 onViewProfile={onViewProfile}
                                 onLoginRequest={onLoginRequest}
                                 onViewImage={onViewImage}
@@ -403,7 +405,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                                 onFetchComments={onFetchComments}
                                 onAddComment={handleFeedAddComment}
                                 onDeleteComment={handleFeedDeleteComment}
-                                onReportComment={onReportComment}
+                                onReportContent={onReportContent}
                                 onOpenShareRatingModal={onOpenShareRatingModal}
                                 fallbackLocationData={fallbackPubData}
                             />
@@ -415,7 +417,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                                 key={`post-${item.id}`}
                                 post={item}
                                 userPostLikes={userPostLikes}
-                                onToggleLike={loggedInUserProfile ? handleFeedTogglePostLike : null}
+                                onToggleLike={handleFeedTogglePostLike}
                                 onViewProfile={onViewProfile}
                                 onLoginRequest={onLoginRequest}
                                 onViewPub={onViewPub}
@@ -424,7 +426,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                                 onFetchCommentsForPost={onFetchCommentsForPost}
                                 onAddPostComment={handleFeedAddPostComment}
                                 onDeletePostComment={handleFeedDeletePostComment}
-                                onReportComment={onReportComment}
+                                onReportContent={onReportContent}
                                 onOpenSharePostModal={onOpenSharePostModal}
                                 loggedInUserProfile={loggedInUserProfile}
                                 pubScores={pubScores}

@@ -22,6 +22,7 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
     const [isLoadingCrawlDetail, setIsLoadingCrawlDetail] = useState(false);
     const [crawlToDelete, setCrawlToDelete] = useState(null);
     const [crawlToReset, setCrawlToReset] = useState(null);
+    const [activeTab, setActiveTab] = useState('my_crawls');
 
     const fetchSavedCrawls = useCallback(async () => {
         if (!userProfile) return;
@@ -287,7 +288,7 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
         }
     };
     
-    const renderContent = () => {
+    const renderMyCrawls = () => {
         if (loading) {
             return (
                 <div className="flex justify-center items-center h-full">
@@ -335,6 +336,29 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
             </ul>
         );
     };
+
+    const renderCommunityCrawls = () => (
+        <div className="text-center text-gray-500 dark:text-gray-400 p-8">
+            <i className="fas fa-users-slash fa-3x mb-4"></i>
+            <h2 className="text-xl font-bold">Coming Soon!</h2>
+            <p className="mt-2">Soon you'll be able to discover and save public pub crawls created by the Stoutly community.</p>
+        </div>
+    );
+    
+    const TabButton = ({ tabId, label, isActive, onClick }) => (
+        <button
+            onClick={onClick}
+            className={`px-1 py-4 text-sm font-medium border-b-2 ${
+                isActive
+                ? 'border-amber-500 text-amber-600 dark:text-amber-400'
+                : 'border-transparent text-gray-500 hover:border-gray-300 dark:hover:border-gray-600'
+            }`}
+            role="tab"
+            aria-selected={isActive}
+        >
+            {label}
+        </button>
+    );
 
     if (viewingCrawl) {
         return (
@@ -400,32 +424,48 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
             )}
             <div className="h-full flex flex-col">
                 <header className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center space-x-3">
-                            <i className="fas fa-route text-2xl text-amber-500"></i>
-                            <div className="flex items-center gap-2">
-                                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Pub Crawl Planner</h1>
-                                <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">BETA</span>
+                    <div className="max-w-4xl mx-auto">
+                        <div className="flex justify-between items-center">
+                            <div className="flex items-center space-x-3">
+                                <i className="fas fa-route text-2xl text-amber-500"></i>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Pub Crawl Planner</h1>
+                                    <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">BETA</span>
+                                </div>
                             </div>
                         </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                            Plan, save, and track your ultimate Guinness adventures.
+                        </p>
                     </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                        Plan, save, and track your ultimate Guinness adventures.
-                    </p>
                 </header>
-                <main className="flex-grow overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4">
-                    <div className="space-y-4">
-                        <button
-                            onClick={() => setIsSetupModalOpen(true)}
-                            className="w-full bg-amber-500 text-black font-bold py-3 px-4 rounded-lg hover:bg-amber-400 transition-colors flex items-center justify-center space-x-2 text-lg"
-                        >
-                            <i className="fas fa-magic"></i>
-                            <span>Plan a New Crawl</span>
-                        </button>
-
-                        <h2 className="text-xl font-bold text-gray-800 dark:text-white pt-4 border-t border-gray-200 dark:border-gray-700">My Saved Crawls ({savedCrawls.length})</h2>
-                        {renderContent()}
+                 <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <div className="max-w-4xl mx-auto px-4">
+                        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                            <TabButton tabId="my_crawls" label="My Crawls" isActive={activeTab === 'my_crawls'} onClick={() => setActiveTab('my_crawls')} />
+                            <TabButton tabId="community_crawls" label="Community Crawls" isActive={activeTab === 'community_crawls'} onClick={() => setActiveTab('community_crawls')} />
+                        </nav>
                     </div>
+                </div>
+                <main className="flex-grow overflow-y-auto bg-gray-100 dark:bg-gray-900">
+                   <div className="max-w-4xl mx-auto p-4">
+                        <div className="space-y-4">
+                            {activeTab === 'my_crawls' && (
+                                <>
+                                    <button
+                                        onClick={() => setIsSetupModalOpen(true)}
+                                        className="w-full bg-amber-500 text-black font-bold py-3 px-4 rounded-lg hover:bg-amber-400 transition-colors flex items-center justify-center space-x-2 text-lg"
+                                    >
+                                        <i className="fas fa-magic"></i>
+                                        <span>Plan a New Crawl</span>
+                                    </button>
+                                    <h2 className="text-xl font-bold text-gray-800 dark:text-white pt-4 border-t border-gray-200 dark:border-gray-700">My Saved Crawls ({savedCrawls.length})</h2>
+                                    {renderMyCrawls()}
+                                </>
+                            )}
+                            {activeTab === 'community_crawls' && renderCommunityCrawls()}
+                        </div>
+                   </div>
                 </main>
             </div>
         </>

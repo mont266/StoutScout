@@ -93,6 +93,49 @@ const StatsModal = ({ isOpen, onClose, userRatings, onViewPub, rankData, userPro
     return createPortal(modalContent, modalRoot);
 };
 
+// New Modal component for desktop stats view
+const DesktopStatsModal = ({ isOpen, onClose, userRatings, onViewPub, rankData, userProfile, levelRequirements, pubScores }) => {
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
+    
+    if (!isOpen) return null;
+
+    const modalContent = (
+        <div
+            className="fixed inset-0 bg-black/60 z-[1300] flex items-center justify-center p-4 animate-modal-fade-in"
+            onClick={onClose}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="desktop-stats-title"
+        >
+            <div
+                className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <header className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <h2 id="desktop-stats-title" className="text-xl font-bold text-gray-800 dark:text-white">Profile Stats</h2>
+                    <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white p-2 rounded-full">
+                        <i className="fas fa-times fa-lg"></i>
+                    </button>
+                </header>
+                <div className="flex-grow overflow-y-auto bg-gray-100 dark:bg-gray-900">
+                    <ProfileStatsView userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />
+                </div>
+            </div>
+        </div>
+    );
+    
+    const modalRoot = document.getElementById('modal-root');
+    if (!modalRoot) return null;
+    return createPortal(modalContent, modalRoot);
+};
+
 
 // Helper component for badges
 const UserBadges = ({ profile, className = '', justification = 'justify-center' }) => {
@@ -278,6 +321,7 @@ const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendReque
 
 const TrophyCabinet = ({ trophies, onOpenTrophyModal, onNavigateToSettings }) => {
     const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
+    const isNativeIos = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
 
     const displayItems = [...(trophies || [])];
     while (displayItems.length < 4) {
@@ -323,15 +367,21 @@ const TrophyCabinet = ({ trophies, onOpenTrophyModal, onNavigateToSettings }) =>
                                 <div className={`absolute bottom-full mb-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-300 z-10 ${tooltipPositionClasses}`}>
                                     <h5 className={`font-bold text-base ${trophy.isUnlocked ? 'text-amber-400' : 'text-gray-400'}`}>{trophy.name} {!trophy.isUnlocked && '(Locked)'}</h5>
                                     <p className="text-gray-300 mt-1">{trophy.description}</p>
-                                    {!trophy.isUnlocked && trophy.id === PATRON_TROPHY_ID && onNavigateToSettings && (
+                                    {!trophy.isUnlocked && trophy.id === PATRON_TROPHY_ID && (
                                         <div className="mt-2 pt-2 border-t border-gray-700">
-                                            <button
-                                                onClick={() => onNavigateToSettings('settings', 'support')}
-                                                className="w-full bg-amber-500 text-black text-xs font-bold py-1.5 px-3 rounded-md hover:bg-amber-400 transition-colors flex items-center justify-center space-x-1.5 pointer-events-auto"
-                                            >
-                                                <i className="fas fa-heart"></i>
-                                                <span>Support Us to Unlock</span>
-                                            </button>
+                                            {isNativeIos ? (
+                                                <p className="text-xs text-center text-amber-400">
+                                                    To unlock, please visit <strong className="font-bold">app.stoutly.co.uk</strong> and donate via the web app.
+                                                </p>
+                                            ) : onNavigateToSettings ? (
+                                                <button
+                                                    onClick={() => onNavigateToSettings('settings', 'support')}
+                                                    className="w-full bg-amber-500 text-black text-xs font-bold py-1.5 px-3 rounded-md hover:bg-amber-400 transition-colors flex items-center justify-center space-x-1.5 pointer-events-auto"
+                                                >
+                                                    <i className="fas fa-heart"></i>
+                                                    <span>Support Us to Unlock</span>
+                                                </button>
+                                            ) : null}
                                         </div>
                                     )}
                                     <div className={`absolute top-full w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-gray-900 ${arrowPositionClasses}`}></div>
@@ -390,7 +440,24 @@ const hasMetConditions = (trophy, stats) => {
     return conditionChecked;
 };
 
-const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen, userPostLikes, onTogglePostLike, onViewProfile }) => {
+// A reusable card component for consistent styling
+const StatCard = ({ icon, title, children, className = '', onClick }) => (
+    <div
+        onClick={onClick}
+        className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md ${onClick ? 'cursor-pointer transition-transform hover:scale-105' : ''} ${className}`}
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : -1}
+        onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); } : undefined}
+    >
+        <div className="flex items-center space-x-3 mb-2">
+            <i className={`fas ${icon} text-amber-500 dark:text-amber-400 w-5 text-center`}></i>
+            <h3 className="font-bold text-gray-800 dark:text-white">{title}</h3>
+        </div>
+        <div className="pl-8">{children}</div>
+    </div>
+);
+
+const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen, userPostLikes, onTogglePostLike, onViewProfile, onReportContent, onEditPost, onDeletePost, onOpenSharePostModal, blockList, onBlockUser, onUnblockUser, blockedUsersProfiles }) => {
     const isDesktop = useIsDesktop();
     const [isBanning, setIsBanning] = useState(false);
     const [isUnbanning, setIsUnbanning] = useState(false);
@@ -780,6 +847,11 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                         onLoginRequest={() => {}} // User is already logged in to see their own profile
                         onViewPub={onViewPub}
                         pubScores={pubScores}
+                        onEditPost={onEditPost}
+                        onDeletePost={onDeletePost}
+                        loggedInUserProfile={loggedInUserProfile}
+                        onReportContent={onReportContent}
+                        onOpenSharePostModal={onOpenSharePostModal}
                     />
                 ))}
             </div>
@@ -811,303 +883,168 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                                 </button>
                             )}
                         </div>
-                        <div className="text-sm">
-                            <h4 className="font-bold mb-2">Roles</h4>
-                            <div className="space-y-2">
-                                <label className="flex items-center justify-between"><span className="font-semibold text-amber-600 dark:text-amber-400">Developer</span><input type="checkbox" checked={userProfile.is_developer} onChange={(e) => confirmSetRole('is_developer', e.target.checked)} disabled={isUpdatingRoles} className="w-5 h-5 rounded text-amber-500 focus:ring-amber-500" /></label>
-                                <label className="flex items-center justify-between"><span className="font-semibold text-purple-600 dark:text-purple-400">Team Member</span><input type="checkbox" checked={is_team_member} onChange={(e) => confirmSetRole('is_team_member', e.target.checked)} disabled={isUpdatingRoles} className="w-5 h-5 rounded text-purple-500 focus:ring-purple-500" /></label>
-                            </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                             <p><strong>Images Removed:</strong> {removed_image_count || 0}</p>
                         </div>
-                        {is_banned && userProfile.ban_reason && (
-                             <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-md">
-                                <p className="text-xs text-red-800 dark:text-red-300"><strong className="block">Ban Reason:</strong> {userProfile.ban_reason}</p>
+
+                         <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                             <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">Set Roles</h4>
+                             <div className="space-y-2">
+                                <label className="flex items-center justify-between">
+                                    <span className="text-gray-700 dark:text-gray-300">Developer</span>
+                                    <input type="checkbox" checked={userProfile.is_developer || false} onChange={(e) => confirmSetRole('is_developer', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+                                </label>
+                                 <label className="flex items-center justify-between">
+                                    <span className="text-gray-700 dark:text-gray-300">Beta Tester</span>
+                                    <input type="checkbox" checked={userProfile.is_beta_tester || false} onChange={(e) => confirmSetRole('is_beta_tester', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+                                </label>
+                                 <label className="flex items-center justify-between">
+                                    <span className="text-gray-700 dark:text-gray-300">Team Member</span>
+                                    <input type="checkbox" checked={userProfile.is_team_member || false} onChange={(e) => confirmSetRole('is_team_member', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+                                </label>
                             </div>
-                        )}
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Removed images: {removed_image_count || 0}</p>
+                         </div>
                     </div>
                 )}
             </div>
         )
-    );
-
-    const RankProgression = () => (
-         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md">
-            <button
-                onClick={() => toggleSection('rank_progression', isRankProgressionVisible, setIsRankProgressionVisible)}
-                className="w-full flex justify-between items-center text-left text-xl font-semibold p-2 bg-gray-100 dark:bg-gray-700/50 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500"
-                aria-expanded={isRankProgressionVisible}
-                aria-controls="rank-progression-panel"
-            >
-                <span><i className="fas fa-chart-line mr-2"></i>Rank Progression</span>
-                <i className={`fas fa-chevron-down text-gray-500/70 dark:text-gray-400/70 transition-transform duration-300 ${isRankProgressionVisible ? 'rotate-180' : ''}`}></i>
-            </button>
-            {isRankProgressionVisible && (
-                <div id="rank-progression-panel" className="mt-4">
-                    <ul className="space-y-3">
-                        {RANK_DETAILS.map(rank => {
-                            const isAchieved = level >= rank.minLevel;
-                            return (
-                                <li key={rank.name} className={`flex items-center space-x-3 p-2 rounded-md transition-colors ${isAchieved ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>
-                                    <i className={`fas ${rank.icon} text-2xl w-8 text-center ${isAchieved ? '' : 'opacity-50'}`}></i>
-                                    <div>
-                                        <p className={`font-bold ${isAchieved ? 'text-amber-800 dark:text-amber-200' : ''}`}>{rank.name}</p>
-                                        <p className="text-xs">Requires Level {rank.minLevel}</p>
-                                    </div>
-                                    {isAchieved && <i className="fas fa-check-circle ml-auto text-green-500"></i>}
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </div>
-            )}
-        </div>
     );
     
-    const DevInfo = () => (
-        isDeveloper && (
-            <section className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md">
-                <button
-                    onClick={() => setIsDevInfoVisible(prev => !prev)}
-                    className="w-full flex justify-between items-center text-left text-xl font-semibold text-gray-800 dark:text-white p-2 bg-gray-100 dark:bg-gray-700/50 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                    aria-expanded={isDevInfoVisible}
-                >
-                    <span><i className="fas fa-code mr-2"></i>Developer Info</span>
-                    <i className={`fas fa-chevron-down text-gray-500/70 dark:text-gray-400/70 transition-transform duration-300 ${isDevInfoVisible ? 'rotate-180' : ''}`}></i>
-                </button>
-                {isDevInfoVisible && (
-                    <div className="mt-4 p-3 bg-gray-200 dark:bg-gray-900 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 break-all animate-fade-in-down">
-                        <p><strong>User ID:</strong> {userProfile.id}</p>
-                        <p><strong>Created:</strong> {new Date(userProfile.created_at).toLocaleString('en-GB')}</p>
-                        <p><strong>Last Login:</strong> {userProfile.last_sign_in_at ? new Date(userProfile.last_sign_in_at).toLocaleString('en-GB') : 'Unknown'}</p>
-                        {userProfile.signup_utm_source && <p><strong>UTM Source:</strong> {userProfile.signup_utm_source}</p>}
-                    </div>
-                )}
-            </section>
-        )
-    );
-
-    if (isDesktop && isStatsModalOpen) {
-        return (
-            <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900 overflow-hidden">
-                <header className="flex items-center p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-800">
-                    <button onClick={() => onSetIsStatsModalOpen(false)} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg transition-colors">
-                        <i className="fas fa-arrow-left"></i>
-                        <span className="font-semibold whitespace-nowrap">Back to Profile</span>
-                    </button>
-                </header>
-                <div className="flex-grow overflow-y-auto">
-                    <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Profile Stats for {userProfile.username}</h2>
-                    </div>
-                    <ProfileStatsView
-                        userRatings={userRatings}
-                        onViewPub={onViewPub}
-                        rankData={rankData}
-                        userProfile={userProfile}
-                        levelRequirements={levelRequirements}
-                        pubScores={pubScores}
-                    />
-                </div>
-            </div>
-        );
-    }
-
     return (
-    <>
-        {isBanModalOpen && <BanUserModal username={username} onClose={() => setIsBanModalOpen(false)} onConfirm={handleBanUser} />}
-        {imageToView && <ImageModal rating={imageToView} onClose={() => setImageToView(null)} onReport={() => handleInitiateReport(imageToView)} canReport={loggedInUserProfile && loggedInUserProfile.id !== imageToView.user.id} />}
-        {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
-        {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={isActionLoading} onClose={() => setConfirmation({ isOpen: false })} />}
-        {alertInfo.isOpen && <AlertModal {...alertInfo} onClose={() => setAlertInfo({ isOpen: false })} />}
-        {isViewingOwnProfile && <EditProfileActionsModal isOpen={isEditActionsModalOpen} onClose={() => setIsEditActionsModalOpen(false)} onEditAvatar={() => handleOpenModal(onAvatarChangeClick)} onEditUsername={() => handleOpenModal(onEditUsernameClick)} onEditBio={() => handleOpenModal(onEditBioClick)} onEditSocials={() => handleOpenModal(onEditSocialsClick)} onOpenUpdateDetailsModal={() => handleOpenModal(onOpenUpdateDetailsModal)} userProfile={userProfile} />}
-        {isTrophyModalOpen && (
-            <TrophyModal
-                isOpen={isTrophyModalOpen}
-                onClose={() => setIsTrophyModalOpen(false)}
-                trophiesWithStatus={trophiesWithStatus}
-                userStats={userStatsForTrophies}
-                onNavigateToSettings={onNavigateToSettings}
-                userProfile={userProfile}
-            />
-        )}
-        {!isDesktop && canViewStats && (
-            <StatsModal 
-                isOpen={isStatsModalOpen}
-                onClose={() => onSetIsStatsModalOpen(false)}
-                userRatings={userRatings}
-                onViewPub={onViewPub}
-                rankData={rankData}
-                userProfile={userProfile}
-                levelRequirements={levelRequirements}
-                pubScores={pubScores}
-            />
-        )}
-
-        <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900 overflow-hidden">
-            {/* STATIC COLLAPSED HEADER (Mobile only) */}
-            {!isDesktop && (
-                <header className={`sticky top-0 z-20 flex items-center justify-between px-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-md transition-all duration-300 ease-in-out ${isHeaderCollapsed ? 'h-16 opacity-100' : 'h-0 opacity-0 pointer-events-none'}`}>
-                    <div className="flex items-center gap-3">
-                        <ProfileAvatar userProfile={userProfile} size={32} />
-                        <h1 className="text-lg font-bold text-gray-900 dark:text-white">{username}</h1>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {canViewStats && <button onClick={() => onSetIsStatsModalOpen(true)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="View stats"><i className="fas fa-chart-bar"></i></button>}
-                        {isViewingOwnProfile ? (
-                            <>
-                                <button onClick={() => onOpenShareProfileModal(userProfile)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="Share profile"><i className="fas fa-share-alt"></i></button>
-                                <button onClick={() => setIsEditActionsModalOpen(true)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="Profile settings"><i className="fas fa-cog"></i></button>
-                            </>
-                        ) : (
-                            <button onClick={() => onOpenShareProfileModal(userProfile)} className="text-gray-600 dark:text-gray-300 bg-black/5 dark:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20" aria-label="Share this profile"><i className="fas fa-share-alt"></i></button>
-                        )}
-                    </div>
-                </header>
-            )}
-
-            {/* SINGLE SCROLL CONTAINER */}
-            <main ref={mainScrollRef} className="flex-grow overflow-y-auto overflow-x-hidden">
-                <div className="relative">
-                    {/* Cover Photo */}
-                    <div className="h-48 sm:h-56 md:h-64 bg-gradient-to-br from-amber-50 via-amber-100 to-amber-200 dark:from-black dark:via-gray-900 dark:to-amber-900">
-                        <div className="absolute inset-0 dark:bg-gradient-to-t dark:from-black/80 dark:via-black/50 dark:to-transparent"></div>
-                    </div>
-                    
-                    {/* Buttons over Cover Photo */}
-                    <div className="absolute top-4 left-4 z-10">{onBack && <button onClick={onBack} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Back"><i className="fas fa-arrow-left"></i></button>}</div>
-                    <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-                        {canViewStats && <button onClick={() => onSetIsStatsModalOpen(true)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="View stats"><i className="fas fa-chart-bar"></i></button>}
-                        {isViewingOwnProfile ? (
-                            <>
-                                <button onClick={() => onOpenShareProfileModal(userProfile)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Share profile"><i className="fas fa-share-alt"></i></button>
-                                <button onClick={() => setIsEditActionsModalOpen(true)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Profile settings"><i className="fas fa-cog"></i></button>
-                            </>
-                        ) : (
-                            <button onClick={() => onOpenShareProfileModal(userProfile)} className="text-white bg-black/30 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/50" aria-label="Share this profile"><i className="fas fa-share-alt"></i></button>
-                        )}
-                    </div>
-                    
-                    {/* Desktop Stats Overlay */}
-                    {isDesktop && (
-                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-4xl px-6">
-                            <div className="flex justify-between items-center text-center p-4 px-12 bg-white/20 dark:bg-gray-900/30 backdrop-blur-sm rounded-t-xl shadow-lg">
-                                {/* Left Group (Level & Ratings) */}
-                                <div className="flex items-center gap-8">
-                                    <div className="text-center">
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-white">{level}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Level</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-white">{reviews}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ratings</p>
-                                    </div>
-                                </div>
-
-                                {/* Right Group (Trophies & Friends) */}
-                                <div className="flex items-center gap-8">
-                                    <button
-                                        onClick={() => setIsTrophyModalOpen(true)}
-                                        className="text-center transition-colors group"
-                                    >
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400">{trophiesWithStatus.filter(t => t.isUnlocked).length}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trophies</p>
-                                    </button>
-                                    <button
-                                        onClick={() => onViewFriends(userProfile)}
-                                        className="text-center disabled:cursor-default transition-colors group"
-                                        disabled={!onViewFriends}
-                                    >
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400">{displayFriendCount}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Friends</p>
-                                    </button>
-                                </div>
-                            </div>
+        <>
+            {/* These modals are used across the component */}
+            {imageToView && <ImageModal rating={imageToView} onClose={() => setImageToView(null)} onReport={() => handleInitiateReport(imageToView)} canReport={loggedInUserProfile && loggedInUserProfile.id !== imageToView.user.id} />}
+            {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
+            {isBanModalOpen && <BanUserModal username={username} onClose={() => setIsBanModalOpen(false)} onConfirm={handleBanUser} />}
+            {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={isUnbanning || isUpdatingRoles || !!deletingRatingId} onClose={() => setConfirmation({ isOpen: false })} />}
+            {alertInfo.isOpen && <AlertModal {...alertInfo} onClose={() => setAlertInfo({ isOpen: false })} />}
+            {isEditActionsModalOpen && <EditProfileActionsModal userProfile={userProfile} isOpen={isEditActionsModalOpen} onClose={() => setIsEditActionsModalOpen(false)} onEditAvatar={() => handleOpenModal(onAvatarChangeClick)} onEditUsername={() => handleOpenModal(onEditUsernameClick)} onEditBio={() => handleOpenModal(onEditBioClick)} onEditSocials={() => handleOpenModal(onEditSocialsClick)} onOpenUpdateDetailsModal={() => handleOpenModal(onOpenUpdateDetailsModal)} />}
+            {isTrophyModalOpen && <TrophyModal isOpen={isTrophyModalOpen} onClose={() => setIsTrophyModalOpen(false)} trophiesWithStatus={trophiesWithStatus} userStats={userStatsForTrophies} onNavigateToSettings={isViewingOwnProfile ? onNavigateToSettings : null} />}
+            {!isDesktop && <StatsModal isOpen={isStatsModalOpen} onClose={() => onSetIsStatsModalOpen(false)} userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />}
+            {isDesktop && <DesktopStatsModal isOpen={isStatsModalOpen} onClose={() => onSetIsStatsModalOpen(false)} userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />}
+            
+            <div
+                ref={mainScrollRef}
+                className="h-full bg-gray-100 dark:bg-gray-900 overflow-y-auto"
+            >
+                <div className={`p-4 sm:p-6 space-y-6 ${!isDesktop ? 'pb-24' : ''} lg:grid lg:grid-cols-3 lg:gap-x-8 lg:space-y-0 lg:max-w-7xl lg:mx-auto`}>
+                    {onBack && (
+                        <div className={`fixed top-0 left-0 right-0 z-30 p-2 sm:p-4 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm transition-opacity duration-300 ${isHeaderCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'} lg:hidden`}>
+                            <button onClick={onBack} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg">
+                                <i className="fas fa-arrow-left"></i>
+                                <span className="font-semibold">{username}</span>
+                            </button>
                         </div>
                     )}
-                </div>
-                
-                {/* Main Content Area */}
-                <div className="relative px-4 lg:px-6 z-10 lg:pb-6">
-                    {/* AVATAR SECTION */}
-                    <section className="flex flex-col items-center text-center -mt-14 lg:-mt-20">
-                        <div className={`relative w-32 h-32 rounded-full border-4 ${getProfileBorderColor()}`}>
-                            <ProfileAvatar userProfile={userProfile} levelRequirements={levelRequirements} size={120} onClick={isViewingOwnProfile ? onAvatarChangeClick : undefined} />
-                            {isOnline && <div className="absolute bottom-1 right-1 w-6 h-6 bg-green-500 rounded-full border-4 border-white dark:border-gray-900" title="Online"></div>}
-                        </div>
-                        <div className="mt-4">
-                            <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white">{username}</h1>
-                            <div className="mt-2 flex items-center justify-center space-x-3 text-amber-500 dark:text-amber-400">
-                                <i className={`fas ${rankData.icon} text-xl lg:text-2xl`}></i>
-                                <span className="text-lg lg:text-xl font-semibold">{rankData.name}</span>
-                            </div>
-                            <UserBadges profile={userProfile} className="mt-4" />
-                            <SocialLinks handles={userProfile} className="mt-4 justify-center" />
-                        </div>
-                    </section>
                     
-                    <div className="max-w-7xl mx-auto mt-4">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6">
-                            <aside className="lg:col-span-1 space-y-6">
-                                {!isDesktop && (
-                                    <section>
-                                        <div className="flex justify-around text-center p-3 bg-white dark:bg-gray-800 rounded-xl shadow-md">
-                                            <div><p className="text-2xl font-bold text-gray-900 dark:text-white">{level}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Level</p></div>
-                                            <div><p className="text-2xl font-bold text-gray-900 dark:text-white">{reviews}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ratings</p></div>
-                                            <div><button onClick={() => setIsTrophyModalOpen(true)} className="disabled:cursor-default"><p className="text-2xl font-bold text-gray-900 dark:text-white">{trophiesWithStatus.filter(t => t.isUnlocked).length}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trophies</p></button></div>
-                                            <div><button onClick={() => onViewFriends(userProfile)} className="disabled:cursor-default" disabled={!onViewFriends}><p className="text-2xl font-bold text-gray-900 dark:text-white">{displayFriendCount}</p><p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Friends</p></button></div>
-                                        </div>
-                                    </section>
+                    {/* Left Column (Profile Info) */}
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 lg:p-6">
+                             <div className="relative pt-12 sm:pt-0">
+                                {onBack && !isDesktop && (
+                                    <div className="absolute top-0 left-0">
+                                        <button onClick={onBack} className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-amber-500 dark:hover:text-amber-400 p-2 rounded-lg">
+                                            <i className="fas fa-arrow-left"></i>
+                                        </button>
+                                    </div>
                                 )}
-                                {!isViewingOwnProfile && loggedInUserProfile && <section><FriendshipButton loggedInUser={loggedInUserProfile} targetUser={userProfile} friendships={friendships} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} /></section>}
-                                {bio && <section className="bg-white dark:bg-gray-800 p-4 lg:p-6 rounded-xl shadow-md text-center lg:text-left"><h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3 hidden lg:block">Bio</h2><BioRenderer text={bio} /></section>}
-                                <TrophyCabinet trophies={trophiesForCabinet} onOpenTrophyModal={() => setIsTrophyModalOpen(true)} onNavigateToSettings={onNavigateToSettings} />
-                                <ModerationTools />
-                                <RankProgression />
-                                <DevInfo />
-                            </aside>
-
-                            <div className="lg:col-span-2 space-y-4">
-                                <div className="mt-6 lg:mt-0">
-                                    {isDesktop ? (
-                                        <>
-                                            <div className="flex bg-white dark:bg-gray-800 rounded-t-xl shadow-md border-b border-gray-200 dark:border-gray-700">
-                                                <TabButton tabId="ratings" label={`Ratings (${userRatings.length})`} isActive={activeTab === 'ratings'} onClick={() => setActiveTab('ratings')} />
-                                                <TabButton tabId="posts" label={`Posts (${userPosts.length})`} isActive={activeTab === 'posts'} onClick={() => setActiveTab('posts')} />
-                                            </div>
-                                            <div className="bg-white dark:bg-gray-800 rounded-b-xl shadow-md">
-                                                {activeTab === 'ratings' && (
-                                                    <div className="p-4">
-                                                        <RatingsList />
-                                                    </div>
-                                                )}
-                                                {activeTab === 'posts' && (
-                                                    <div className="p-4">
-                                                        <PostsList />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="space-y-6">
-                                            <div>
-                                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Ratings ({userRatings.length})</h2>
-                                                <RatingsList />
-                                            </div>
-                                            <div>
-                                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Posts ({userPosts.length})</h2>
-                                                <PostsList />
-                                            </div>
+                                
+                                <div className="flex flex-col items-center">
+                                    <div className="relative">
+                                        <div className={`p-1.5 rounded-full border-4 ${getProfileBorderColor()}`}>
+                                            <ProfileAvatar userProfile={userProfile} levelRequirements={levelRequirements} size={isDesktop ? 128 : 96} onClick={isViewingOwnProfile ? onAvatarChangeClick : null} />
                                         </div>
+                                        {isOnline && <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-gray-800" title="Online"></div>}
+                                    </div>
+
+                                    <div className="mt-4 text-center">
+                                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                            <span>{username}</span>
+                                        </h1>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Joined {new Date(userProfile.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</p>
+                                    </div>
+                                    
+                                    <UserBadges profile={userProfile} className="mt-3" />
+                                </div>
+
+                                <div className="mt-4 flex justify-center items-center space-x-6 text-center">
+                                    <div>
+                                        <p className="text-2xl font-bold">{reviews}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Ratings</p>
+                                    </div>
+                                    <button onClick={() => onViewFriends(userProfile)} className="text-center" disabled={!onViewFriends}>
+                                        <p className="text-2xl font-bold">{displayFriendCount}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Friends</p>
+                                    </button>
+                                    <div>
+                                        <p className="text-2xl font-bold">{level}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Level</p>
+                                    </div>
+                                </div>
+                                
+                                {(bio || userProfile.instagram_handle || userProfile.youtube_handle || userProfile.x_handle) && (
+                                    <div className="mt-4 text-center max-w-lg mx-auto">
+                                        <BioRenderer text={bio} />
+                                        <SocialLinks handles={userProfile} className="mt-3 justify-center" />
+                                    </div>
+                                )}
+                                
+                                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                                    {isViewingOwnProfile && <button onClick={() => setIsEditActionsModalOpen(true)} className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Edit Profile</button>}
+                                    {!isViewingOwnProfile && <FriendshipButton {...{ loggedInUser: loggedInUserProfile, targetUser: userProfile, friendships, onFriendRequest, onFriendAction }} />}
+                                    <button onClick={() => onOpenShareProfileModal(userProfile)} className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"><i className="fas fa-share-alt"></i> Share</button>
+                                    {!isViewingOwnProfile && loggedInUserProfile && (
+                                        blockList.has(userProfile.id)
+                                            ? <button onClick={() => onUnblockUser(userProfile.id, userProfile.username)} className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"><i className="fas fa-user-check"></i> Unblock</button>
+                                            : <button onClick={() => onBlockUser(userProfile.id, userProfile.username)} className="flex-1 bg-red-500 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-red-600 transition-colors"><i className="fas fa-user-slash"></i> Block</button>
                                     )}
                                 </div>
                             </div>
                         </div>
+
+                        <ModerationTools />
+                        
+                        <TrophyCabinet trophies={trophiesForCabinet} onOpenTrophyModal={() => setIsTrophyModalOpen(true)} onNavigateToSettings={isViewingOwnProfile ? onNavigateToSettings : null} />
+
+                        {canViewStats && (
+                            <StatCard icon="fa-chart-bar" title="Profile Stats" onClick={() => onSetIsStatsModalOpen(true)}>
+                                <p className="text-sm text-gray-600 dark:text-gray-300">View detailed statistics about your rating history, achievements, and more.</p>
+                            </StatCard>
+                        )}
+                        
+                        {isDeveloper && (
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md">
+                                <button onClick={() => setIsDevInfoVisible(v => !v)} className="w-full font-bold text-amber-600 dark:text-amber-400 text-left">Developer Info</button>
+                                {isDevInfoVisible && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 text-xs font-mono text-gray-600 dark:text-gray-400 break-all space-y-1">
+                                        <p><strong>ID:</strong> {userProfile.id}</p>
+                                        <p><strong>Email:</strong> {userProfile.email || 'Not available'}</p>
+                                        <p><strong>Last Sign In:</strong> {userProfile.last_sign_in_at ? new Date(userProfile.last_sign_in_at).toLocaleString() : 'N/A'}</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Right Column (Activity Feed) */}
+                    <div className="lg:col-span-2 space-y-6">
+                        {/* Tab Navigation for Posts/Ratings */}
+                        <div className="sticky top-0 z-10 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm -mx-4 px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
+                            <div className="border-b border-gray-200 dark:border-gray-700">
+                                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                                    <TabButton tabId="ratings" label={`Ratings (${userRatings?.length || 0})`} isActive={activeTab === 'ratings'} onClick={() => setActiveTab('ratings')} />
+                                    <TabButton tabId="posts" label={`Posts (${userPosts?.length || 0})`} isActive={activeTab === 'posts'} onClick={() => setActiveTab('posts')} />
+                                </nav>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            {activeTab === 'ratings' ? <RatingsList /> : <PostsList />}
+                        </div>
                     </div>
                 </div>
-                <div className="pb-safe lg:pb-6"></div>
-            </main>
-        </div>
-    </>
+            </div>
+        </>
     );
 };
 

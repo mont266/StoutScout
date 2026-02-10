@@ -155,35 +155,57 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
     setIsCropperOpen(false);
   };
 
-  const handleAddPhotoClick = async () => {
-    if (isDesktop) {
-        galleryInputRef.current?.click();
-        return;
-    }
-
+  const takePicture = async () => {
+    setShowImageSourceChooser(false);
     if (Capacitor.isNativePlatform()) {
         try {
             const image = await Camera.getPhoto({
                 quality: 90,
                 allowEditing: false,
                 resultType: CameraResultType.Uri,
-                source: CameraSource.Prompt, // Ask user to choose between Camera and Gallery
+                source: CameraSource.Camera,
                 saveToGallery: true,
             });
-
             if (image.webPath) {
                 setImageToCrop(image.webPath);
                 setIsCropperOpen(true);
             }
         } catch (error) {
-            // This error can happen if the user cancels the camera/gallery selection.
-            // We can safely ignore it.
             console.log('Capacitor Camera action cancelled or failed:', error);
         }
     } else {
-        // For web browsers, show our custom chooser
-        setShowImageSourceChooser(true);
+        cameraInputRef.current?.click();
     }
+  };
+
+  const chooseFromGallery = async () => {
+      setShowImageSourceChooser(false);
+      if (Capacitor.isNativePlatform()) {
+          try {
+              const image = await Camera.getPhoto({
+                  quality: 90,
+                  allowEditing: false,
+                  resultType: CameraResultType.Uri,
+                  source: CameraSource.Photos,
+              });
+              if (image.webPath) {
+                  setImageToCrop(image.webPath);
+                  setIsCropperOpen(true);
+              }
+          } catch (error) {
+              console.log('Capacitor Gallery action cancelled or failed:', error);
+          }
+      } else {
+          galleryInputRef.current?.click();
+      }
+  };
+
+  const handleAddPhotoClick = () => {
+    if (isDesktop) {
+        galleryInputRef.current?.click();
+        return;
+    }
+    setShowImageSourceChooser(true);
   };
 
   const buttonText = existingRating ? 'Update Rating' : 'Submit Rating';
@@ -222,14 +244,8 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
     <ImageSourceChooser 
         isOpen={showImageSourceChooser}
         onClose={() => setShowImageSourceChooser(false)}
-        onSelectCamera={() => {
-            cameraInputRef.current?.click();
-            setShowImageSourceChooser(false);
-        }}
-        onSelectGallery={() => {
-            galleryInputRef.current?.click();
-            setShowImageSourceChooser(false);
-        }}
+        onSelectCamera={takePicture}
+        onSelectGallery={chooseFromGallery}
     />
     {isCropperOpen && imageToCrop && (
         <ImageCropper 

@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useMemo, useCallback, useEffect, useRef, createContext, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import mapboxgl from 'mapbox-gl';
@@ -41,6 +44,8 @@ import ChangelogPage from './components/ChangelogPage.jsx';
 import ChangelogManager from './components/ChangelogManager.jsx';
 import CreatePostModal from './components/CreatePostModal.jsx';
 import ConfirmationModal from './components/ConfirmationModal.jsx';
+import ReportContentModal from './components/ReportContentModal.jsx';
+import DeleteAccountModal from './components/DeleteAccountModal.jsx';
 
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -75,6 +80,7 @@ const App = () => {
   const [mapSearchResults, setMapSearchResults] = useState([]);
   const [pubs, setPubs] = useState([]);
   const [allRatings, setAllRatings] = useState(new Map());
+  const [allRatedPubsData, setAllRatedPubsData] = useState(new Map());
   const [pubScores, setPubScores] = useState(new Map());
   const [selectedPubId, setSelectedPubId] = useState(null);
   const [highlightedRatingId, setHighlightedRatingId] = useState(null);
@@ -85,6 +91,7 @@ const App = () => {
   const [panelHeight, setPanelHeight] = useState(() => window.innerHeight * 0.35);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [geocodingPubIds, setGeocodingPubIds] = useState(new Set());
+  const [isEditRatingFlow, setIsEditRatingFlow] = useState(false);
 
   // Location State
   const [realUserLocation, setRealUserLocation] = useState(DEFAULT_LOCATION);
@@ -129,6 +136,7 @@ const App = () => {
   const [isEditBioModalOpen, setIsEditBioModalOpen] = useState(false);
   const [isEditSocialsModalOpen, setIsEditSocialsModalOpen] = useState(false);
   const [isUpdateDetailsModalOpen, setIsUpdateDetailsModalOpen] = useState(false);
+  const [isSuggestEditModalOpen, setIsSuggestEditModalOpen] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '', theme: 'info' });
   const [isCoasterWelcomeModalOpen, setIsCoasterWelcomeModalOpen] = useState(false);
@@ -169,10 +177,9 @@ const App = () => {
   const [isConfirmingLocation, setIsConfirmingLocation] = useState(false);
 
   // "Suggest Edit" state
-  const [isSuggestEditModalOpen, setIsSuggestEditModalOpen] = useState(false);
   const [pubToEdit, setPubToEdit] = useState(null);
 
-  // Social Features State
+  // Social & Moderation State
   const [friendships, setFriendships] = useState([]);
   const [userLikes, setUserLikes] = useState(new Set());
   const [userZeroVotes, setUserZeroVotes] = useState(new Map());
@@ -184,8 +191,7 @@ const App = () => {
   const [isCommentsLoading, setIsCommentsLoading] = useState(false);
   const [commentsByPost, setCommentsByPost] = useState(new Map());
   const [isPostCommentsLoading, setIsPostCommentsLoading] = useState(false);
-  const [reportCommentInfo, setReportCommentInfo] = useState({ isOpen: false, comment: null });
-  const [reportedComments, setReportedComments] = useState([]);
+  const [reports, setReports] = useState([]);
   const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
   const [createPostModalOrigin, setCreatePostModalOrigin] = useState(null);
   const [postToEdit, setPostToEdit] = useState(null);
@@ -193,6 +199,11 @@ const App = () => {
   const [userPostLikes, setUserPostLikes] = useState(new Set());
   const [userPosts, setUserPosts] = useState([]);
   const [postSuccessCount, setPostSuccessCount] = useState(0);
+  const [reportContentInfo, setReportContentInfo] = useState({ isOpen: false, contentId: null, contentType: null, contentCreatorUsername: null });
+  const [blockList, setBlockList] = useState(new Set());
+  const [blockedUsersProfiles, setBlockedUsersProfiles] = useState([]);
+  const [blockConfirmationInfo, setBlockConfirmationInfo] = useState({ isOpen: false });
+  const [socialsUpdateCount, setSocialsUpdateCount] = useState(0); // This is the new trigger
 
 
   // Cookie Consent State - Initialize synchronously to avoid flicker
@@ -255,6 +266,11 @@ const App = () => {
   const [isChangelogManagerOpen, setIsChangelogManagerOpen] = useState(false);
   const [hasUnreadChangelog, setHasUnreadChangelog] = useState(false);
   const [latestChangelogItemId, setLatestChangelogItemId] = useState(null);
+
+  // State for account deletion
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
 
   const mapRef = useRef(null);
   const initialFlyToDone = useRef(false);
@@ -327,8 +343,457 @@ const App = () => {
     return { bottom: isPanelExpanded ? panelHeight : COLLAPSED_PANEL_HEIGHT };
   }, [isDesktop, isDesktopSidebarCollapsed, panelHeight]);
 
+  // --- DATA & CORE LOGIC (Defined early to prevent reference errors) ---
+
+  const handleBackFromProfileView = useCallback(() => {
+    setViewedProfile(null);
+    const origin = profileViewOrigin;
+    setProfileViewOrigin(null);
+
+    // This logic handles returning to the correct sub-tab in the community section
+    if (origin === 'leaderboard' || origin === 'friends' || origin === 'notifications' || origin === 'community') {
+        setCommunitySubTab(origin);
+        setActiveTab('community');
+    } else if (origin && origin.startsWith('community')) {
+        // Fallback for any other community-related origin
+        setActiveTab('community');
+    }
+    // Other origins like 'pubDetails' do not trigger a tab change, which is correct.
+  }, [profileViewOrigin]);
+
+  const fetchDbPubs = useCallback(async (searchCenter, radius) => {
+    if (!searchCenter) {
+        setDbPubs([]);
+        setIsDbPubsLoaded(true);
+        return;
+    }
+
+    const { data: pubsData, error: rpcError } = await supabase.rpc('get_pubs_in_radius', {
+      lat_param: searchCenter.lat,
+      lng_param: searchCenter.lng,
+      radius_meters: Math.round(radius), // Fix: ensure radius is an integer for the RPC.
+      limit_count: 500
+    });
+
+    if (rpcError) {
+      console.error("Error fetching rated pubs from DB via RPC:", rpcError);
+      setDbPubs([]);
+      setIsDbPubsLoaded(true);
+      throw rpcError;
+    }
+
+    const formatted = (pubsData || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      address: p.address,
+      country_code: p.country_code,
+      country_name: p.country_name,
+      is_closed: !!p.is_closed,
+      location: { lat: p.lat, lng: p.lng },
+      is_dynamic_price_area: p.is_dynamic_price_area,
+      area_identifier: p.area_identifier,
+      area_rating_count: p.area_rating_count,
+      guinness_zero_confirmations: p.guinness_zero_confirmations,
+      guinness_zero_denials: p.guinness_zero_denials,
+      certification_status: p.certification_status,
+      certified_since: p.certified_since,
+    }));
+
+    setDbPubs(formatted);
+    setIsDbPubsLoaded(true);
+  }, []);
+  
+  const fetchAllRatings = useCallback(async () => {
+    // This robust, single-query approach ensures RLS policies for blocking are respected.
+    const { data, error } = await supabase
+      .from('ratings')
+      .select('*, user:profiles!ratings_user_id_fkey(id, username, avatar_id, level, is_banned)')
+      .eq('is_private', false)
+      .order('updated_at', { ascending: false });
+  
+    if (error) {
+      console.error("Critical error fetching ratings with profiles:", error);
+      return;
+    }
+  
+    const ratingsMap = new Map();
+    for (const rating of data || []) {
+      // The server-side join ensures that `rating.user` will be null if the author's
+      // profile is blocked or inaccessible due to RLS. We also check for banned status.
+      if (!rating.user || rating.user.is_banned) {
+        continue;
+      }
+  
+      const existing = ratingsMap.get(rating.pub_id) || [];
+      // No need to re-nest the user object, it's already there from the query.
+      ratingsMap.set(rating.pub_id, [...existing, rating]);
+    }
+  
+    setAllRatings(ratingsMap);
+  }, []);
+
+  useEffect(() => {
+    const fetchAllRatedPubsMetadata = async () => {
+        if (allRatings.size === 0) {
+            setAllRatedPubsData(new Map());
+            return;
+        }
+
+        const pubIds = Array.from(allRatings.keys());
+        const BATCH_SIZE = 500;
+        let allPubs = [];
+        
+        for (let i = 0; i < pubIds.length; i += BATCH_SIZE) {
+            const batch = pubIds.slice(i, i + BATCH_SIZE);
+            const { data, error } = await supabase
+                .from('pubs')
+                .select('id, guinness_zero_confirmations, guinness_zero_denials')
+                .in('id', batch);
+            
+            if (error) {
+                console.error("Error fetching metadata for rated pubs:", error);
+                return;
+            }
+            if (data) {
+              allPubs.push(...data);
+            }
+        }
+        
+        const pubsMap = new Map();
+        allPubs.forEach(p => pubsMap.set(p.id, p));
+        setAllRatedPubsData(pubsMap);
+    };
+
+    fetchAllRatedPubsMetadata();
+  }, [allRatings]);
+
+  const fetchPubScores = useCallback(async () => {
+    const { data, error } = await supabase.from('pub_scores').select('*');
+    if (error) {
+        console.error("Error fetching pub scores:", error);
+        return;
+    }
+    const scoresMap = new Map();
+    for (const score of data || []) {
+        scoresMap.set(score.pub_id, score.pub_score);
+    }
+    setPubScores(scoresMap);
+  }, []);
+
+  const fetchUserZeroVotes = useCallback(async (userId) => {
+    if (!userId) return;
+    const { data, error } = await supabase
+      .from('pub_guinness_zero_reports')
+      .select('pub_id, is_confirmation')
+      .eq('user_id', userId);
+    
+    if (error) {
+        console.error("Error fetching user's Guinness 0.0 votes:", error);
+        return;
+    }
+
+    const votesMap = new Map();
+    (data || []).forEach(vote => {
+        votesMap.set(vote.pub_id, vote.is_confirmation);
+    });
+    setUserZeroVotes(votesMap);
+  }, []);
+
+  const fetchUserTrophies = useCallback(async (userId) => {
+    if (!userId) {
+        setUserTrophies([]);
+        return [];
+    }
+    const { data, error } = await supabase
+        .from('user_trophies')
+        .select('trophy_id, achieved_at')
+        .eq('user_id', userId)
+        .order('achieved_at', { ascending: false });
+    
+    if (error) {
+        console.error("Error fetching user trophies:", error);
+        setUserTrophies([]);
+        return [];
+    } else {
+        setUserTrophies(data || []);
+        return data || [];
+    }
+  }, []);
+
+  const fetchClosedOsmPubs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('closed_osm_pubs')
+      .select('osm_id');
+    
+    if (error) {
+        console.error("Error fetching closed OSM pubs:", error);
+    } else {
+        // Store with 'osm-' prefix for direct comparison with nominatim results
+        setClosedOsmPubIds(new Set((data || []).map(p => `osm-${p.osm_id}`)));
+    }
+    setIsClosedOsmPubsLoaded(true);
+  }, []);
+
+  const fetchClosedStoutlyPubs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('pubs')
+      .select('id')
+      .eq('is_closed', true);
+    
+    if (error) {
+        console.error("Error fetching closed Stoutly pubs:", error);
+    } else {
+        setClosedStoutlyPubIds(new Set((data || []).map(p => p.id)));
+    }
+    setIsClosedStoutlyPubsLoaded(true);
+  }, []);
+
+  const fetchOsmPubOverrides = useCallback(async () => {
+    const { data, error } = await supabase
+        .from('osm_pub_overrides')
+        .select('osm_id, name');
+    
+    if (error) {
+        console.error("Error fetching OSM pub overrides:", error);
+    } else {
+        const overridesMap = new Map();
+        for (const override of data || []) {
+            // Store with 'osm-' prefix for direct comparison
+            overridesMap.set(`osm-${override.osm_id}`, { name: override.name });
+        }
+        setOsmPubOverrides(overridesMap);
+    }
+    setIsOsmOverridesLoaded(true);
+  }, []);
+
+  const fetchSocialData = useCallback(async (userId) => {
+    if (!userId) return;
+    
+    // Fetch user's rating likes
+    const { data: likesData, error: likesError } = await supabase
+      .from('rating_likes')
+      .select('rating_id')
+      .eq('user_id', userId);
+    if (likesError) console.error("Error fetching user rating likes:", likesError);
+    else setUserLikes(new Set((likesData || []).map(l => l.rating_id)));
+
+    // Fetch user's post likes
+    const { data: postLikesData, error: postLikesError } = await supabase
+        .from('post_likes')
+        .select('post_id')
+        .eq('user_id', userId);
+    if (postLikesError) console.error("Error fetching user post likes:", postLikesError);
+    else setUserPostLikes(new Set((postLikesData || []).map(l => l.post_id)));
+
+    // Fetch user's friendships
+    const { data: friendsData, error: friendsError } = await supabase
+      .from('friendships')
+      .select('*')
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
+    if (friendsError) console.error("Error fetching friendships:", friendsError);
+    else setFriendships(friendsData || []);
+
+    // Fetch notifications
+    const { data: notificationsData, error: notificationsError } = await supabase
+      .from('notifications')
+      .select('*, actor:actor_id(id, username, avatar_id)')
+      .eq('recipient_id', userId)
+      .order('created_at', { ascending: false });
+    if (notificationsError) console.error("Error fetching notifications:", notificationsError);
+    else setNotifications(notificationsData || []);
+    
+    // Fetch user's 0.0 votes
+    await fetchUserZeroVotes(userId);
+
+    // Fetch user's trophies
+    await fetchUserTrophies(userId);
+    
+    // Fetch user's block list (both directions) for comprehensive client-side filtering.
+    const { data: blockData, error: blockError } = await supabase
+      .from('user_blocks')
+      .select('blocker_id, blocked_id')
+      .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
+
+    if (blockError) {
+        console.error("Error fetching block list:", blockError);
+        setBlockList(new Set());
+        setBlockedUsersProfiles([]);
+    } else {
+        const newBlockList = new Set();
+        let hasBlockedUsers = false; // Flag to check if we need to call the function.
+
+        (blockData || []).forEach(b => {
+            if (b.blocker_id === userId) {
+                // I blocked them
+                newBlockList.add(b.blocked_id);
+                hasBlockedUsers = true;
+            } else {
+                // They blocked me
+                newBlockList.add(b.blocker_id);
+            }
+        });
+        setBlockList(newBlockList);
+
+        // Fetch blocked user profiles using the new Edge Function to bypass RLS.
+        if (hasBlockedUsers) {
+            const { data: blockedProfiles, error: functionError } = await supabase.functions.invoke('get-blocked-profiles');
+
+            if (functionError) {
+                console.error("Error fetching blocked user profiles via function:", functionError);
+                setBlockedUsersProfiles([]);
+            } else {
+                setBlockedUsersProfiles(blockedProfiles || []);
+            }
+        } else {
+            setBlockedUsersProfiles([]);
+        }
+    }
+  }, [fetchUserZeroVotes, fetchUserTrophies]);
+
+  const handleDataRefresh = useCallback(async () => {
+      await Promise.all([
+          fetchAllRatings(),
+          fetchPubScores(),
+          fetchClosedOsmPubs(),
+          fetchOsmPubOverrides(),
+          fetchClosedStoutlyPubs(),
+          session?.user?.id ? fetchSocialData(session.user.id) : Promise.resolve(),
+      ]);
+      // Refetch DB pubs for the current view
+      if (mapRef.current) {
+        const searchCenter = mapRef.current.getCenter();
+        await fetchDbPubs({ lat: searchCenter.lat, lng: searchCenter.lng }, settings.radius);
+      }
+  }, [fetchAllRatings, fetchPubScores, fetchClosedOsmPubs, fetchOsmPubOverrides, fetchClosedStoutlyPubs, fetchSocialData, session, fetchDbPubs, settings.radius]);
+
 
   // --- CORE HANDLERS (Define these early to avoid reference errors) ---
+   const handleBlockUser = useCallback(async (userIdToBlock, username) => {
+    if (!session?.user) {
+        setIsAuthOpen(true);
+        return;
+    }
+    setBlockConfirmationInfo({
+        isOpen: true,
+        title: `Block ${username}?`,
+        message: "You will no longer see any content from this user, and they won't see yours. You can unblock them later from their profile.",
+        confirmText: 'Block',
+        theme: 'red',
+        onConfirm: async () => {
+            trackEvent('block_user', { blocked_user_id: userIdToBlock });
+            setBlockConfirmationInfo({ isOpen: false });
+
+            const { error } = await supabase.from('user_blocks').insert({
+                blocker_id: session.user.id,
+                blocked_id: userIdToBlock,
+            });
+            
+            if (error) {
+                setAlertInfo({ isOpen: true, title: 'Error', message: `Could not block user: ${error.message}`, theme: 'error' });
+            } else {
+                setAlertInfo({ isOpen: true, title: 'User Blocked', message: `You will no longer see content from ${username}.`, theme: 'success' });
+                if (viewedProfile?.id === userIdToBlock) {
+                    handleBackFromProfileView();
+                }
+                // Full refresh to ensure all blocked content is removed
+                await fetchSocialData(session.user.id);
+                setSocialsUpdateCount(c => c + 1);
+            }
+        },
+    });
+  }, [session, viewedProfile, handleBackFromProfileView, fetchSocialData]);
+
+  const handleUnblockUser = useCallback(async (userIdToUnblock, username) => {
+      if (!session?.user) return;
+      trackEvent('unblock_user', { unblocked_user_id: userIdToUnblock });
+
+      const { error } = await supabase.from('user_blocks').delete().match({
+          blocker_id: session.user.id,
+          blocked_id: userIdToUnblock,
+      });
+
+      if (error) {
+          setAlertInfo({ isOpen: true, title: 'Error', message: `Could not unblock user: ${error.message}`, theme: 'error' });
+      } else {
+          setAlertInfo({ isOpen: true, title: 'User Unblocked', message: `You will now see content from ${username} again.`, theme: 'success' });
+          await fetchSocialData(session.user.id);
+          setSocialsUpdateCount(c => c + 1);
+      }
+  }, [session, fetchSocialData]);
+  
+  const handleOpenReportContentModal = useCallback(({ contentId, contentType, contentCreatorUsername }) => {
+      if (!session) {
+          setIsAuthOpen(true);
+          return;
+      }
+      setReportContentInfo({ isOpen: true, contentId, contentType, contentCreatorUsername });
+  }, [session]);
+
+  const handleSubmitReport = useCallback(async (reason) => {
+      if (!reportContentInfo.contentId || !reportContentInfo.contentType) return;
+
+      trackEvent('report_content', {
+          content_id: reportContentInfo.contentId,
+          content_type: reportContentInfo.contentType,
+          reason,
+      });
+
+      try {
+          const { error } = await supabase.rpc('submit_report', {
+              p_content_id: reportContentInfo.contentId,
+              p_content_type: reportContentInfo.contentType,
+              p_reason: reason,
+          });
+          if (error) throw error;
+          setAlertInfo({ isOpen: true, title: 'Report Submitted', message: 'Thank you. The content has been reported and will be reviewed.', theme: 'success' });
+      } catch (err) {
+          console.error("Failed to report content:", err);
+          setAlertInfo({ isOpen: true, title: 'Report Failed', message: `Could not submit report: ${err.message}`, theme: 'error' });
+      } finally {
+          setReportContentInfo({ isOpen: false, contentId: null, contentType: null, contentCreatorUsername: null });
+      }
+  }, [reportContentInfo]);
+
+  const handleDeleteAccountRequest = () => {
+    trackEvent('delete_account_initiated');
+    setIsDeleteAccountModalOpen(true);
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    if (!userProfile) return;
+
+    setIsDeletingAccount(true);
+    trackEvent('delete_account_confirmed');
+
+    try {
+        const { error } = await supabase.functions.invoke('delete-account');
+        if (error) throw new Error(error.message);
+
+        // The onAuthStateChange listener will handle resetting state upon SIGNED_OUT event.
+        // We just need to sign out locally and show a success message.
+        await supabase.auth.signOut();
+        setIsDeleteAccountModalOpen(false);
+        setAlertInfo({
+            isOpen: true,
+            title: 'Account Deleted',
+            message: "Your account and all associated data have been permanently deleted. We're sorry to see you go.",
+            theme: 'success'
+        });
+
+    } catch (err) {
+        console.error("Failed to delete account:", err);
+        trackEvent('delete_account_failed', { error_message: err.message });
+        setAlertInfo({
+            isOpen: true,
+            title: 'Deletion Failed',
+            message: `An error occurred while deleting your account: ${err.message}`,
+            theme: 'error'
+        });
+    } finally {
+        setIsDeletingAccount(false);
+    }
+  };
+
 
   const handleSettingsChange = (newSettings) => {
     setSettings(newSettings);
@@ -534,11 +999,12 @@ const App = () => {
   }, [setAlertInfo]);
 
   const handleSelectPub = useCallback(async (pub, highlightOptions = {}) => {
-    const { highlightRatingId: ratingId, highlightCommentId: commentId } = highlightOptions;
+    const { highlightRatingId: ratingId, highlightCommentId: commentId, expandRatingForm } = highlightOptions;
     const pubId = pub ? pub.id : null;
     
     setHighlightedRatingId(ratingId || null);
     setHighlightedCommentId(commentId || null);
+    setIsEditRatingFlow(!!expandRatingForm);
 
     if (pubId && pubId !== selectedPubId) {
         history.pushState({ view: 'pub', pubId }, '');
@@ -546,6 +1012,7 @@ const App = () => {
 
     if (!pubId) {
       setSelectedPubId(null);
+      setIsEditRatingFlow(false);
       return;
     }
 
@@ -677,7 +1144,7 @@ const App = () => {
         // Fetch posts for the viewed user
         const { data: posts, error: postsError } = await supabase
             .from('posts')
-            .select('*, user:user_id!inner(id, username, avatar_id, level, is_banned), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))')
+            .select('*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))')
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
@@ -691,7 +1158,7 @@ const App = () => {
         // We only fetch non-private ratings for other users.
         const { data: ratings, error: ratingsError } = await supabase
             .from('ratings')
-            .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng, country_code, country_name)')
+            .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials)')
             .eq('user_id', userId)
             .eq('is_private', false) // Important: respect privacy
             .order('created_at', { ascending: false });
@@ -782,22 +1249,6 @@ const App = () => {
     }
   }, [activeCrawl]);
   
-  const handleBackFromProfileView = useCallback(() => {
-    setViewedProfile(null);
-    const origin = profileViewOrigin;
-    setProfileViewOrigin(null);
-
-    // This logic handles returning to the correct sub-tab in the community section
-    if (origin === 'leaderboard' || origin === 'friends' || origin === 'notifications' || origin === 'community') {
-        setCommunitySubTab(origin);
-        setActiveTab('community');
-    } else if (origin && origin.startsWith('community')) {
-        // Fallback for any other community-related origin
-        setActiveTab('community');
-    }
-    // Other origins like 'pubDetails' do not trigger a tab change, which is correct.
-  }, [profileViewOrigin]);
-
   const handleBackFromFriendsList = useCallback(() => {
     setViewingFriendsOf(null);
     if (isDesktop) {
@@ -919,48 +1370,6 @@ const App = () => {
         setMapSearchResults([]);
         setResultsAreCapped(false);
     }
-  }, []);
-
-  const fetchDbPubs = useCallback(async (searchCenter, radius) => {
-    if (!searchCenter) {
-        setDbPubs([]);
-        setIsDbPubsLoaded(true);
-        return;
-    }
-
-    const { data: pubsData, error: rpcError } = await supabase.rpc('get_pubs_in_radius', {
-      lat_param: searchCenter.lat,
-      lng_param: searchCenter.lng,
-      radius_meters: Math.round(radius), // Fix: ensure radius is an integer for the RPC.
-      limit_count: 500
-    });
-
-    if (rpcError) {
-      console.error("Error fetching rated pubs from DB via RPC:", rpcError);
-      setDbPubs([]);
-      setIsDbPubsLoaded(true);
-      throw rpcError;
-    }
-
-    const formatted = (pubsData || []).map(p => ({
-      id: p.id,
-      name: p.name,
-      address: p.address,
-      country_code: p.country_code,
-      country_name: p.country_name,
-      is_closed: !!p.is_closed,
-      location: { lat: p.lat, lng: p.lng },
-      is_dynamic_price_area: p.is_dynamic_price_area,
-      area_identifier: p.area_identifier,
-      area_rating_count: p.area_rating_count,
-      guinness_zero_confirmations: p.guinness_zero_confirmations,
-      guinness_zero_denials: p.guinness_zero_denials,
-      certification_status: p.certification_status,
-      certified_since: p.certified_since,
-    }));
-
-    setDbPubs(formatted);
-    setIsDbPubsLoaded(true);
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -1159,214 +1568,6 @@ const App = () => {
     checkChangelog();
   }, []);
 
-  const fetchClosedOsmPubs = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('closed_osm_pubs')
-      .select('osm_id');
-    
-    if (error) {
-        console.error("Error fetching closed OSM pubs:", error);
-    } else {
-        // Store with 'osm-' prefix for direct comparison with nominatim results
-        setClosedOsmPubIds(new Set((data || []).map(p => `osm-${p.osm_id}`)));
-    }
-    setIsClosedOsmPubsLoaded(true);
-  }, []);
-
-  const fetchClosedStoutlyPubs = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('pubs')
-      .select('id')
-      .eq('is_closed', true);
-    
-    if (error) {
-        console.error("Error fetching closed Stoutly pubs:", error);
-    } else {
-        setClosedStoutlyPubIds(new Set((data || []).map(p => p.id)));
-    }
-    setIsClosedStoutlyPubsLoaded(true);
-  }, []);
-
-  const fetchOsmPubOverrides = useCallback(async () => {
-    const { data, error } = await supabase
-        .from('osm_pub_overrides')
-        .select('osm_id, name');
-    
-    if (error) {
-        console.error("Error fetching OSM pub overrides:", error);
-    } else {
-        const overridesMap = new Map();
-        for (const override of data || []) {
-            // Store with 'osm-' prefix for direct comparison
-            overridesMap.set(`osm-${override.osm_id}`, { name: override.name });
-        }
-        setOsmPubOverrides(overridesMap);
-    }
-    setIsOsmOverridesLoaded(true);
-  }, []);
-
-  const fetchAllRatings = useCallback(async () => {
-    // This robust, two-query approach avoids complex RLS-related JOIN issues on the backend.
-    
-    // Step 1: Fetch all public ratings without joining profile data yet.
-    const { data: ratingsData, error: ratingsError } = await supabase
-      .from('ratings')
-      .select('id, pub_id, user_id, price, quality, created_at, updated_at, exact_price, image_url, like_count, comment_count, message')
-      .eq('is_private', false)
-      .order('updated_at', { ascending: false });
-  
-    if (ratingsError) {
-      console.error("Critical error fetching ratings:", ratingsError);
-      return;
-    }
-  
-    // Step 2: Fetch all user profiles. The RLS policy on profiles allows public reads (`USING (true)`).
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, username, avatar_id, level, is_banned');
-  
-    if (profilesError) {
-      console.error("Critical error fetching profiles:", profilesError);
-      return;
-    }
-  
-    // Create a lookup map for efficient access to profiles.
-    const profilesMap = new Map((profilesData || []).map(p => [p.id, p]));
-  
-    // Step 3: Join the data on the client side.
-    const ratingsMap = new Map();
-    for (const rating of ratingsData || []) {
-      const user = profilesMap.get(rating.user_id);
-  
-      // This check replicates the security logic from the database RLS policy:
-      // only show ratings from users who exist and are not banned.
-      if (!user || user.is_banned) {
-        continue;
-      }
-      
-      // Re-nest the user object into the rating, as the rest of the app expects this structure.
-      const ratingWithUser = { ...rating, user };
-      
-      const existing = ratingsMap.get(rating.pub_id) || [];
-      ratingsMap.set(rating.pub_id, [...existing, ratingWithUser]);
-    }
-  
-    setAllRatings(ratingsMap);
-  }, []);
-
-  const fetchPubScores = useCallback(async () => {
-    const { data, error } = await supabase.from('pub_scores').select('*');
-    if (error) {
-        console.error("Error fetching pub scores:", error);
-        return;
-    }
-    const scoresMap = new Map();
-    for (const score of data || []) {
-        scoresMap.set(score.pub_id, score.pub_score);
-    }
-    setPubScores(scoresMap);
-  }, []);
-  
-  const fetchUserZeroVotes = useCallback(async (userId) => {
-    if (!userId) return;
-    const { data, error } = await supabase
-      .from('pub_guinness_zero_reports')
-      .select('pub_id, is_confirmation')
-      .eq('user_id', userId);
-    
-    if (error) {
-        console.error("Error fetching user's Guinness 0.0 votes:", error);
-        return;
-    }
-
-    const votesMap = new Map();
-    (data || []).forEach(vote => {
-        votesMap.set(vote.pub_id, vote.is_confirmation);
-    });
-    setUserZeroVotes(votesMap);
-  }, []);
-
-  const fetchUserTrophies = useCallback(async (userId) => {
-    if (!userId) {
-        setUserTrophies([]);
-        return [];
-    }
-    const { data, error } = await supabase
-        .from('user_trophies')
-        .select('trophy_id, achieved_at')
-        .eq('user_id', userId)
-        .order('achieved_at', { ascending: false });
-    
-    if (error) {
-        console.error("Error fetching user trophies:", error);
-        setUserTrophies([]);
-        return [];
-    } else {
-        setUserTrophies(data || []);
-        return data || [];
-    }
-  }, []);
-
-  const fetchSocialData = useCallback(async (userId) => {
-    if (!userId) return;
-    
-    // Fetch user's rating likes
-    const { data: likesData, error: likesError } = await supabase
-      .from('rating_likes')
-      .select('rating_id')
-      .eq('user_id', userId);
-    if (likesError) console.error("Error fetching user rating likes:", likesError);
-    else setUserLikes(new Set((likesData || []).map(l => l.rating_id)));
-
-    // Fetch user's post likes
-    const { data: postLikesData, error: postLikesError } = await supabase
-        .from('post_likes')
-        .select('post_id')
-        .eq('user_id', userId);
-    if (postLikesError) console.error("Error fetching user post likes:", postLikesError);
-    else setUserPostLikes(new Set((postLikesData || []).map(l => l.post_id)));
-
-    // Fetch user's friendships
-    const { data: friendsData, error: friendsError } = await supabase
-      .from('friendships')
-      .select('*')
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`);
-    if (friendsError) console.error("Error fetching friendships:", friendsError);
-    else setFriendships(friendsData || []);
-
-    // Fetch notifications
-    const { data: notificationsData, error: notificationsError } = await supabase
-      .from('notifications')
-      .select('*, actor:actor_id(id, username, avatar_id)')
-      .eq('recipient_id', userId)
-      .order('created_at', { ascending: false });
-    if (notificationsError) console.error("Error fetching notifications:", notificationsError);
-    else setNotifications(notificationsData || []);
-    
-    // Fetch user's 0.0 votes
-    await fetchUserZeroVotes(userId);
-
-    // Fetch user's trophies
-    await fetchUserTrophies(userId);
-
-  }, [fetchUserZeroVotes, fetchUserTrophies]);
-
-  const handleDataRefresh = useCallback(async () => {
-      await Promise.all([
-          fetchAllRatings(),
-          fetchPubScores(),
-          fetchClosedOsmPubs(),
-          fetchOsmPubOverrides(),
-          fetchClosedStoutlyPubs(),
-          session?.user?.id ? fetchSocialData(session.user.id) : Promise.resolve(),
-      ]);
-      // Refetch DB pubs for the current view
-      if (mapRef.current) {
-        const searchCenter = mapRef.current.getCenter();
-        await fetchDbPubs({ lat: searchCenter.lat, lng: searchCenter.lng }, settings.radius);
-      }
-  }, [fetchAllRatings, fetchPubScores, fetchClosedOsmPubs, fetchOsmPubOverrides, fetchClosedStoutlyPubs, fetchSocialData, session, fetchDbPubs, settings.radius]);
-
   // --- HISTORY MANAGEMENT ---
   useEffect(() => {
     const handlePopState = (event) => {
@@ -1525,6 +1726,8 @@ const App = () => {
             setUserPosts([]);
             setUserZeroVotes(new Map());
             setUserTrophies([]);
+            setBlockList(new Set());
+            setBlockedUsersProfiles([]);
         }
     });
 
@@ -1706,12 +1909,12 @@ const App = () => {
     const [ratingsResult, postsResult] = await Promise.all([
       supabase
         .from('ratings')
-        .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng, country_code, country_name)')
+        .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false }),
       supabase
         .from('posts')
-        .select('*, user:user_id!inner(id, username, avatar_id, level, is_banned), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))')
+        .select('*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
     ]);
@@ -1762,6 +1965,9 @@ const App = () => {
       setUserLikes(new Set());
       setUserPostLikes(new Set());
       setUserZeroVotes(new Map());
+      setUserTrophies([]);
+      setBlockList(new Set());
+      setBlockedUsersProfiles([]);
     }
   }, [session, fetchSocialData]);
 
@@ -2189,11 +2395,15 @@ const App = () => {
     });
 
     // 4. Attach ratings and scores to the final list of pubs to be displayed.
-    const finalPubsList = radiusFilteredPubs.map(pub => ({
-      ...pub,
-      ratings: allRatings.get(pub.id) || [],
-      pub_score: pubScores.get(pub.id) ?? null,
-    }));
+    const finalPubsList = radiusFilteredPubs.map(pub => {
+      const ratedPubData = allRatedPubsData.get(pub.id);
+      return {
+        ...pub,
+        ...(ratedPubData || {}), // Enrich with GZ data if available for this pub ID
+        ratings: allRatings.get(pub.id) || [],
+        pub_score: pubScores.get(pub.id) ?? null,
+      }
+    });
 
     setPubs(finalPubsList);
     
@@ -2207,7 +2417,7 @@ const App = () => {
         setInitialSearchComplete(true);
     }
 
-  }, [showAllDbPubs, mapSearchResults, dbPubs, allRatings, pubScores, searchOrigin, getDistance, closedOsmPubIds, closedStoutlyPubIds, osmPubOverrides, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded, isClosedStoutlyPubsLoaded, settings.radius]);
+  }, [showAllDbPubs, mapSearchResults, dbPubs, allRatings, allRatedPubsData, pubScores, searchOrigin, getDistance, closedOsmPubIds, closedStoutlyPubIds, osmPubOverrides, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded, isClosedStoutlyPubsLoaded, settings.radius]);
 
   // This effect will run after pubs are loaded and look for any without an address
   useEffect(() => {
@@ -2266,7 +2476,7 @@ const App = () => {
 
   const selectedPub = useMemo(() => pubs.find(p => p.id === selectedPubId) || null, [pubs, selectedPubId]);
   
-  const existingUserRatingForSelectedPub = useMemo(() => {
+  const existingUserRating = useMemo(() => {
     if (!selectedPub) return undefined;
     return userRatings.find(r => r.pubId === selectedPub.id);
   }, [selectedPub, userRatings]);
@@ -2401,9 +2611,17 @@ const App = () => {
     let pubsToProcess = [...pubs];
 
     if (filterGuinnessZero) {
-        pubsToProcess = pubsToProcess.filter(pub => 
-            (pub.guinness_zero_confirmations || 0) > (pub.guinness_zero_denials || 0)
-        );
+        pubsToProcess = pubsToProcess.filter(p => {
+            // Explicitly exclude closed pubs when this filter is active for a better user experience.
+            if (p.is_closed) return false;
+            
+            // Ensure values are numbers for safe comparison.
+            const confirmations = Number(p.guinness_zero_confirmations || 0);
+            const denials = Number(p.guinness_zero_denials || 0);
+            
+            // Align with the "Confirmed" status: confirmations must be strictly greater than denials.
+            return confirmations > denials;
+        });
     }
 
     return pubsToProcess.sort((a, b) => {
@@ -2585,25 +2803,9 @@ const App = () => {
     }
     trackEvent('vote_guinness_zero', { pub_id: pubId, vote: isConfirmation ? 'confirm' : 'deny' });
     
-    if (userZeroVotes.get(pubId) === isConfirmation) return;
+    const oldVote = userZeroVotes.get(pubId);
+    if (oldVote === isConfirmation) return;
 
-    const pubToUpsert = pubs.find(p => p.id === pubId);
-    if (!pubToUpsert) {
-        console.error("Cannot vote on a pub that doesn't exist in the current view.");
-        return;
-    }
-    
-    const { error: upsertError } = await supabase.from('pubs').upsert({
-        id: pubToUpsert.id, name: pubToUpsert.name, address: pubToUpsert.address,
-        lat: pubToUpsert.location.lat, lng: pubToUpsert.location.lng,
-        country_code: pubToUpsert.country_code, country_name: pubToUpsert.country_name,
-    });
-    if (upsertError) {
-        console.error("Error upserting pub before vote:", upsertError);
-        setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Could not save pub info: ${upsertError.message}`, theme: 'error' });
-        return;
-    }
-    
     const { error } = await supabase.rpc('report_guinness_zero_status', {
         p_pub_id: pubId, p_is_confirmation: isConfirmation,
     });
@@ -2612,9 +2814,41 @@ const App = () => {
         console.error("Error voting on Guinness 0.0 status:", error);
         setAlertInfo({ isOpen: true, title: 'Vote Failed', message: `Your vote could not be saved: ${error.message}`, theme: 'error' });
     } else {
-        await refreshSinglePubAndUserVotes(pubId, session.user.id);
+        // Optimistic update for the user's vote button state
+        setUserZeroVotes(prevVotes => {
+            const newVotes = new Map(prevVotes);
+            newVotes.set(pubId, isConfirmation);
+            return newVotes;
+        });
+
+        // Optimistic update for the pub's counts using functional update to avoid stale state
+        const updatePubCounts = (prevState) => {
+            const index = prevState.findIndex(p => p.id === pubId);
+            if (index === -1) return prevState;
+
+            const newPubs = [...prevState];
+            const targetPub = { ...newPubs[index] };
+
+            let confirms = targetPub.guinness_zero_confirmations || 0;
+            let denials = targetPub.guinness_zero_denials || 0;
+
+            if (oldVote === true) confirms--;
+            if (oldVote === false) denials--;
+
+            if (isConfirmation === true) confirms++;
+            if (isConfirmation === false) denials++;
+
+            targetPub.guinness_zero_confirmations = Math.max(0, confirms);
+            targetPub.guinness_zero_denials = Math.max(0, denials);
+            
+            newPubs[index] = targetPub;
+            return newPubs;
+        };
+        
+        setPubs(updatePubCounts);
+        setDbPubs(updatePubCounts);
     }
-  }, [session, userZeroVotes, pubs, refreshSinglePubAndUserVotes]);
+  }, [session, userZeroVotes, setAlertInfo, setIsAuthOpen]);
 
   const handleClearGuinnessZeroVote = useCallback(async (pubId) => {
     if (!session) {
@@ -2623,7 +2857,8 @@ const App = () => {
     }
     trackEvent('clear_vote_guinness_zero', { pub_id: pubId });
 
-    if (userZeroVotes.get(pubId) === undefined) return;
+    const oldVote = userZeroVotes.get(pubId);
+    if (oldVote === undefined) return;
 
     const { error } = await supabase.rpc('clear_guinness_zero_status', { p_pub_id: pubId });
 
@@ -2631,9 +2866,36 @@ const App = () => {
         console.error("Error clearing Guinness 0.0 vote:", error);
         setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Your vote could not be cleared: ${error.message}`, theme: 'error' });
     } else {
-        await refreshSinglePubAndUserVotes(pubId, session.user.id);
+        // Optimistic update
+        setUserZeroVotes(prevVotes => {
+            const newVotes = new Map(prevVotes);
+            newVotes.delete(pubId);
+            return newVotes;
+        });
+
+        const updatePubCounts = (prevState) => {
+            const index = prevState.findIndex(p => p.id === pubId);
+            if (index === -1) return prevState;
+
+            const newPubs = [...prevState];
+            const targetPub = { ...newPubs[index] };
+
+            let confirms = targetPub.guinness_zero_confirmations || 0;
+            let denials = targetPub.guinness_zero_denials || 0;
+
+            if (oldVote === true) confirms--;
+            if (oldVote === false) denials--;
+
+            targetPub.guinness_zero_confirmations = Math.max(0, confirms);
+            targetPub.guinness_zero_denials = Math.max(0, denials);
+            
+            newPubs[index] = targetPub;
+            return newPubs;
+        };
+        setPubs(updatePubCounts);
+        setDbPubs(updatePubCounts);
     }
-  }, [session, userZeroVotes, refreshSinglePubAndUserVotes]);
+  }, [session, userZeroVotes, setAlertInfo]);
 
   const handleDeleteRating = useCallback(async (ratingToDelete) => {
     if (!session || !userProfile || !ratingToDelete) return;
@@ -3065,7 +3327,6 @@ const App = () => {
               onViewFriends={handleViewFriends}
               onDeleteRating={handleDeleteRating}
               onOpenShareProfileModal={(user) => setShareProfileModalUser(user)}
-              onViewProfile={handleViewProfile}
               onNavigateToSettings={handleTabChange}
               pubScores={pubScores}
               isStatsModalOpen={isProfileStatsModalOpen}
@@ -3074,6 +3335,13 @@ const App = () => {
               onTogglePostLike={handleTogglePostLike}
               onEditPost={handleEditPost}
               onDeletePost={handleDeletePost}
+              onReportContent={handleOpenReportContentModal}
+              onOpenSharePostModal={setSharePostModalPost}
+              blockList={blockList}
+              onBlockUser={handleBlockUser}
+              onUnblockUser={handleUnblockUser}
+              blockedUsersProfiles={blockedUsersProfiles}
+              onLoginRequest={() => setIsAuthOpen(true)}
           />
       );
   }, [
@@ -3082,7 +3350,8 @@ const App = () => {
       handleProfileUpdate, friendships, handleFriendRequest, handleViewProfile,
       handleFriendAction, handleViewFriends, handleDeleteRating, handleTabChange,
       pubScores, isProfileStatsModalOpen, userPostLikes, handleTogglePostLike,
-      handleEditPost, handleDeletePost,
+      handleEditPost, handleDeletePost, handleOpenReportContentModal, setSharePostModalPost,
+      blockList, handleBlockUser, handleUnblockUser, blockedUsersProfiles
   ]);
   
   const handleAddPubClick = () => {
@@ -3248,10 +3517,11 @@ const App = () => {
     if (error) {
       console.error("Error fetching comments:", error);
     } else {
-      setCommentsByRating(prev => new Map(prev).set(ratingId, data));
+      const filteredData = (data || []).filter(comment => !blockList.has(comment.user_id));
+      setCommentsByRating(prev => new Map(prev).set(ratingId, filteredData));
     }
     setIsCommentsLoading(false);
-  }, []);
+  }, [blockList]);
 
   const handleAddComment = useCallback(async (ratingId, content, parentCommentId = null) => {
     if (!session) {
@@ -3321,10 +3591,11 @@ const App = () => {
     if (error) {
       console.error("Error fetching post comments:", error);
     } else {
-      setCommentsByPost(prev => new Map(prev).set(postId, data));
+      const filteredData = (data || []).filter(comment => !blockList.has(comment.user_id));
+      setCommentsByPost(prev => new Map(prev).set(postId, filteredData));
     }
     setIsPostCommentsLoading(false);
-  }, []);
+  }, [blockList]);
 
   const handleAddPostComment = useCallback(async (postId, content, parentCommentId = null) => {
     if (!session) {
@@ -3359,39 +3630,6 @@ const App = () => {
       await fetchCommentsForPost(postId);
     }
   }, [fetchCommentsForPost]);
-
-  const handleOpenReportCommentModal = (comment) => {
-    setReportCommentInfo({ isOpen: true, comment });
-  };
-
-  const handleReportComment = useCallback(async (reason) => {
-    if (!reportCommentInfo.comment) return;
-    const { id: commentId } = reportCommentInfo.comment;
-
-    trackEvent('report_comment', { comment_id: commentId, reason });
-    const { error } = await supabase.rpc('report_comment', {
-      p_comment_id: commentId,
-      p_reason: reason,
-    });
-
-    setReportCommentInfo({ isOpen: false, comment: null }); // Close modal
-
-    if (error) {
-      setAlertInfo({
-        isOpen: true,
-        title: 'Report Failed',
-        message: `There was an error reporting this comment: ${error.message}`,
-        theme: 'error',
-      });
-    } else {
-      setAlertInfo({
-        isOpen: true,
-        title: 'Comment Reported',
-        message: 'Thank you for helping keep the community safe. Our moderation team will review it shortly.',
-        theme: 'success',
-      });
-    }
-  }, [reportCommentInfo.comment]);
 
   const handleMarkNotificationsAsRead = useCallback(async () => {
     if (!session || unreadNotificationsCount === 0) return;
@@ -3436,48 +3674,61 @@ const App = () => {
         });
     }
   }, [session, notifications, setAlertInfo, setNotifications]);
-  
-  // --- MODERATION HANDLERS (for reported comments) ---
 
-  const fetchReportedComments = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('reported_comments')
-      .select(`
-        *,
-        comment:comments!inner(
-          id, content, created_at,
-          author:profiles!comments_user_id_fkey(id, username, avatar_id)
-        ),
-        reporter:profiles!reported_comments_reporter_id_fkey(id, username)
-      `)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true });
-    
-    if (error) {
-      console.error("Error fetching reported comments:", error);
-    } else {
-      setReportedComments(data || []);
+  // Effect to re-filter any currently loaded comments when the block list changes.
+  useEffect(() => {
+    if (commentsByRating.size > 0) {
+        setCommentsByRating(prevMap => {
+            const newMap = new Map();
+            for (const [ratingId, comments] of prevMap.entries()) {
+                newMap.set(ratingId, (comments || []).filter(c => !blockList.has(c.user_id)));
+            }
+            return newMap;
+        });
     }
-  }, [setReportedComments]);
+    if (commentsByPost.size > 0) {
+        setCommentsByPost(prevMap => {
+            const newMap = new Map();
+            for (const [postId, comments] of prevMap.entries()) {
+                newMap.set(postId, (comments || []).filter(c => !blockList.has(c.user_id)));
+            }
+            return newMap;
+        });
+    }
+  }, [blockList]);
+  
+  // --- MODERATION HANDLERS ---
 
-  const handleResolveCommentReport = useCallback(async (report, action) => {
-    trackEvent('resolve_comment_report', { report_id: report.id, action });
+  const fetchReports = useCallback(async () => {
+    const { data, error } = await supabase.rpc('get_all_pending_reports');
+    if (error) {
+        console.error("Error fetching all pending reports:", error);
+        setAlertInfo({ isOpen: true, title: 'Error', message: `Could not load moderation queue: ${error.message}`, theme: 'error' });
+    } else {
+        setReports(data || []);
+    }
+  }, [setAlertInfo]);
+
+  const onResolveReport = useCallback(async (reportId, action) => {
+    trackEvent('resolve_report', { report_id: reportId, action });
     
-    const { error } = await supabase.functions.invoke('resolve-comment-report', {
-      body: { report_id: report.id, action: action }
+    const originalReports = reports;
+    setReports(prev => prev.filter(r => r.report_id !== reportId));
+
+    const { error } = await supabase.rpc('resolve_report', {
+        p_report_id: reportId,
+        p_action: action,
     });
     
     if (error) {
-      alert(`Failed to resolve report: ${error.context?.responseJson?.error || error.message}`);
+      setReports(originalReports);
+      setAlertInfo({ isOpen: true, title: 'Action Failed', message: `Failed to resolve report: ${error.message}`, theme: 'error'});
     } else {
-      // Optimistically remove from list
-      setReportedComments(prev => prev.filter(r => r.id !== report.id));
       if (action === 'remove') {
-          // If a comment was removed, we should refresh all ratings to update comment counts
-          await fetchAllRatings();
+          await handleDataRefresh();
       }
     }
-  }, [fetchAllRatings, setReportedComments]);
+  }, [reports, handleDataRefresh, setAlertInfo]);
 
   const handleAdminDeleteComment = useCallback(async (commentId) => {
       trackEvent('admin_delete_comment', { comment_id: commentId });
@@ -3652,6 +3903,7 @@ const App = () => {
   const layoutProps = {
       isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
+      onLoginRequest: () => setIsAuthOpen(true),
       activeTab, handleTabChange, locationError, settings, handleSettingsChange, filter, handleFilterChange,
       filterGuinnessZero, onFilterGuinnessZeroChange,
       handleRefresh, isRefreshing, sortedPubs, userLocation, mapCenter, searchOrigin,
@@ -3660,10 +3912,10 @@ const App = () => {
       handleFindCurrentPub, getDistance,
       getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
       profilePage, session, userProfile, onLogout: () => supabase.auth.signOut(),
-      selectedPub, existingUserRatingForSelectedPub, handleRatePub,
+      selectedPub, existingUserRating, handleRatePub,
       reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
       isAvatarModalOpen, setIsAvatarModalOpen,
-      handleUpdateAvatar, viewedProfile, handleViewProfile, legalPageView, handleViewLegal, handleDataRefresh,
+      handleUpdateAvatar, viewedProfile, onViewProfile: handleViewProfile, onViewPub: handleSelectPub, legalPageView, handleViewLegal, handleDataRefresh,
       installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
       showSearchAreaButton, handleSearchThisArea,
       searchOnNextMoveEnd, handleSearchAfterMove,
@@ -3686,10 +3938,9 @@ const App = () => {
       onOpenSuggestEditModal: handleOpenSuggestEditModal,
       unreadNotificationsCount,
       notifications, onMarkNotificationsAsRead: handleMarkNotificationsAsRead, onDeleteNotification: handleDeleteNotification,
-      commentsByRating, isCommentsLoading, onFetchComments: fetchCommentsForRating, onAddComment: handleAddComment, onDeleteComment: handleDeleteComment, onReportComment: handleOpenReportCommentModal,
-      commentsByPost, isPostCommentsLoading, onFetchCommentsForPost: handleAddPostComment, onDeletePostComment: handleDeletePostComment,
-      reportCommentInfo, onCloseReportCommentModal: () => setReportCommentInfo({ isOpen: false, comment: null }), onSubmitReportComment: handleReportComment,
-      reportedComments, onFetchReportedComments: fetchReportedComments, onResolveCommentReport: handleResolveCommentReport, onAdminDeleteComment: handleAdminDeleteComment,
+      commentsByRating, isCommentsLoading, onFetchComments: fetchCommentsForRating, onAddComment: handleAddComment, onDeleteComment: handleDeleteComment, onReportContent: handleOpenReportContentModal,
+      commentsByPost, isPostCommentsLoading, onFetchCommentsForPost: fetchCommentsForPost, onAddPostComment: handleAddPostComment, onDeletePostComment: handleDeletePostComment,
+      reports, onFetchReports: fetchReports, onResolveReport: onResolveReport, onAdminDeleteComment: handleAdminDeleteComment,
       toastNotification, onCloseToast: () => setToastNotification(null), onToastClick: handleToastClick,
       handleMarketingConsentChange,
       userZeroVotes, onGuinnessZeroVote: handleGuinnessZeroVote, onClearGuinnessZeroVote: handleClearGuinnessZeroVote,
@@ -3718,7 +3969,8 @@ const App = () => {
       onTestTrophyPopup: handleTestTrophyPopup,
       onTestDonationPopup: handleTestDonationPopup,
       mapRef, onMapLoad: handleMapLoad,
-      communitySubTab, setCommunitySubTab,
+      activeSubTab: communitySubTab, 
+      onSubTabChange: setCommunitySubTab,
       isAppHeaderVisible, onMobileScroll: handleMobileScroll, isNavShrunk,
       // Changelog handlers
       hasUnreadChangelog,
@@ -3745,6 +3997,14 @@ const App = () => {
       // Mobile Panel
       panelHeight, setPanelHeight, COLLAPSED_PANEL_HEIGHT,
       handleDonationSuccess,
+      isEditRatingFlow,
+      // Block handlers
+      blockList,
+      blockedUsersProfiles,
+      handleBlockUser,
+      handleUnblockUser,
+      socialsUpdateCount,
+      onDeleteAccountRequest: handleDeleteAccountRequest,
   };
 
   const Layout = isDesktop ? DesktopLayout : MobileLayout;
@@ -3756,10 +4016,11 @@ const App = () => {
   if (isCrawlModeActive && activeCrawl) {
       return (
           <CrawlModePage
+              isDesktop={isDesktop}
               activeCrawl={activeCrawl}
-              onEndCrawl={handleEndCrawl}
+              onEndCrawl={onEndCrawl}
               onExitCrawlMode={handleExitCrawlMode}
-              onToggleCrawlStop={handleToggleCrawlStop}
+              onToggleCrawlStop={onToggleCrawlStop}
               onSkipCrawlStop={handleSkipCrawlStop}
               userRatings={userRatings}
               userProfile={userProfile}
@@ -3768,7 +4029,7 @@ const App = () => {
               isSubmittingRating={isSubmittingRating}
               getAverageRating={getAverageRating}
               onLoginRequest={() => setIsAuthOpen(true)}
-              onViewProfile={onViewProfile}
+              onViewProfile={handleViewProfile}
               onDataRefresh={handleDataRefresh}
               userLikes={userLikes}
               onToggleLike={onToggleLike}
@@ -3776,13 +4037,13 @@ const App = () => {
               onOpenSuggestEditModal={handleOpenSuggestEditModal}
               commentsByRating={commentsByRating}
               isCommentsLoading={isCommentsLoading}
-              onFetchComments={fetchCommentsForRating}
+              onFetchComments={onFetchComments}
               onAddComment={onAddComment}
               onDeleteComment={onDeleteComment}
-              onReportComment={onReportComment}
+              onReportContent={onReportContent}
               userZeroVotes={userZeroVotes}
-              onGuinnessZeroVote={onGuinnessZeroVote}
-              onClearGuinnessZeroVote={onClearGuinnessZeroVote}
+              onGuinnessZeroVote={handleGuinnessZeroVote}
+              onClearGuinnessZeroVote={handleClearGuinnessZeroVote}
               onOpenShareModal={setShareModalPub}
               onOpenShareRatingModal={handleOpenShareRatingModal}
               setAlertInfo={setAlertInfo}
@@ -3801,12 +4062,26 @@ const App = () => {
       <ExchangeRatesProvider>
         <Layout {...layoutProps} />
 
-        {/* Popups & Modals that can appear over any layout */}
+        {/* Popups and Modals that can appear over any layout */}
         {alertInfo.isOpen && (
           <AlertModal
             {...alertInfo}
             onClose={() => setAlertInfo({ isOpen: false, title: '', message: '', theme: 'info' })}
           />
+        )}
+        {blockConfirmationInfo.isOpen && (
+            <ConfirmationModal
+                {...blockConfirmationInfo}
+                onClose={() => setBlockConfirmationInfo({ isOpen: false })}
+            />
+        )}
+        {isDeleteAccountModalOpen && userProfile && (
+            <DeleteAccountModal
+                userProfile={userProfile}
+                onClose={() => setIsDeleteAccountModalOpen(false)}
+                onConfirm={handleConfirmDeleteAccount}
+                isLoading={isDeletingAccount}
+            />
         )}
         {isPubScoreModalOpen && <PubScoreExplanationModal isOpen={isPubScoreModalOpen} onClose={() => setIsPubScoreModalOpen(false)} />}
         {isChangelogOpen && <ChangelogPage onClose={() => setIsChangelogOpen(false)} />}
@@ -3877,6 +4152,15 @@ const App = () => {
       {shareProfileModalUser && <ShareProfileModal user={shareProfileModalUser} onClose={() => setShareProfileModalUser(null)} />}
       {shareRatingModalRating && <ShareRatingModal rating={shareRatingModalRating} onClose={() => setShareRatingModalRating(null)} loggedInUserProfile={userProfile} />}
       {sharePostModalPost && <SharePostModal post={sharePostModalPost} onClose={() => setSharePostModalPost(null)} />}
+      {reportContentInfo.isOpen && (
+        <ReportContentModal
+            isOpen={reportContentInfo.isOpen}
+            onClose={() => setReportContentInfo({ isOpen: false })}
+            onSubmit={handleSubmitReport}
+            contentType={reportContentInfo.contentType}
+            contentCreatorUsername={reportContentInfo.contentCreatorUsername}
+        />
+      )}
 
       {unlockedTrophiesToShow.length > 0 && <TrophyUnlockedPopup trophies={unlockedTrophiesToShow} onClose={handleCloseTrophyPopup} />}
 

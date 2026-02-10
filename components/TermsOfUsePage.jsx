@@ -20,7 +20,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const TermsOfUsePage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Terms of Use" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: January 20, 2026</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: February 9, 2026</p>
             <p>Welcome to Stoutly! These Terms of Use ("Terms") govern your access to and use of the Stoutly web application and any related services (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Description of Service</h2>
@@ -65,8 +65,9 @@ const TermsOfUsePage = ({ onBack }) => {
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li>Monitor, screen, or remove any User Content at our sole discretion, including comments, profile pictures, or photographs that we deem inappropriate or in violation of these Terms.</li>
                 <li>Suspend or permanently terminate your account for any reason, without notice, especially for violations of these Terms. Our decisions on moderation and termination are final.</li>
+                <li><strong>User Blocking:</strong> You may block other users at any time to prevent them from seeing your profile and content, and to hide their profile and content from your view. This action is reversible by visiting the blocked user's profile. We reserve the right to limit interactions between users to foster a positive community environment.</li>
             </ul>
-            <p className="pt-2"><strong>Termination by You:</strong> You may terminate your account at any time by requesting deletion via the "Contact Us" form in the app's settings or by emailing us directly at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a>. We will process your request in accordance with our Privacy Policy.</p>
+            <p className="pt-2"><strong>Termination by You:</strong> You may terminate your account at any time through the "Danger Zone" section in the app's Settings. You can also request deletion by emailing us directly at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a>. Account termination is processed in accordance with our Privacy Policy.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Disclaimers</h2>
             <p>The Service is provided "AS IS" and "AS AVAILABLE" without warranties of any kind. We do not warrant that the information provided (including pub locations or average ratings) is accurate, complete, or reliable. You rely on any information available through the Service at your own risk.</p>

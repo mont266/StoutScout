@@ -1,3 +1,5 @@
+
+
 // This file is now 'utils.js'
 import { RANK_DETAILS } from './constants.js';
 
@@ -56,20 +58,21 @@ export const normalizePubNameForComparison = (name) => {
     .replace(/'s\b/g, '') // e.g., "kavanagh's" -> "kavanagh"
     .replace(/[^a-z0-9\s]/g, ''); // Remove all non-alphanumeric characters except spaces
 
-  // Step 2: Attempt to remove common pub words
-  const withoutCommonWords = initialNormalization.replace(/\b(the|inn|tavern|pub|bar|arms|house|hotel|lounge)\b/g, '');
+  // Step 2: Attempt to remove common pub words and major chain names.
+  // Longer phrases must come first to be matched correctly.
+  const commonWordsRegex = /\b(jd wetherspoon|wetherspoons|greene king|fullers|marstons|stonegate|the|inn|tavern|pub|bar|arms|house|hotel|lounge)\b/g;
+  const withoutCommonWords = initialNormalization.replace(commonWordsRegex, '');
 
   // Step 3: Remove all whitespace from the result
   const final = withoutCommonWords.replace(/\s+/g, '');
 
-  // The previous logic was too aggressive, causing different pub names to be incorrectly flagged as duplicates.
-  // This new logic is safer: if removing common words results in a non-empty string, we use that.
-  // Otherwise, we fall back to the original name to avoid incorrect matches.
+  // If removing common words results in a non-empty string, use that.
+  // This prevents names like "The Pub" from becoming an empty string and matching everything.
   if (withoutCommonWords.trim().length > 0) {
     return final;
   }
   
-  // Fallback for names like "The Pub" which would otherwise become empty.
+  // Fallback for names that consist only of common words.
   return initialNormalization.replace(/\s+/g, '');
 };
 
