@@ -20,7 +20,7 @@ const ShareRatingModal = ({ rating, onClose, loggedInUserProfile }) => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
 
-    const productionUrl = 'https://www.stoutly.co.uk';
+    const productionUrl = 'https://app.stoutly.co.uk';
     const origin = Capacitor.isNativePlatform() ? productionUrl : window.location.origin;
     const baseUrl = `${origin}/?pub_id=${rating.pub_id}&rating_id=${rating.id}`;
     const shareUrl = `${baseUrl}&utm_source=stoutly_app&utm_medium=share&utm_campaign=rating_share`;
@@ -128,7 +128,7 @@ const ShareRatingModal = ({ rating, onClose, loggedInUserProfile }) => {
                                     </div>
                                 </div>
                             </div>
-                            <p className="absolute bottom-1 right-2 text-[10px] font-bold text-amber-400 opacity-80" style={{ textShadow: '1px 1px 1px #000' }}>Stoutly.co.uk</p>
+                            <p className="absolute bottom-1 right-2 text-[10px] font-bold text-amber-400 opacity-80" style={{ textShadow: '1px 1px 1px #000' }}>app.stoutly.co.uk</p>
                         </div>
                     ) : (
                         // No Image Layout
@@ -170,7 +170,7 @@ const ShareRatingModal = ({ rating, onClose, loggedInUserProfile }) => {
                             )}
 
                             <div className="text-center text-xl font-extrabold text-amber-500 dark:text-amber-400 mt-4 tracking-wider">
-                                Stoutly.co.uk
+                                app.stoutly.co.uk
                             </div>
                         </div>
                     )}

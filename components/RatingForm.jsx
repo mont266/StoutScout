@@ -6,43 +6,6 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 
-const ImageSourceChooser = ({ isOpen, onClose, onSelectCamera, onSelectGallery }) => {
-    if (!isOpen) return null;
-
-    return (
-        <div 
-            className="fixed inset-0 bg-black/60 z-[1300] flex items-end" 
-            onClick={onClose}
-            role="dialog"
-            aria-modal="true"
-        >
-            <div 
-                className="bg-white dark:bg-gray-800 w-full rounded-t-2xl p-4 animate-fade-in-up" 
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="w-10 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-4"></div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">Add a Photo</h3>
-                <ul className="space-y-2">
-                    <li>
-                        <button onClick={onSelectCamera} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3">
-                            <i className="fas fa-camera w-6 text-center text-gray-500"></i>
-                            <span>Take Photo</span>
-                        </button>
-                    </li>
-                    <li>
-                        <button onClick={onSelectGallery} className="w-full text-left p-3 text-lg rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3">
-                            <i className="fas fa-images w-6 text-center text-gray-500"></i>
-                            <span>Choose from Gallery</span>
-                        </button>
-                    </li>
-                </ul>
-                <button onClick={onClose} className="w-full mt-4 bg-gray-200 dark:bg-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600">Cancel</button>
-                <div className="pb-safe"></div>
-            </div>
-        </div>
-    );
-};
-
 const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote, isLondon = false }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
@@ -55,14 +18,12 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
   const [imagePreview, setImagePreview] = useState(null);
   const [imageWasRemoved, setImageWasRemoved] = useState(false);
   
-  const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [imageToCrop, setImageToCrop] = useState(null);
 
   const [validationError, setValidationError] = useState(null);
-  const [showImageSourceChooser, setShowImageSourceChooser] = useState(false);
   const isDesktop = useIsDesktop();
 
   const { symbol: currencySymbol = '£', examplePrice = '5.70', tiers } = currencyInfo;
@@ -155,31 +116,7 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
     setIsCropperOpen(false);
   };
 
-  const takePicture = async () => {
-    setShowImageSourceChooser(false);
-    if (Capacitor.isNativePlatform()) {
-        try {
-            const image = await Camera.getPhoto({
-                quality: 90,
-                allowEditing: false,
-                resultType: CameraResultType.Uri,
-                source: CameraSource.Camera,
-                saveToGallery: true,
-            });
-            if (image.webPath) {
-                setImageToCrop(image.webPath);
-                setIsCropperOpen(true);
-            }
-        } catch (error) {
-            console.log('Capacitor Camera action cancelled or failed:', error);
-        }
-    } else {
-        cameraInputRef.current?.click();
-    }
-  };
-
   const chooseFromGallery = async () => {
-      setShowImageSourceChooser(false);
       if (Capacitor.isNativePlatform()) {
           try {
               const image = await Camera.getPhoto({
@@ -201,11 +138,7 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
   };
 
   const handleAddPhotoClick = () => {
-    if (isDesktop) {
-        galleryInputRef.current?.click();
-        return;
-    }
-    setShowImageSourceChooser(true);
+    chooseFromGallery();
   };
 
   const buttonText = existingRating ? 'Update Rating' : 'Submit Rating';
@@ -241,12 +174,6 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
 
   return (
     <>
-    <ImageSourceChooser 
-        isOpen={showImageSourceChooser}
-        onClose={() => setShowImageSourceChooser(false)}
-        onSelectCamera={takePicture}
-        onSelectGallery={chooseFromGallery}
-    />
     {isCropperOpen && imageToCrop && (
         <ImageCropper 
             imageSrc={imageToCrop}
@@ -347,14 +274,6 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
                     <i className="fas fa-camera text-3xl mb-2"></i>
                     <span className="font-semibold">{isDesktop ? 'Choose from Files...' : 'Add Photo of Your Pint'}</span>
                 </button>
-                <input
-                    type="file"
-                    ref={cameraInputRef}
-                    className="hidden"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleImageChange}
-                />
                 <input
                     type="file"
                     ref={galleryInputRef}

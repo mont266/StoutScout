@@ -18,7 +18,7 @@ const ShareProfileModal = ({ user, onClose }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy Link');
 
     // Base URL for native share and copy link
-    const productionUrl = 'https://www.stoutly.co.uk';
+    const productionUrl = 'https://app.stoutly.co.uk';
     const origin = Capacitor.isNativePlatform() ? productionUrl : window.location.origin;
     const baseUrl = `${origin}/?user_id=${user.id}`;
     const shareUrl = `${baseUrl}&utm_source=stoutly_app&utm_medium=profile_share&utm_campaign=user_profile_share`;
@@ -120,7 +120,7 @@ const ShareProfileModal = ({ user, onClose }) => {
                         </div>
 
                         <div className="text-center text-xl font-extrabold text-amber-500 dark:text-amber-400 mt-4 tracking-wider">
-                            Stoutly.co.uk
+                            app.stoutly.co.uk
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useMemo, useCallback, useEffect, useRef, createContext, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import mapboxgl from 'mapbox-gl';
@@ -2336,9 +2333,9 @@ const App = () => {
 
     if (showAllDbPubs) {
       // DEV MODE: Unfiltered list of all pubs from our DB for debugging.
-      pubsToFilter = dbPubs.map(pub => ({
-        ...pub,
-        is_closed: !!pub.is_closed || closedOsmPubIds.has(pub.id) || closedStoutlyPubIds.has(pub.id),
+      pubsToFilter = dbPubs.map(p => ({
+        ...p,
+        is_closed: !!p.is_closed || closedOsmPubIds.has(p.id) || closedStoutlyPubIds.has(p.id),
       }));
     } else {
       // NORMAL MODE: Combine sources for a comprehensive list, prioritizing our DB.
@@ -2451,12 +2448,22 @@ const App = () => {
         }
     };
     
-    const pubsToGeocode = pubs.filter(p =>
-        (!p.address || p.address === 'Address unknown') &&
-        p.location?.lat &&
-        p.location?.lng &&
-        !geocodingPubIds.has(p.id)
-    );
+    const pubsToGeocode = pubs.filter(p => {
+        // HARD EXEMPTION: Never, ever geocode a pub added by a user.
+        // The address stored in the database is the absolute source of truth
+        // and must never be overwritten by this client-side logic.
+        if (p.id.startsWith('stoutly-')) {
+            return false;
+        }
+
+        // --- Standard logic for external pubs ---
+        if (!p.location?.lat || !p.location?.lng || geocodingPubIds.has(p.id)) {
+            return false;
+        }
+        
+        // Geocode if the address is missing (falsy) or if it's the generic placeholder.
+        return !p.address || p.address === 'Address unknown';
+    });
 
     if (pubsToGeocode.length > 0) {
         setGeocodingPubIds(prev => {
@@ -2565,8 +2572,8 @@ const App = () => {
   const handleMapMove = useCallback((viewState) => {
     const newCenter = { lat: viewState.latitude, lng: viewState.longitude };
     setMapCenter(newCenter);
-    
-    // If in placement mode, allow map movement without cancelling the flow or showing other buttons.
+
+    // If in placement mode, the map can move without affecting the pin's final location.
     if (pubPlacementState) {
         return;
     }
@@ -2836,7 +2843,7 @@ const App = () => {
             if (oldVote === false) denials--;
 
             if (isConfirmation === true) confirms++;
-            if (isConfirmation === false) denials++;
+            if (isConfirmation === false) denials--;
 
             targetPub.guinness_zero_confirmations = Math.max(0, confirms);
             targetPub.guinness_zero_denials = Math.max(0, denials);
@@ -3089,7 +3096,7 @@ const App = () => {
 
   const onViewSocialHub = () => handleViewAdminPage('social');
 
-  const handlePlacementPinMove = useCallback((newLocation) => {
+  const handleUpdatePlacementLocation = useCallback((newLocation) => {
     setFinalPlacementLocation(newLocation);
   }, []);
 
@@ -3415,12 +3422,11 @@ const App = () => {
       let country_code = null;
       let country_name = null;
       if (reverseData.features && reverseData.features.length > 0) {
-          const context = reverseData.features[0].context;
-          const country = context?.find(c => c.id.startsWith('country'));
-          if (country) {
-            country_code = country.short_code;
-            country_name = country.text;
-          }
+          const countryFeature = reverseData.features[0];
+          // When using &types=country, the feature itself is the country.
+          // The short_code is in properties.
+          country_code = countryFeature.properties?.short_code || null;
+          country_name = countryFeature.text || null;
       }
       
       // Generate a unique ID for the new pub to satisfy the not-null constraint.
@@ -3920,7 +3926,7 @@ const App = () => {
       showSearchAreaButton, handleSearchThisArea,
       searchOnNextMoveEnd, handleSearchAfterMove,
       pubPlacementState, finalPlacementLocation, isConfirmingLocation,
-      handlePlacementPinMove, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
+      onPlacementPinMove: handleUpdatePlacementLocation, handleConfirmNewPub, handleCancelPubPlacement, isSubmittingRating,
       handleFindPlace,
       onPubSelected: handleSelectPub,
       searchRadius: settings.radius,
@@ -3943,7 +3949,7 @@ const App = () => {
       reports, onFetchReports: fetchReports, onResolveReport: onResolveReport, onAdminDeleteComment: handleAdminDeleteComment,
       toastNotification, onCloseToast: () => setToastNotification(null), onToastClick: handleToastClick,
       handleMarketingConsentChange,
-      userZeroVotes, onGuinnessZeroVote: handleGuinnessZeroVote, onClearGuinnessZeroVote: handleClearGuinnessZeroVote,
+      userZeroVotes, onGuinnessZeroVote: handleClearGuinnessZeroVote,
       showAllDbPubs, onToggleShowAllDbPubs: handleToggleShowAllDbPubs,
       onOpenShareModal: setShareModalPub,
       onOpenShareRatingModal: handleOpenShareRatingModal,
@@ -4020,7 +4026,7 @@ const App = () => {
               activeCrawl={activeCrawl}
               onEndCrawl={onEndCrawl}
               onExitCrawlMode={handleExitCrawlMode}
-              onToggleCrawlStop={onToggleCrawlStop}
+              onToggleCrawlStop={handleToggleCrawlStop}
               onSkipCrawlStop={handleSkipCrawlStop}
               userRatings={userRatings}
               userProfile={userProfile}
@@ -4029,7 +4035,7 @@ const App = () => {
               isSubmittingRating={isSubmittingRating}
               getAverageRating={getAverageRating}
               onLoginRequest={() => setIsAuthOpen(true)}
-              onViewProfile={handleViewProfile}
+              onViewProfile={onViewProfile}
               onDataRefresh={handleDataRefresh}
               userLikes={userLikes}
               onToggleLike={onToggleLike}
@@ -4037,7 +4043,7 @@ const App = () => {
               onOpenSuggestEditModal={handleOpenSuggestEditModal}
               commentsByRating={commentsByRating}
               isCommentsLoading={isCommentsLoading}
-              onFetchComments={onFetchComments}
+              onFetchComments={fetchCommentsForRating}
               onAddComment={onAddComment}
               onDeleteComment={onDeleteComment}
               onReportContent={onReportContent}

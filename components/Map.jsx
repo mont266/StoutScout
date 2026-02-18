@@ -1,5 +1,6 @@
 
 
+
 import React, { useMemo, useRef, useEffect } from 'react';
 import Map, { Marker, NavigationControl, Source, Layer } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -38,7 +39,7 @@ const ClosedPubIcon = () => (
 );
 
 const PlacementIcon = () => (
-    <div className="w-12 h-12 relative flex items-center justify-center animate-pulse cursor-grab">
+    <div className="w-12 h-12 relative flex items-center justify-center animate-pulse cursor-move">
       <svg viewBox="0 0 24 24" fill="#F59E0B" stroke="#1A202C" strokeWidth="1.5" className="w-full h-full drop-shadow-2xl">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
       </svg>
@@ -156,15 +157,19 @@ const MapComponent = (props) => {
           longitude={pub.location.lng}
           latitude={pub.location.lat}
           anchor="bottom"
-          onClick={e => {
-            e.originalEvent.stopPropagation();
-            onSelectPub(pub);
-          }}
         >
-          {icon}
+          <div onClick={e => {
+            e.stopPropagation();
+            const handler = onSelectPub || props.onPubSelected;
+            if (handler) {
+                handler(pub);
+            }
+          }}>
+            {icon}
+          </div>
         </Marker>
       );
-  }), [pubs, selectedPubId, onSelectPub, icons]);
+  }), [pubs, selectedPubId, onSelectPub, props.onPubSelected, icons]);
 
   const searchRadiusCircle = useMemo(() => {
     if (!searchOrigin || !searchRadius) return null;
@@ -228,15 +233,15 @@ const MapComponent = (props) => {
             <Marker
                 longitude={finalPlacementLocation.lng}
                 latitude={finalPlacementLocation.lat}
-                draggable={true}
-                onDragEnd={evt => onPlacementPinMove({ lat: evt.lngLat.lat, lng: evt.lngLat.lng })}
+                draggable
+                onDragEnd={(e) => onPlacementPinMove({ lat: e.lngLat.lat, lng: e.lngLat.lng })}
                 anchor="bottom"
             >
                 <PlacementIcon />
             </Marker>
         )}
-
       </Map>
+
        {/* Desktop version of the "Search This Area" button. Mobile version is in MobileLayout.jsx */}
       {isDesktop && showSearchAreaButton && !selectedPubId && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">

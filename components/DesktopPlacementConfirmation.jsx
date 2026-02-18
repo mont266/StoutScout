@@ -8,7 +8,7 @@ const DesktopPlacementConfirmation = ({ pubName, onConfirm, onCancel, isLoading 
             
             <div className="my-6 p-4 bg-blue-500/10 border-l-4 border-blue-500 text-blue-800 dark:text-blue-200 rounded-r-lg">
                 <p className="font-bold">Is this the right spot?</p>
-                <p className="text-sm mt-1">Look at the map and drag the new pin to the pub's exact entrance. When you're happy with the location, hit confirm.</p>
+                <p className="text-sm mt-1">Drag the pin to place it over the pub's exact entrance. When you're happy with the location, hit confirm.</p>
             </div>
 
             <div className="mt-auto space-y-3">
