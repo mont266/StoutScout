@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "uk.co.stoutly.twa",
+        "paths": ["*"]
+      }
+    ]
+  }
+}
