@@ -43,6 +43,7 @@ import CreatePostModal from './components/CreatePostModal.jsx';
 import ConfirmationModal from './components/ConfirmationModal.jsx';
 import ReportContentModal from './components/ReportContentModal.jsx';
 import DeleteAccountModal from './components/DeleteAccountModal.jsx';
+import AuthCallbackPage from './components/AuthCallbackPage.jsx';
 
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -327,10 +328,94 @@ const App = () => {
 
   // --- HOOKS ---
   const isDesktop = useIsDesktop();
+
+  // --- ROUTING ---
+  if (window.location.pathname === '/auth/callback') {
+    return <AuthCallbackPage />;
+  }
   const locationPermissionTracked = useRef(false);
   const didProcessUrlParams = useRef(false);
   const watchCallbackRef = useRef();
   
+  const handleCloseAllModals = useCallback(() => {
+    setIsAuthOpen(false);
+    setIsPubScoreModalOpen(false);
+    setIsEditUsernameModalOpen(false);
+    // ... add any other modal state setters here
+  }, []);
+
+  const handleViewProfileByUsername = useCallback(async (username, origin) => {
+    if (!username) return;
+    setIsFetchingViewedProfile(true);
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('username', username)
+        .single();
+
+      if (error || !profile) {
+        throw new Error(error?.message || 'Profile not found.');
+      }
+
+      // Set the state to display the profile
+      setViewedProfile(profile);
+      setProfileViewOrigin(origin);
+      setActiveTab('community');
+      setCommunitySubTab('profile');
+    } catch (err) {
+      console.error('Error fetching profile by username:', err);
+      setAlertInfo({ isOpen: true, title: 'Profile Not Found', message: `Could not find a user with the name "${username}".`, theme: 'error' });
+    } finally {
+      setIsFetchingViewedProfile(false);
+    }
+  }, []);
+
+  // --- DEEP LINKING ---
+  useEffect(() => {
+    const listener = CapacitorApp.addListener('appUrlOpen', (event) => {
+      try {
+        const url = new URL(event.url);
+        const path = url.pathname;
+
+        if (path.startsWith('/pub/')) {
+          const pubId = path.split('/')[2];
+          if (pubId) {
+            handleCloseAllModals();
+            setActiveTab('map');
+            setSelectedPubId(pubId);
+            trackEvent('deep_link_opened', { type: 'pub', pub_id: pubId });
+          }
+        } else if (path === '/auth/callback') {
+          if (event.url.includes('#access_token=')) {
+            setToastNotification("Email confirmed. Welcome to Stoutly!");
+            setActiveTab('map');
+          } else {
+            setAlertInfo({ 
+              isOpen: true, 
+              title: 'Link Expired', 
+              message: 'This confirmation link has expired. Please sign up again.', 
+              theme: 'error' 
+            });
+          }
+        } else if (path.startsWith('/user/')) {
+          const username = path.split('/')[2];
+          if (username) {
+            handleViewProfileByUsername(username, 'deep_link');
+            trackEvent('deep_link_opened', { type: 'user', username: username });
+          }
+        }
+      } catch (error) {
+        console.error('Error handling deep link:', error);
+        trackEvent('deep_link_error', { error: error.message });
+      }
+    });
+
+        return () => {
+      listener.then(handle => handle.remove());
+    };
+  }, [handleCloseAllModals, handleViewProfileByUsername]);
+
   const getFlyToPadding = useCallback(() => {
     if (isDesktop) {
       const sidebarWidth = isDesktopSidebarCollapsed ? 0 : 420;
@@ -3529,47 +3614,7 @@ const App = () => {
     setIsCommentsLoading(false);
   }, [blockList]);
 
-  const handleAddComment = useCallback(async (ratingId, content, parentCommentId = null) => {
-    if (!session) {
-      setIsAuthOpen(true);
-      return;
-    }
-    trackEvent('add_comment', { rating_id: ratingId, is_reply: !!parentCommentId });
 
-    const payload = {
-        rating_id: ratingId,
-        user_id: session.user.id,
-        content,
-        parent_comment_id: parentCommentId,
-    };
-
-    const { data: newComment, error } = await supabase
-      .from('comments')
-      .insert(payload)
-      .select('*, user:user_id(id, username, avatar_id, level, is_developer)')
-      .single();
-
-    if (error) {
-        if (error.message.includes('Please wait a moment')) {
-            setAlertInfo({
-                isOpen: true,
-                title: 'You are commenting too quickly!',
-                message: 'To prevent spam, we have a limit on how frequently you can comment. Please wait a moment before trying again.',
-                theme: 'info',
-            });
-        } else {
-             setAlertInfo({
-                isOpen: true,
-                title: 'Error',
-                message: `Could not post comment: ${error.message}`,
-                theme: 'error',
-            });
-        }
-    } else {
-      // Re-fetch all comments for the rating to get the updated thread structure
-      await fetchCommentsForRating(ratingId);
-    }
-  }, [session, setAlertInfo, fetchCommentsForRating, setIsAuthOpen]);
 
   const handleDeleteComment = useCallback(async (commentId, ratingId) => {
     trackEvent('delete_comment', { comment_id: commentId });
@@ -3906,6 +3951,48 @@ const App = () => {
     setLocalStPaddysOverride(isActive);
   }, []);
 
+  const handleAddComment = useCallback(async (ratingId, content, parentCommentId = null) => {
+    if (!session) {
+      setIsAuthOpen(true);
+      return;
+    }
+    trackEvent('add_comment', { rating_id: ratingId, is_reply: !!parentCommentId });
+
+    const payload = {
+        rating_id: ratingId,
+        user_id: session.user.id,
+        content,
+        parent_comment_id: parentCommentId,
+    };
+
+    const { data: newComment, error } = await supabase
+      .from('comments')
+      .insert(payload)
+      .select('*, user:user_id(id, username, avatar_id, level, is_developer)')
+      .single();
+
+    if (error) {
+        if (error.message.includes('Please wait a moment')) {
+            setAlertInfo({
+                isOpen: true,
+                title: 'You are commenting too quickly!',
+                message: 'To prevent spam, we have a limit on how frequently you can comment. Please wait a moment before trying again.',
+                theme: 'info',
+            });
+        } else {
+             setAlertInfo({
+                isOpen: true,
+                title: 'Error',
+                message: `Could not post comment: ${error.message}`,
+                theme: 'error',
+            });
+        }
+    } else {
+      // Re-fetch all comments for the rating to get the updated thread structure
+      await fetchCommentsForRating(ratingId);
+    }
+  }, [session, setAlertInfo, fetchCommentsForRating, setIsAuthOpen]);
+
   const layoutProps = {
       isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
@@ -4024,7 +4111,7 @@ const App = () => {
           <CrawlModePage
               isDesktop={isDesktop}
               activeCrawl={activeCrawl}
-              onEndCrawl={onEndCrawl}
+              onEndCrawl={handleEndCrawl}
               onExitCrawlMode={handleExitCrawlMode}
               onToggleCrawlStop={handleToggleCrawlStop}
               onSkipCrawlStop={handleSkipCrawlStop}
@@ -4035,10 +4122,10 @@ const App = () => {
               isSubmittingRating={isSubmittingRating}
               getAverageRating={getAverageRating}
               onLoginRequest={() => setIsAuthOpen(true)}
-              onViewProfile={onViewProfile}
+              onViewProfile={handleViewProfile}
               onDataRefresh={handleDataRefresh}
               userLikes={userLikes}
-              onToggleLike={onToggleLike}
+              onToggleLike={handleToggleLike}
               onOpenScoreExplanation={() => setIsPubScoreModalOpen(true)}
               onOpenSuggestEditModal={handleOpenSuggestEditModal}
               commentsByRating={commentsByRating}

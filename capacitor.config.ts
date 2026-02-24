@@ -4,6 +4,13 @@ const config: CapacitorConfig = {
   appId: 'uk.co.stoutly.twa',
   appName: 'Stoutly',
   webDir: 'dist',
+  server: {
+    hostname: 'app.stoutly.co.uk',
+    androidScheme: 'https',
+    allowNavigation: [
+      'app.stoutly.co.uk/*'
+    ]
+  },
   plugins: {
     StatusBar: {
       // By setting this to false, the webview will be pushed down below the
