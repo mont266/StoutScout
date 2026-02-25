@@ -1,4 +1,13 @@
+# This rule ensures that the deep linking files are served correctly.
 [[redirects]]
   from = "/.well-known/*"
   to = "/.well-known/:splat"
+  status = 200
+  force = true
+
+# This is the general rule for the Single-Page Application.
+# It should be last.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
   status = 200
