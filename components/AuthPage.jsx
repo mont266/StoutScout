@@ -231,6 +231,7 @@ const AuthPage = ({ onClose }) => {
               dob,
               country_code: countryCode,
             },
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
           },
         });
 
