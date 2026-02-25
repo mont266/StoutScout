@@ -8,6 +8,9 @@ export default defineConfig({
   server: {
     host: true // This exposes the server to the network
   },
+  optimizeDeps: {
+    include: ['react-router-dom'],
+  },
   test: {
     globals: true,
     environment: 'jsdom',
