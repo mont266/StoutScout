@@ -1,11 +1,9 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, createContext, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import NotFoundPage from './components/NotFoundPage.jsx';
 import mapboxgl from 'mapbox-gl';
 import { FilterType } from './types.js';
 import { DEFAULT_LOCATION } from './constants.js';
-import { loadSettings, saveSettings, loadRatingPromptState, saveRatingPromptState } from './storage.js';
+import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
 import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, normalizePubNameForComparison, isLondonPub, getMobileOS } from './utils.js';
 import { initializeAnalytics, trackEvent } from './analytics.js';
@@ -47,7 +45,6 @@ import ReportContentModal from './components/ReportContentModal.jsx';
 import DeleteAccountModal from './components/DeleteAccountModal.jsx';
 import AuthCallbackPage from './components/AuthCallbackPage.jsx';
 
-
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { Capacitor } from '@capacitor/core';
@@ -66,7 +63,7 @@ mapboxgl.accessToken = mapboxToken;
 
 const COLLAPSED_PANEL_HEIGHT = 56;
 
-const MainApp = () => {
+const App = () => {
   // --- STATE MANAGEMENT ---
 
   // Auth state
@@ -271,10 +268,6 @@ const MainApp = () => {
   // State for account deletion
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [appPath, setAppPath] = useState(window.location.pathname);
-  const [ratingPromptState, setRatingPromptState] = useState(loadRatingPromptState);
-  const [showRatingPrompt, setShowRatingPrompt] = useState(false);
-  
 
 
   const mapRef = useRef(null);
@@ -282,50 +275,7 @@ const MainApp = () => {
   const isRefreshingRef = useRef(false);
   const isInitialMountForRadius = useRef(true);
 
-    useEffect(() => {
-    const newState = { ...ratingPromptState, appOpenCount: ratingPromptState.appOpenCount + 1 };
-    setRatingPromptState(newState);
-    saveRatingPromptState(newState);
-  }, []);
-
-  const handleShowRatingPrompt = (currentState) => {
-    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
-      const { appOpenCount, userRatingCount, ratePromptState: promptState, remindLaterTimestamp } = currentState;
-      if (
-        promptState !== 'dismissed' &&
-        appOpenCount >= 3 &&
-        userRatingCount >= 2 &&
-        (promptState !== 'remind_later' || (remindLaterTimestamp && Date.now() > remindLaterTimestamp))
-      ) {
-        setShowRatingPrompt(true);
-      }
-    }
-  };
-
-  const handleRateNow = () => {
-    window.open('https://play.google.com/store/apps/details?id=uk.co.stoutly.twa', '_blank');
-    const newState = { ...ratingPromptState, ratePromptState: 'dismissed' };
-    setRatingPromptState(newState);
-    saveRatingPromptState(newState);
-    setShowRatingPrompt(false);
-  };
-
-  const handleRemindLater = () => {
-    const remindTimestamp = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days from now
-    const newState = { ...ratingPromptState, ratePromptState: 'remind_later', remindLaterTimestamp: remindTimestamp };
-    setRatingPromptState(newState);
-    saveRatingPromptState(newState);
-    setShowRatingPrompt(false);
-  };
-
-  const handleDismissPrompt = () => {
-    const newState = { ...ratingPromptState, ratePromptState: 'dismissed' };
-    setRatingPromptState(newState);
-    saveRatingPromptState(newState);
-    setShowRatingPrompt(false);
-  };
-
-const getBoundsFromRadius = (center, radiusInMeters) => {
+  const getBoundsFromRadius = (center, radiusInMeters) => {
     const lat = center.lat;
     const lng = center.lng;
     const earthRadius = 6371000; // in meters
@@ -380,7 +330,7 @@ const getBoundsFromRadius = (center, radiusInMeters) => {
   const isDesktop = useIsDesktop();
 
   // --- ROUTING ---
-  if (appPath === '/auth/callback') {
+  if (window.location.pathname === '/auth/callback') {
     return <AuthCallbackPage />;
   }
   const locationPermissionTracked = useRef(false);
@@ -436,8 +386,18 @@ const getBoundsFromRadius = (center, radiusInMeters) => {
             setSelectedPubId(pubId);
             trackEvent('deep_link_opened', { type: 'pub', pub_id: pubId });
           }
-                } else if (path === '/auth/callback') {
-          setAppPath('/auth/callback');
+        } else if (path === '/auth/callback') {
+          if (event.url.includes('#access_token=')) {
+            setToastNotification("Email confirmed. Welcome to Stoutly!");
+            setActiveTab('map');
+          } else {
+            setAlertInfo({ 
+              isOpen: true, 
+              title: 'Link Expired', 
+              message: 'This confirmation link has expired. Please sign up again.', 
+              theme: 'error' 
+            });
+          }
         } else if (path.startsWith('/user/')) {
           const username = path.split('/')[2];
           if (username) {
@@ -2912,13 +2872,6 @@ const getBoundsFromRadius = (center, radiusInMeters) => {
                 }
             }
             setReviewPopupInfo({ key: crypto.randomUUID() });
-
-        const newRatingCount = ratingPromptState.userRatingCount + 1;
-        const newState = { ...ratingPromptState, userRatingCount: newRatingCount };
-        setRatingPromptState(newState);
-        saveRatingPromptState(newState);
-
-        handleShowRatingPrompt(newState);
         } else {
             setUpdateConfirmationInfo({ key: crypto.randomUUID() });
         }
@@ -4040,8 +3993,7 @@ const getBoundsFromRadius = (center, radiusInMeters) => {
     }
   }, [session, setAlertInfo, fetchCommentsForRating, setIsAuthOpen]);
 
-      const layoutProps = {
-      
+  const layoutProps = {
       isDesktop,
       isAuthOpen, setIsAuthOpen, isPasswordRecovery, setIsPasswordRecovery,
       onLoginRequest: () => setIsAuthOpen(true),
@@ -4179,9 +4131,9 @@ const getBoundsFromRadius = (center, radiusInMeters) => {
               commentsByRating={commentsByRating}
               isCommentsLoading={isCommentsLoading}
               onFetchComments={fetchCommentsForRating}
-              onAddComment={handleAddComment}
-              onDeleteComment={handleDeleteComment}
-              onReportContent={handleOpenReportContentModal}
+              onAddComment={onAddComment}
+              onDeleteComment={onDeleteComment}
+              onReportContent={onReportContent}
               userZeroVotes={userZeroVotes}
               onGuinnessZeroVote={handleGuinnessZeroVote}
               onClearGuinnessZeroVote={handleClearGuinnessZeroVote}
@@ -4198,9 +4150,7 @@ const getBoundsFromRadius = (center, radiusInMeters) => {
   }
 
   return (
-              <Elements stripe={stripePromise}>
-      {showRatingPrompt && <RateStoutlyPrompt onRate={handleRateNow} onRemind={handleRemindLater} onDismiss={handleDismissPrompt} />}
-            
+    <Elements stripe={stripePromise}>
       <OnlineStatusContext.Provider value={{ onlineUserIds }}>
       <ExchangeRatesProvider>
         <Layout {...layoutProps} />
@@ -4335,14 +4285,5 @@ const getBoundsFromRadius = (center, radiusInMeters) => {
     </Elements>
   );
 };
-
-const App = () => (
-  <BrowserRouter>
-    <Routes>
-      <Route path="/" element={<MainApp />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
-  </BrowserRouter>
-);
 
 export default App;
