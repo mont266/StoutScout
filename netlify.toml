@@ -1,7 +1,7 @@
 # Rule for Apple App Site Association
 [[redirects]]
   from = "/.well-known/apple-app-site-association"
-  to = "/.well-known/apple-app-site-association"
+  to = "/.well-known/apple-app-site-association.json"
   status = 200
   force = true
   headers = {"Content-Type" = "application/json"}
