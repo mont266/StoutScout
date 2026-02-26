@@ -1,12 +1,18 @@
-# This rule ensures that the deep linking files are served correctly.
+# Rule for Apple App Site Association
 [[redirects]]
-  from = "/.well-known/*"
-  to = "/.well-known/:splat"
+  from = "/.well-known/apple-app-site-association"
+  to = "/apple-app-site-association"
   status = 200
   force = true
 
-# This is the general rule for the Single-Page Application.
-# It should be last.
+# Rule for Android Asset Links
+[[redirects]]
+  from = "/.well-known/assetlinks.json"
+  to = "/assetlinks.json"
+  status = 200
+  force = true
+
+# SPA Fallback Rule - MUST BE LAST
 [[redirects]]
   from = "/*"
   to = "/index.html"
