@@ -1,4 +1,20 @@
-# SPA Fallback Rule
+# Rule for Apple App Site Association
+[[redirects]]
+  from = "/.well-known/apple-app-site-association"
+  to = "/.well-known/apple-app-site-association"
+  status = 200
+  force = true
+  headers = {"Content-Type" = "application/json"}
+
+# Rule for Android Asset Links
+[[redirects]]
+  from = "/.well-known/assetlinks.json"
+  to = "/.well-known/assetlinks.json"
+  status = 200
+  force = true
+  headers = {"Content-Type" = "application/json"}
+
+# SPA Fallback Rule - MUST BE LAST
 [[redirects]]
   from = "/*"
   to = "/index.html"
