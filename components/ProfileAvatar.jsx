@@ -8,7 +8,8 @@ const ProfileAvatar = ({ userProfile, levelRequirements, size = 48, onClick }) =
             return { percentage: 0, progressText: '' };
         }
         
-        const { level, reviews } = userProfile;
+        const { level } = userProfile;
+        const reviews = Number(userProfile.reviews) || 0;
         const currentLevelInfo = levelRequirements.find(lr => lr.level === level);
         const nextLevelInfo = levelRequirements.find(lr => lr.level === level + 1);
         
