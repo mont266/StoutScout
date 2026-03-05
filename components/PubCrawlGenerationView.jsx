@@ -41,6 +41,10 @@ const PubCrawlGenerationView = ({ onCancel }) => {
             <p className="text-gray-300 text-center transition-opacity duration-500">
                 {currentMessage}
             </p>
+            <p className="text-amber-400 text-sm text-center mt-4 font-medium animate-pulse">
+                <i className="fas fa-exclamation-triangle mr-2"></i>
+                Please do not minimise the app or switch tabs while we plan your route.
+            </p>
             <button
                 onClick={onCancel}
                 className="mt-8 bg-gray-700/50 text-white font-semibold py-2 px-6 rounded-lg hover:bg-gray-600/50 transition-colors"

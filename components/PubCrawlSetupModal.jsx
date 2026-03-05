@@ -14,6 +14,7 @@ const PubCrawlSetupModal = ({ onClose, onSubmit, userLocation, locationPermissio
     
     // New state for autocomplete
     const [suggestions, setSuggestions] = useState([]);
+    const [isSuggestionSelected, setIsSuggestionSelected] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const debounceTimeout = useRef(null);
     const suggestionsContainerRef = useRef(null);
@@ -37,6 +38,11 @@ const PubCrawlSetupModal = ({ onClose, onSubmit, userLocation, locationPermissio
     }, []);
 
     useEffect(() => {
+        if (isSuggestionSelected) {
+            setIsSuggestionSelected(false); // Reset after one run
+            return;
+        }
+
         if (debounceTimeout.current) {
             clearTimeout(debounceTimeout.current);
         }
@@ -88,7 +94,15 @@ const PubCrawlSetupModal = ({ onClose, onSubmit, userLocation, locationPermissio
     }, [suggestionsContainerRef]);
 
     const handleSuggestionClick = (suggestion) => {
-        setStartLocationText(suggestion.display_name);
+        // Construct a cleaner display name
+        const { city, town, village, county, state, country } = suggestion.address;
+        const mainName = suggestion.name || city || town || village;
+        const region = county || state || '';
+        const countryName = country || '';
+        const displayName = [mainName, region, countryName].filter(Boolean).join(', ');
+
+        setIsSuggestionSelected(true); // Prevent search from re-triggering
+        setStartLocationText(displayName || suggestion.display_name); // Fallback to full name
         setSuggestions([]); // Hide suggestions
     };
 
@@ -208,7 +222,10 @@ const PubCrawlSetupModal = ({ onClose, onSubmit, userLocation, locationPermissio
                                 id="start-location"
                                 type="text"
                                 value={startLocationText}
-                                onChange={(e) => setStartLocationText(e.target.value)}
+                                onChange={(e) => {
+                                    setStartLocationText(e.target.value);
+                                    setIsSuggestionSelected(false); // Allow searching again if user types
+                                }}
                                 className="w-full pl-10 pr-10 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                                 required
                                 placeholder="e.g., Temple Bar, Dublin"
@@ -265,7 +282,7 @@ const PubCrawlSetupModal = ({ onClose, onSubmit, userLocation, locationPermissio
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Prioritize
+                            Prioritise
                         </label>
                         <div className="flex rounded-lg bg-gray-200 dark:bg-gray-900 p-1" role="group">
                             <button

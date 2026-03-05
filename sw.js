@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stoutly-cache-v3';
+const CACHE_NAME = 'stoutly-cache-v4-debug';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -46,7 +46,6 @@ const urlsToCache = [
   '/components/ImageModal.jsx',
   '/components/ImageCropper.jsx',
   '/components/ReportImageModal.jsx',
-  '/components/IOSInstallInstructionsModal.jsx',
   '/components/AddPubModal.jsx',
   '/components/PlacementConfirmationBar.jsx',
   '/components/DesktopPlacementConfirmation.jsx',

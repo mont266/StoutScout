@@ -33,6 +33,7 @@ const ConfirmationModal = ({
     title, 
     message, 
     confirmText = "Confirm", 
+    cancelText = "Cancel",
     theme = 'red' 
 }) => {
     
@@ -79,7 +80,7 @@ const ConfirmationModal = ({
                         disabled={isLoading}
                         className="w-full sm:w-1/2 mt-2 sm:mt-0 py-2 px-4 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors disabled:opacity-50"
                     >
-                        Cancel
+                        {cancelText}
                     </button>
                     <button
                         type="button"

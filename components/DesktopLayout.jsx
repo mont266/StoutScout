@@ -43,7 +43,7 @@ const DesktopLayout = (props) => {
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, onViewProfile, legalPageView, handleViewLegal, handleDataRefresh,
-        installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
+        installPromptEvent, setInstallPromptEvent,
         showSearchAreaButton, handleSearchThisArea,
         searchOnNextMoveEnd, handleSearchAfterMove,
         pubPlacementState, finalPlacementLocation, isConfirmingLocation,
@@ -65,7 +65,7 @@ const DesktopLayout = (props) => {
         onOpenSuggestEditModal,
         unreadNotificationsCount,
         notifications, onMarkNotificationsAsRead, onDeleteNotification,
-        commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onReportContent,
+        commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportContent,
         commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment,
         reports, onFetchReports, onResolveReport, onAdminDeleteComment,
         toastNotification, onCloseToast, onToastClick,
@@ -86,14 +86,16 @@ const DesktopLayout = (props) => {
         isStPaddysModeActive,
         top10PubIds,
         systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode,
+        stPaddysModeEnabled, setStPaddysModeEnabled,
         isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner,
         PubCrawlPage,
         activeCrawl, onStartCrawl, onEndCrawl, onToggleCrawlStop, onReorderStops,
+        onAddStop, onDeleteStop,
         pubScores,
         onEnterCrawlMode,
         handleAddPubClick,
         isBackfilling, onBackfillCountryData,
-        onTestTrophyPopup,
+        onTestTrophyPopup, fetchUserTrophies, setUnlockedTrophiesToShow,
         onTestDonationPopup,
         mapRef, onMapLoad,
         activeSubTab: communitySubTab, 
@@ -123,6 +125,7 @@ const DesktopLayout = (props) => {
         handleUnblockUser,
         socialsUpdateCount,
         onDeleteAccountRequest,
+        
     } = props;
     
     const isSocialHubFullScreen = activeTab === 'settings' && settingsSubView === 'social';
@@ -163,6 +166,9 @@ const DesktopLayout = (props) => {
                         loggedInUserProfile={props.userProfile}
                         pub={props.selectedPub} 
                         onClose={() => handleSelectPub(null)}
+                        onAddComment={onAddComment}
+                        onDeleteComment={onDeleteComment}
+                        onReportContent={onReportContent}
                     />
                 );
             }
@@ -262,7 +268,6 @@ const DesktopLayout = (props) => {
                             handleDonationSuccess={handleDonationSuccess}
                             installPromptEvent={installPromptEvent}
                             setInstallPromptEvent={setInstallPromptEvent}
-                            onShowIosInstall={() => setIsIosInstallModalOpen(true)}
                             onMarketingConsentChange={handleMarketingConsentChange}
                             setAlertInfo={props.setAlertInfo}
                             showAllDbPubs={showAllDbPubs}
@@ -281,6 +286,8 @@ const DesktopLayout = (props) => {
                             localStPaddysOverride={localStPaddysOverride}
                             onToggleGlobalStPaddysMode={onToggleGlobalStPaddysMode}
                             onToggleLocalStPaddysMode={onToggleLocalStPaddysMode}
+                            stPaddysModeEnabled={stPaddysModeEnabled}
+                            setStPaddysModeEnabled={setStPaddysModeEnabled}
                             isPubCrawlPlannerEnabled={isPubCrawlPlannerEnabled}
                             onTogglePubCrawlPlanner={onTogglePubCrawlPlanner}
                             onTestTrophyPopup={onTestTrophyPopup}
@@ -289,6 +296,7 @@ const DesktopLayout = (props) => {
                             onManageChangelog={onManageChangelog}
                             hasUnreadChangelog={hasUnreadChangelog}
                             onDeleteAccountRequest={onDeleteAccountRequest}
+                            
                         />
                     </div>
                 </div>
@@ -409,7 +417,8 @@ const DesktopLayout = (props) => {
                     {/* Full Screen Pub Crawl Planner */}
                     <div className={`absolute inset-0 ${activeTab === 'pub_crawl' ? '' : 'hidden'}`}>
                         <PubCrawlPage 
-                            userProfile={userProfile} 
+                            userProfile={userProfile}
+                            session={session}
                             setAlertInfo={props.setAlertInfo} 
                             handleSelectPub={handleSelectPub}
                             activeCrawl={activeCrawl}
@@ -417,11 +426,18 @@ const DesktopLayout = (props) => {
                             onEndCrawl={onEndCrawl}
                             onToggleCrawlStop={onToggleCrawlStop}
                             onReorderStops={onReorderStops}
+                            onAddStop={onAddStop}
+                            onDeleteStop={onDeleteStop}
                             settings={settings}
                             pubScores={pubScores}
                             userLocation={userLocation}
                             locationPermissionStatus={locationPermissionStatus}
                             onRequestPermission={onRequestPermission}
+                            userTrophies={userTrophies}
+                            allTrophies={allTrophies}
+                            fetchUserTrophies={fetchUserTrophies}
+                            setUnlockedTrophiesToShow={setUnlockedTrophiesToShow}
+                            setConfettiState={setConfettiState}
                         />
                     </div>
                 </div>

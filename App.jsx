@@ -29,21 +29,27 @@ import AlertModal from './components/AlertModal.jsx';
 import ShopPage from './components/ShopPage.jsx';
 import CoasterWelcomeModal from './components/CoasterWelcomeModal.jsx';
 import Confetti from 'react-confetti';
+import CrawlSummaryModal from './components/CrawlSummaryModal';
 import ShareRatingModal from './components/ShareRatingModal.jsx';
 import ShareModal from './components/ShareModal.jsx';
 import ShareProfileModal from './components/ShareProfileModal.jsx';
 import SharePostModal from './components/SharePostModal.jsx';
 import TrophyUnlockedPopup from './components/TrophyUnlockedPopup.jsx';
 import WelcomeModal from './components/WelcomeModal.jsx';
+import StPaddysModal from './components/StPaddysModal.jsx';
 import PubCrawlPage from './components/PubCrawlPage.jsx';
 import CrawlModePage from './components/CrawlModePage.jsx';
 import ChangelogPage from './components/ChangelogPage.jsx';
 import ChangelogManager from './components/ChangelogManager.jsx';
 import CreatePostModal from './components/CreatePostModal.jsx';
 import ConfirmationModal from './components/ConfirmationModal.jsx';
+
 import ReportContentModal from './components/ReportContentModal.jsx';
 import DeleteAccountModal from './components/DeleteAccountModal.jsx';
 import AuthCallbackPage from './components/AuthCallbackPage.jsx';
+import RateStoutlyPrompt from './components/RateStoutlyPrompt.jsx';
+import { useAppRating } from './hooks/useAppRating.js';
+
 
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -143,6 +149,7 @@ const App = () => {
   const [shareRatingModalRating, setShareRatingModalRating] = useState(null);
   const [sharePostModalPost, setSharePostModalPost] = useState(null);
   const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
+  const [isStPaddysModalOpen, setIsStPaddysModalOpen] = useState(false);
   const [isProfileStatsModalOpen, setIsProfileStatsModalOpen] = useState(false);
   
   const [levelRequirements, setLevelRequirements] = useState([]);
@@ -166,7 +173,6 @@ const App = () => {
 
   // PWA Install prompt state
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
-  const [isIosInstallModalOpen, setIsIosInstallModalOpen] = useState(false);
 
   // Add Pub feature state
   const [isAddPubModalOpen, setIsAddPubModalOpen] = useState(false);
@@ -241,6 +247,7 @@ const App = () => {
     }
   });
   const [isCrawlModeActive, setIsCrawlModeActive] = useState(false);
+  const [completedCrawlSummary, setCompletedCrawlSummary] = useState(null);
 
 
   // Trophy State
@@ -251,9 +258,19 @@ const App = () => {
   // Desktop layout state
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   
+  // --- RATING PROMPT HOOK ---
+  const { 
+    showRatingPrompt, 
+    triggerRatingPromptCheck, 
+    handleRateNow, 
+    handleRemindLater, 
+    handleDecline 
+  } = useAppRating();
+  
   // St. Paddy's Day Mode State
   const [systemFlags, setSystemFlags] = useState({});
   const [localStPaddysOverride, setLocalStPaddysOverride] = useState(false);
+  const [stPaddysModeEnabled, setStPaddysModeEnabled] = useState(true); // User preference to disable it when active globally
 
   // UI Visibility State (for scroll-to-hide)
   const [isAppHeaderVisible, setIsAppHeaderVisible] = useState(true);
@@ -1040,11 +1057,12 @@ const App = () => {
   const handleEndCrawl = useCallback(() => {
     if (activeCrawl) {
         trackEvent('end_pub_crawl', { crawl_id: activeCrawl.id, stops_visited: activeCrawl.visitedStops.length, stops_skipped: activeCrawl.skippedStops.length });
+        setCompletedCrawlSummary(activeCrawl);
     }
     setActiveCrawl(null);
     localStorage.removeItem('stoutly-active-crawl');
     handleExitCrawlMode();
-  }, [activeCrawl]);
+  }, [activeCrawl, handleExitCrawlMode]);
 
   const handleReorderStops = useCallback(async (crawlId, reorderedStops) => {
     trackEvent('reorder_pub_crawl_stops', { crawl_id: crawlId });
@@ -1079,6 +1097,82 @@ const App = () => {
         return false; // Indicate failure
     }
   }, [setAlertInfo]);
+
+  const handleAddStop = useCallback(async (crawlId, pub, currentStopsCount) => {
+      if (!session?.user) return false;
+      trackEvent('add_pub_crawl_stop', { crawl_id: crawlId, pub_id: pub.id });
+
+      try {
+          const { data, error } = await supabase
+              .from('pub_crawl_stops')
+              .insert({
+                  crawl_id: crawlId,
+                  pub_id: pub.id,
+                  stop_order: currentStopsCount + 1,
+              })
+              .select('*, pub:pubs(*)')
+              .single();
+
+          if (error) throw error;
+
+          // Normalize location for the new stop to match the structure used in the app
+          const newStop = {
+              ...data,
+              pub: {
+                  ...data.pub,
+                  location: { lat: data.pub.lat, lng: data.pub.lng }
+              }
+          };
+
+          setAlertInfo({
+              isOpen: true,
+              title: 'Stop Added',
+              message: `${pub.name} has been added to your crawl.`,
+              theme: 'success',
+          });
+          return newStop;
+      } catch (err) {
+          console.error("Error adding stop:", err);
+          setAlertInfo({
+              isOpen: true,
+              title: 'Error',
+              message: `Could not add stop: ${err.message}`,
+              theme: 'error',
+          });
+          return null;
+      }
+  }, [session, setAlertInfo]);
+
+  const handleDeleteStop = useCallback(async (stopId, stopName) => {
+      if (!session?.user) return false;
+      trackEvent('delete_pub_crawl_stop', { stop_id: stopId });
+
+      try {
+          const { error } = await supabase
+              .from('pub_crawl_stops')
+              .delete()
+              .eq('id', stopId);
+
+          if (error) throw error;
+
+          setAlertInfo({
+              isOpen: true,
+              title: 'Stop Removed',
+              message: `${stopName} has been removed from your crawl.`,
+              theme: 'success',
+          });
+          return true;
+      } catch (err) {
+          console.error("Error deleting stop:", err);
+          setAlertInfo({
+              isOpen: true,
+              title: 'Error',
+              message: `Could not remove stop: ${err.message}`,
+              theme: 'error',
+          });
+          return false;
+      }
+  }, [session, setAlertInfo]);
 
   const handleSelectPub = useCallback(async (pub, highlightOptions = {}) => {
     const { highlightRatingId: ratingId, highlightCommentId: commentId, expandRatingForm } = highlightOptions;
@@ -2020,6 +2114,30 @@ const App = () => {
           pubCountryCode: r.pubs?.country_code,
           pubCountryName: r.pubs?.country_name,
         }));
+
+        // FIX: Ensure profile review count matches actual ratings
+        // The database trigger on 'profiles' table might be slow or out of sync.
+        // We trust the actual list of ratings fetched for the user as the source of truth.
+        if (profile && mappedUserRatings.length !== profile.reviews) {
+            profile.reviews = mappedUserRatings.length;
+
+            // Also attempt to correct the level if we have the requirements loaded
+            if (levelRequirements && levelRequirements.length > 0) {
+                let correctLevel = 1;
+                for (const req of levelRequirements) {
+                    if (profile.reviews >= req.total_ratings_required) {
+                        correctLevel = Math.max(correctLevel, req.level);
+                    }
+                }
+                
+                if (profile.level !== correctLevel) {
+                    profile.level = correctLevel;
+                }
+            }
+
+            // Update the state with the corrected profile object
+            setUserProfile({ ...profile });
+        }
     }
     setUserRatings(mappedUserRatings);
 
@@ -2834,7 +2952,7 @@ const App = () => {
         await refreshSinglePubAndUserVotes(pubId, session.user.id);
         
         const oldLevel = userProfile?.level;
-        const { profile: newProfile } = await fetchUserData();
+        const { profile: newProfile, ratings: newRatings } = await fetchUserData();
 
         // Check for newly unlocked trophies
         const newTrophies = await fetchUserTrophies(session.user.id);
@@ -2875,6 +2993,9 @@ const App = () => {
         } else {
             setUpdateConfirmationInfo({ key: crypto.randomUUID() });
         }
+        
+        // Trigger rating prompt check after successful submission
+        triggerRatingPromptCheck(newRatings?.length);
         
     } catch (error) {
         console.error("Error submitting rating:", error);
@@ -3875,7 +3996,7 @@ const App = () => {
 
   // --- St Paddy's Day Mode ---
   
-  const isStPaddysModeActive = (systemFlags.st_paddys_mode || false) || localStPaddysOverride;
+  const isStPaddysModeActive = ((systemFlags.st_paddys_mode || false) || localStPaddysOverride) && stPaddysModeEnabled;
 
   // Fetch and subscribe to system flags
   useEffect(() => {
@@ -3935,6 +4056,20 @@ const App = () => {
       root.classList.remove('st-paddys-mode');
     }
   }, [isStPaddysModeActive, windowSize]);
+
+  // St. Paddy's Day Modal Logic
+  // useEffect(() => {
+  //   if (isStPaddysModeActive) {
+  //     const hasSeenModal = localStorage.getItem('stoutly-st-paddys-seen-2026');
+  //     if (!hasSeenModal) {
+  //       // Small delay to ensure app is loaded and not overwhelming the user immediately
+  //       const timer = setTimeout(() => {
+  //           setIsStPaddysModalOpen(true);
+  //       }, 1500);
+  //       return () => clearTimeout(timer);
+  //     }
+  //   }
+  // }, [isStPaddysModeActive]);
   
   const handleToggleGlobalStPaddysMode = useCallback(async (isActive) => {
     trackEvent('dev_toggle_global_event', { event: 'st_paddys_mode', active: isActive });
@@ -4009,7 +4144,7 @@ const App = () => {
       reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
       isAvatarModalOpen, setIsAvatarModalOpen,
       handleUpdateAvatar, viewedProfile, onViewProfile: handleViewProfile, onViewPub: handleSelectPub, legalPageView, handleViewLegal, handleDataRefresh,
-      installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
+      installPromptEvent, setInstallPromptEvent,
       showSearchAreaButton, handleSearchThisArea,
       searchOnNextMoveEnd, handleSearchAfterMove,
       pubPlacementState, finalPlacementLocation, isConfirmingLocation,
@@ -4041,10 +4176,11 @@ const App = () => {
       onOpenShareModal: setShareModalPub,
       onOpenShareRatingModal: handleOpenShareRatingModal,
       onOpenSharePostModal: setSharePostModalPost,
+      setAlertInfo,
       scrollToSection, onScrollComplete: () => setScrollToSection(null),
       confettiState, setConfettiState,
       isChangingPassword, handleChangePassword,
-      userTrophies, allTrophies,
+      userTrophies, allTrophies, fetchUserTrophies, setUnlockedTrophiesToShow,
       dbPubs,
       onViewSocialHub,
       geocodingPubIds,
@@ -4052,9 +4188,11 @@ const App = () => {
       isStPaddysModeActive,
       top10PubIds,
       systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode: handleToggleGlobalStPaddysMode, onToggleLocalStPaddysMode: handleToggleLocalStPaddysMode,
+      stPaddysModeEnabled, setStPaddysModeEnabled,
       isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner: handleTogglePubCrawlPlanner,
       PubCrawlPage,
       activeCrawl, onStartCrawl: handleStartCrawl, onEndCrawl: handleEndCrawl, onToggleCrawlStop: handleToggleCrawlStop, onReorderStops: handleReorderStops,
+      onAddStop: handleAddStop, onDeleteStop: handleDeleteStop,
       pubScores,
       onEnterCrawlMode: handleEnterCrawlMode,
       handleAddPubClick,
@@ -4106,56 +4244,56 @@ const App = () => {
     return <BannedPage userProfile={userProfile} onLogout={() => supabase.auth.signOut()} />;
   }
   
-  if (isCrawlModeActive && activeCrawl) {
-      return (
-          <CrawlModePage
-              isDesktop={isDesktop}
-              activeCrawl={activeCrawl}
-              onEndCrawl={handleEndCrawl}
-              onExitCrawlMode={handleExitCrawlMode}
-              onToggleCrawlStop={handleToggleCrawlStop}
-              onSkipCrawlStop={handleSkipCrawlStop}
-              userRatings={userRatings}
-              userProfile={userProfile}
-              session={session}
-              onRate={handleRatePub}
-              isSubmittingRating={isSubmittingRating}
-              getAverageRating={getAverageRating}
-              onLoginRequest={() => setIsAuthOpen(true)}
-              onViewProfile={handleViewProfile}
-              onDataRefresh={handleDataRefresh}
-              userLikes={userLikes}
-              onToggleLike={handleToggleLike}
-              onOpenScoreExplanation={() => setIsPubScoreModalOpen(true)}
-              onOpenSuggestEditModal={handleOpenSuggestEditModal}
-              commentsByRating={commentsByRating}
-              isCommentsLoading={isCommentsLoading}
-              onFetchComments={fetchCommentsForRating}
-              onAddComment={onAddComment}
-              onDeleteComment={onDeleteComment}
-              onReportContent={onReportContent}
-              userZeroVotes={userZeroVotes}
-              onGuinnessZeroVote={handleGuinnessZeroVote}
-              onClearGuinnessZeroVote={handleClearGuinnessZeroVote}
-              onOpenShareModal={setShareModalPub}
-              onOpenShareRatingModal={handleOpenShareRatingModal}
-              setAlertInfo={setAlertInfo}
-              settings={settings}
-              pubScores={pubScores}
-              userLocation={userLocation}
-              allRatings={allRatings}
-              isActiveCrawl={isCrawlModeActive}
-          />
-      );
-  }
-
-  return (
-    <Elements stripe={stripePromise}>
+    return (
+      <Elements stripe={stripePromise}>
       <OnlineStatusContext.Provider value={{ onlineUserIds }}>
-      <ExchangeRatesProvider>
-        <Layout {...layoutProps} />
+        <ExchangeRatesProvider>
+          {isCrawlModeActive && activeCrawl ? (
+            <div className="h-full w-full font-sans antialiased">
+              <CrawlModePage
+                isDesktop={isDesktop}
+                activeCrawl={activeCrawl}
+                onEndCrawl={handleEndCrawl}
+                onExitCrawlMode={handleExitCrawlMode}
+                onToggleCrawlStop={handleToggleCrawlStop}
+                onSkipCrawlStop={handleSkipCrawlStop}
+                userRatings={userRatings}
+                userProfile={userProfile}
+                session={session}
+                onRate={handleRatePub}
+                isSubmittingRating={isSubmittingRating}
+                getAverageRating={getAverageRating}
+                onLoginRequest={() => setIsAuthOpen(true)}
+                onViewProfile={handleViewProfile}
+                onDataRefresh={handleDataRefresh}
+                userLikes={userLikes}
+                onToggleLike={handleToggleLike}
+                onOpenScoreExplanation={() => setIsPubScoreModalOpen(true)}
+                onOpenSuggestEditModal={handleOpenSuggestEditModal}
+                commentsByRating={commentsByRating}
+                isCommentsLoading={isCommentsLoading}
+                onFetchComments={fetchCommentsForRating}
+                onAddComment={handleAddComment}
+                onDeleteComment={handleDeleteComment}
+                onReportContent={handleOpenReportContentModal}
+                userZeroVotes={userZeroVotes}
+                onGuinnessZeroVote={handleGuinnessZeroVote}
+                onClearGuinnessZeroVote={handleClearGuinnessZeroVote}
+                onOpenShareModal={setShareModalPub}
+                onOpenShareRatingModal={handleOpenShareRatingModal}
+                setAlertInfo={setAlertInfo}
+                settings={settings}
+                pubScores={pubScores}
+                userLocation={userLocation}
+                allRatings={allRatings}
+                isActiveCrawl={isCrawlModeActive}
+              />
+            </div>
+          ) : (
+            <Layout {...layoutProps} />
+          )}
 
-        {/* Popups and Modals that can appear over any layout */}
+          {/* Popups and Modals that can appear over any layout */}          
         {alertInfo.isOpen && (
           <AlertModal
             {...alertInfo}
@@ -4257,6 +4395,21 @@ const App = () => {
 
       {unlockedTrophiesToShow.length > 0 && <TrophyUnlockedPopup trophies={unlockedTrophiesToShow} onClose={handleCloseTrophyPopup} />}
 
+      {completedCrawlSummary && (
+        <CrawlSummaryModal
+          crawl={completedCrawlSummary}
+          userProfile={userProfile}
+          onClose={() => setCompletedCrawlSummary(null)}
+        />
+      )}
+
+      {showRatingPrompt && (
+        <RateStoutlyPrompt 
+            onRate={handleRateNow}
+            onRemind={handleRemindLater}
+            onDismiss={handleDecline}
+        />
+      )}
       {confettiState.active && (
           <Confetti
               key={confettiState.key}
@@ -4273,6 +4426,16 @@ const App = () => {
       )}
 
       {isWelcomeModalOpen && <WelcomeModal onClose={() => setIsWelcomeModalOpen(false)} />}
+      
+      {isStPaddysModalOpen && (
+        <StPaddysModal 
+            onClose={() => setIsStPaddysModalOpen(false)} 
+            onCheckOut={() => {
+                setIsStPaddysModalOpen(false);
+                setActiveTab('pub_crawl');
+            }}
+        />
+      )}
 
       {cookieConsent === null && (
         <CookieConsentBanner onAccept={handleAcceptCookies} onDecline={handleDeclineCookies} />
@@ -4282,7 +4445,7 @@ const App = () => {
       
       </ExchangeRatesProvider>
       </OnlineStatusContext.Provider>
-    </Elements>
+      </Elements>
   );
 };
 

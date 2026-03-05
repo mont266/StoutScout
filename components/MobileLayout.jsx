@@ -35,22 +35,13 @@ import SocialContentHub from './SocialContentHub.jsx';
 import ActiveCrawlTracker from './ActiveCrawlTracker.jsx';
 import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 import PlacementConfirmationBar from './PlacementConfirmationBar.jsx';
-import IOSInstallInstructionsModal from './IOSInstallInstructionsModal.jsx';
 
 const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount, isPubCrawlPlannerEnabled, userProfile, settings, isNavShrunk }) => {
   const baseTabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
+    { id: 'pub_crawl', icon: 'fa-route', label: 'Crawl' },
   ];
-
-  if (isPubCrawlPlannerEnabled) {
-      const communityIndex = baseTabs.findIndex(tab => tab.id === 'community');
-      if (communityIndex !== -1) {
-        baseTabs.splice(communityIndex + 1, 0, { id: 'pub_crawl', icon: 'fa-route', label: 'Crawl' });
-      } else {
-        baseTabs.push({ id: 'pub_crawl', icon: 'fa-route', label: 'Crawl' });
-      }
-  }
 
   if (userProfile?.is_developer && settings?.developerMode && settings?.isShopEnabled) {
     baseTabs.push({ id: 'shop', icon: 'fa-shopping-bag', label: 'Shop' });
@@ -108,7 +99,7 @@ const MobileLayout = (props) => {
         reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, onViewProfile, legalPageView, handleViewLegal, handleDataRefresh,
-        installPromptEvent, setInstallPromptEvent, isIosInstallModalOpen, setIsIosInstallModalOpen,
+        installPromptEvent, setInstallPromptEvent,
         showSearchAreaButton, handleSearchThisArea,
         searchOnNextMoveEnd, handleSearchAfterMove,
         pubPlacementState, finalPlacementLocation, isConfirmingLocation,
@@ -124,7 +115,7 @@ const MobileLayout = (props) => {
         onOpenScoreExplanation, onOpenSuggestEditModal,
         unreadNotificationsCount,
         notifications, onMarkNotificationsAsRead, onDeleteNotification,
-        commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onReportContent,
+        commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportContent,
         toastNotification, onCloseToast, onToastClick,
         handleMarketingConsentChange,
         userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote,
@@ -144,10 +135,27 @@ const MobileLayout = (props) => {
         isAppHeaderVisible, onMobileScroll, isNavShrunk,
         isEditRatingFlow,
         panelHeight, setPanelHeight, COLLAPSED_PANEL_HEIGHT,
+        
         ...restProps
     } = props;
     
     const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+    const [showScrollTop, setShowScrollTop] = useState(false);
+    const mainScrollRef = useRef(null);
+    
+    const handleMainScroll = useCallback((e) => {
+        if (e.target.scrollTop > 300) {
+            setShowScrollTop(true);
+        } else {
+            setShowScrollTop(false);
+        }
+    }, []);
+
+    const scrollToTop = () => {
+        if (mainScrollRef.current) {
+            mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
     
     const MIN_PANEL_HEIGHT = COLLAPSED_PANEL_HEIGHT;
     const DEFAULT_PANEL_HEIGHT = window.innerHeight * 0.35;
@@ -236,7 +244,7 @@ const MobileLayout = (props) => {
             }
             if (legalPageView === 'terms') return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
             if (legalPageView === 'privacy') return <PrivacyPolicyPage onBack={() => handleViewLegal(null)} />;
-            return <SettingsPage {...props} onMarketingConsentChange={handleMarketingConsentChange} />;
+            return <SettingsPage {...props} onLogout={onLogout} onMarketingConsentChange={handleMarketingConsentChange} onViewModeration={() => handleViewAdminPage('moderation')} />;
         }
         return null;
     };
@@ -256,7 +264,11 @@ const MobileLayout = (props) => {
                 />
             )}
             
-            <main className="flex-grow min-h-0 relative">
+            <main 
+                ref={mainScrollRef}
+                onScroll={handleMainScroll}
+                className="flex-grow min-h-0 relative overflow-y-auto"
+            >
                 <div className={`h-full ${showMap ? 'hidden' : 'block'}`}>
                     {renderContent()}
                 </div>
@@ -371,12 +383,26 @@ const MobileLayout = (props) => {
                             pub={selectedPub} 
                             onClose={() => handleSelectPub(null)}
                             loggedInUserProfile={userProfile}
+                            onAddComment={onAddComment}
+                            onDeleteComment={onDeleteComment}
+                            onReportContent={onReportContent}
                         />
                     </div>
                 )}
 
                 {pubPlacementState && <PlacementConfirmationBar onConfirm={handleConfirmNewPub} onCancel={handleCancelPubPlacement} isLoading={isConfirmingLocation} />}
                 {locationPermissionStatus !== 'granted' && !locationError && <LocationPermissionPrompt status={locationPermissionStatus} onRequestPermission={() => onRequestPermission('prompt')} />}
+                
+                {/* Scroll to Top Button */}
+                {!showMap && showScrollTop && (
+                    <button
+                        onClick={scrollToTop}
+                        className="fixed bottom-24 left-4 z-50 w-10 h-10 bg-amber-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-amber-600 transition-all duration-300 animate-fade-in-up"
+                        aria-label="Scroll to top"
+                    >
+                        <i className="fas fa-arrow-up"></i>
+                    </button>
+                )}
             </main>
             
             <TabBar 
@@ -391,7 +417,6 @@ const MobileLayout = (props) => {
 
             {/* Global Modals & Popups */}
             <SubmittingRatingModal isVisible={isSubmittingRating} />
-            {isIosInstallModalOpen && <IOSInstallInstructionsModal onClose={() => setIsIosInstallModalOpen(false)} />}
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
             {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}

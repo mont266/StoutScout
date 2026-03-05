@@ -6,11 +6,12 @@ import PubCrawlSetupModal from './PubCrawlSetupModal.jsx';
 import PubCrawlGenerationView from './PubCrawlGenerationView.jsx';
 import PubCrawlDetailView from './PubCrawlDetailView.jsx';
 import ConfirmationModal from './ConfirmationModal.jsx';
+import PubCrawlFeedbackModal from './PubCrawlFeedbackModal.jsx';
 
 // Initialize Gemini AI client
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
-const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl, onStartCrawl, onEndCrawl, onToggleCrawlStop, onReorderStops, settings, pubScores, userLocation, locationPermissionStatus, onRequestPermission }) => {
+const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl, onStartCrawl, onEndCrawl, onToggleCrawlStop, onReorderStops, onAddStop, onDeleteStop, settings, pubScores, userLocation, locationPermissionStatus, onRequestPermission, userTrophies, allTrophies, fetchUserTrophies, setUnlockedTrophiesToShow, setConfettiState }) => {
     const [savedCrawls, setSavedCrawls] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -23,10 +24,83 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
     const [crawlToDelete, setCrawlToDelete] = useState(null);
     const [crawlToReset, setCrawlToReset] = useState(null);
     const [activeTab, setActiveTab] = useState('my_crawls');
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+    const [crawlCredits, setCrawlCredits] = useState(5);
+    const [timeUntilReset, setTimeUntilReset] = useState('');
+
+    useEffect(() => {
+        if (userProfile) {
+            // Initial fetch of credits
+            const fetchCredits = async () => {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('crawl_credits')
+                    .eq('id', userProfile.id)
+                    .single();
+                
+                if (data) {
+                    setCrawlCredits(data.crawl_credits ?? 5);
+                }
+            };
+            fetchCredits();
+
+            // Subscribe to realtime changes
+            const subscription = supabase
+                .channel(`public:profiles:id=eq.${userProfile.id}`)
+                .on('postgres_changes', { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'profiles', 
+                    filter: `id=eq.${userProfile.id}` 
+                }, (payload) => {
+                    if (payload.new && payload.new.crawl_credits !== undefined) {
+                        setCrawlCredits(payload.new.crawl_credits);
+                    }
+                })
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(subscription);
+            };
+        }
+    }, [userProfile]);
+
+    useEffect(() => {
+        // Countdown timer logic
+        if (crawlCredits < 5) {
+            const updateTimer = () => {
+                const now = new Date();
+                const nextReset = new Date(now);
+                nextReset.setUTCHours(24, 0, 0, 0); // Next midnight UTC
+                
+                const diff = nextReset - now;
+                if (diff <= 0) {
+                    setTimeUntilReset('00:00:00');
+                    return;
+                }
+
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+                setTimeUntilReset(
+                    `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+                );
+            };
+
+            updateTimer(); // Run immediately
+            const interval = setInterval(updateTimer, 1000);
+            return () => clearInterval(interval);
+        } else {
+            setTimeUntilReset('');
+        }
+    }, [crawlCredits]);
 
     const fetchSavedCrawls = useCallback(async () => {
         if (!userProfile) return;
-        setLoading(true);
+        // Use the new isRefreshing state for the refresh button, keep 'loading' for the initial load
+        setIsRefreshing(true);
         setError(null);
         trackEvent('view_pub_crawl_page');
 
@@ -49,7 +123,8 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
             console.error("Error fetching saved crawls:", err);
             setError("Could not load your saved pub crawls.");
         } finally {
-            setLoading(false);
+            setLoading(false); // This handles the initial page load spinner
+            setIsRefreshing(false); // This handles the refresh button spinner
         }
     }, [userProfile]);
 
@@ -95,20 +170,28 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
 
     const confirmDelete = async () => {
         if (!crawlToDelete) return;
-        trackEvent('delete_pub_crawl', { crawl_id: crawlToDelete.id });
+        const targetCrawl = crawlToDelete;
+        trackEvent('delete_pub_crawl', { crawl_id: targetCrawl.id });
+
+        // Optimistic update: Remove from list immediately
+        setSavedCrawls(prev => prev.filter(c => c.id !== targetCrawl.id));
+        if (viewingCrawl && viewingCrawl.id === targetCrawl.id) {
+            setViewingCrawl(null);
+        }
 
         const { error: deleteError } = await supabase
             .from('pub_crawls')
             .delete()
-            .eq('id', crawlToDelete.id);
+            .eq('id', targetCrawl.id);
         
         setCrawlToDelete(null); // Close modal
 
         if (deleteError) {
             setAlertInfo({ isOpen: true, title: 'Delete Failed', message: `Could not delete crawl: ${deleteError.message}`, theme: 'error' });
+            fetchSavedCrawls(); // Revert on error
         } else {
             setAlertInfo({ isOpen: true, title: 'Success', message: 'Pub crawl has been deleted.', theme: 'success' });
-            fetchSavedCrawls(); // Refresh the list
+            // List already updated optimistically
         }
     };
     
@@ -141,12 +224,13 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
 
     const confirmReset = async () => {
         if (!crawlToReset) return;
-        trackEvent('reset_pub_crawl', { crawl_id: crawlToReset.id });
+        const targetCrawl = crawlToReset; // Capture the crawl before clearing state
+        trackEvent('reset_pub_crawl', { crawl_id: targetCrawl.id });
     
         const { error: updateError } = await supabase
             .from('pub_crawl_stops')
             .update({ visited_at: null })
-            .eq('crawl_id', crawlToReset.id);
+            .eq('crawl_id', targetCrawl.id);
     
         setCrawlToReset(null); // Close modal
     
@@ -154,12 +238,17 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
             setAlertInfo({ isOpen: true, title: 'Reset Failed', message: `Could not reset crawl progress: ${updateError.message}`, theme: 'error' });
         } else {
             setAlertInfo({ isOpen: true, title: 'Success', message: 'Crawl progress has been reset.', theme: 'success' });
-            if (viewingCrawl && viewingCrawl.id === crawlToReset.id) {
+            
+            // Optimistically update the detail view state immediately
+            if (viewingCrawl && viewingCrawl.id === targetCrawl.id) {
                 setViewingCrawl(prev => ({
                     ...prev,
-                    stops: prev.stops.map(stop => ({ ...stop, visited_at: null }))
+                    stops: prev.stops.map(stop => ({ ...stop, visited_at: null })),
+                    lastUpdated: Date.now() // Force re-render via key change
                 }));
             }
+            
+            // Removed fetchSavedCrawls() to prevent race condition overwriting the optimistic update
         }
     };
     
@@ -170,6 +259,11 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
     };
 
     const handlePlanCrawl = async ({ startLocationText, numPubs, crawlName, priority }) => {
+        if (crawlCredits <= 0) {
+            setAlertInfo({ isOpen: true, title: 'No Credits', message: 'You have used all your daily crawl credits. Please wait until they reset.', theme: 'error' });
+            return;
+        }
+
         setIsSetupModalOpen(false);
         setIsGenerating(true);
         isCancelledRef.current = false;
@@ -177,6 +271,16 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
         trackEvent('plan_pub_crawl_start', { location: startLocationText, num_pubs: numPubs, priority });
 
         try {
+            // 0. Deduct credit
+            const { data: creditDeducted, error: creditError } = await supabase.rpc('deduct_crawl_credit', { user_id_param: userProfile.id });
+            
+            if (creditError || !creditDeducted) {
+                throw new Error('Could not deduct crawl credit. Please try again later.');
+            }
+
+            // Optimistically update local state immediately
+            setCrawlCredits(prev => Math.max(0, prev - 1));
+
             // 1. Geocode location
             const geoUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(startLocationText)}&format=jsonv2&limit=1`;
             const geoResponse = await fetch(geoUrl, { headers: { 'User-Agent': 'Stoutly/1.0 (https://stoutly.co.uk)' } });
@@ -192,7 +296,7 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
                 limit_count: 100
             });
             if (rpcError) throw rpcError;
-            if (candidates.length < 2) throw new Error('Not enough pubs found in that area to plan a crawl.');
+            if (candidates.length < 2) throw new Error('Not enough rated pubs found in that area to plan a crawl.');
 
             // 3. Prompt Gemini
             let priorityInstructions = '';
@@ -244,10 +348,20 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
             if (isCancelledRef.current) return;
 
             const result = JSON.parse(response.text);
-            const pubIds = result.crawl_route;
+            const rawPubIds = result.crawl_route;
 
-            if (!pubIds || pubIds.length === 0) {
+            if (!rawPubIds || rawPubIds.length === 0) {
                 throw new Error("The AI couldn't generate a crawl for that area. Try a different location or more stops.");
+            }
+
+            // Validate that the IDs returned by Gemini actually exist in our candidates list
+            // to prevent foreign key violations if the AI "invents" a pub ID.
+            const validPubIds = rawPubIds.filter(id => 
+                candidates.some(c => String(c.id) === String(id))
+            );
+
+            if (validPubIds.length === 0) {
+                throw new Error("The AI generated an invalid route. Please try again.");
             }
 
             // 4. Auto-save the crawl
@@ -265,21 +379,86 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
                 .single();
             if (crawlError) throw crawlError;
 
-            const stopsToInsert = pubIds.map((pubId, index) => ({
-                crawl_id: crawl.id,
-                pub_id: pubId,
-                stop_order: index + 1,
-            }));
+            const stopsToInsert = validPubIds.map((pubId, index) => {
+                // Find the original pub ID from candidates to ensure we use the correct type (number vs string)
+                const originalPub = candidates.find(c => String(c.id) === String(pubId));
+                return {
+                    crawl_id: crawl.id,
+                    pub_id: originalPub.id,
+                    stop_order: index + 1,
+                };
+            });
             const { error: stopsError } = await supabase.from('pub_crawl_stops').insert(stopsToInsert);
             if (stopsError) throw stopsError;
 
-            trackEvent('plan_pub_crawl_success', { generated_stops: pubIds.length });
-            setAlertInfo({ isOpen: true, title: 'Crawl Generated!', message: `Your ${pubIds.length}-stop pub crawl in ${startLocationText} has been saved.`, theme: 'success' });
-            fetchSavedCrawls();
+            trackEvent('plan_pub_crawl_success', { generated_stops: validPubIds.length });
+            
+            let successMessage = `Your ${validPubIds.length}-stop pub crawl in ${startLocationText} has been saved.`;
+            let successTitle = 'Crawl Generated!';
+            let successTheme = 'success';
+
+            if (validPubIds.length < numPubs) {
+                successMessage = `We could only find ${validPubIds.length} suitable pubs in this area, so your crawl is shorter than the ${numPubs} stops you requested.`;
+                successTitle = 'Crawl Generated (Short)';
+                successTheme = 'warning';
+            }
+
+            setAlertInfo({ isOpen: true, title: successTitle, message: successMessage, theme: successTheme });
+
+            // Manually add the new crawl to the state for an instant, reliable update.
+            // This avoids a race condition where we try to fetch the list before the new crawl is available.
+            const newCrawlForList = {
+                ...crawl,
+                stops: [{ count: validPubIds.length }], // Mimic the exact data structure from a real fetch
+                stop_count: validPubIds.length,
+            };
+            setSavedCrawls(prevCrawls => [newCrawlForList, ...prevCrawls]);
+            
+            // Check for newly unlocked trophies
+            if (fetchUserTrophies && setUnlockedTrophiesToShow && setConfettiState && userTrophies && allTrophies) {
+                console.log('Checking for new trophies...');
+                const trophiesBefore = new Set(userTrophies.map(t => t.trophy_id));
+                const newTrophies = await fetchUserTrophies(userProfile.id);
+                console.log('New trophies fetched:', newTrophies);
+                const justUnlocked = newTrophies.filter(t => !trophiesBefore.has(t.trophy_id));
+                console.log('Just unlocked trophies:', justUnlocked);
+
+                if (justUnlocked.length > 0) {
+                    const unlockedDetails = justUnlocked
+                        .map(ut => allTrophies.find(at => at.id === ut.trophy_id))
+                        .filter(Boolean);
+                    
+                    if (unlockedDetails.length > 0) {
+                        console.log('Showing unlocked trophies:', unlockedDetails);
+                        setUnlockedTrophiesToShow(unlockedDetails);
+                        // Trigger confetti
+                        setConfettiState({
+                            active: true,
+                            recycle: true,
+                            opacity: 1,
+                            key: crypto.randomUUID(),
+                            numberOfPieces: 350,
+                            confettiSource: { x: 0, y: 0, w: window.innerWidth, h: 0 },
+                        });
+                    }
+                }
+            } else {
+                console.warn('Missing props for trophy check:', { fetchUserTrophies: !!fetchUserTrophies, setUnlockedTrophiesToShow: !!setUnlockedTrophiesToShow, setConfettiState: !!setConfettiState, userTrophies: !!userTrophies, allTrophies: !!allTrophies });
+            }
+            
+            // Removed fetchSavedCrawls() to prevent race condition overwriting the optimistic update
 
         } catch (err) {
             console.error("Error planning crawl:", err);
             if (!isCancelledRef.current) {
+                // Refund the credit if the crawl failed and wasn't cancelled by the user
+                try {
+                    await supabase.rpc('refund_crawl_credit', { user_id_param: userProfile.id });
+                    setCrawlCredits(prev => Math.min(5, prev + 1)); // Optimistic update
+                } catch (refundErr) {
+                    console.error("Failed to refund credit:", refundErr);
+                }
+
                 setAlertInfo({ isOpen: true, title: 'Planning Failed', message: `Failed to plan crawl: ${err.message}`, theme: 'error' });
                 trackEvent('plan_pub_crawl_failed', { error: err.message });
             }
@@ -314,12 +493,16 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
         return (
              <ul className="space-y-3">
                 {savedCrawls.map(crawl => (
-                    <li key={crawl.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between">
+                    <li key={crawl.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md flex flex-col items-start sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <p className="font-bold text-gray-800 dark:text-white">{crawl.name || `Crawl from ${new Date(crawl.created_at).toLocaleDateString()}`}</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">{crawl.stop_count} stops in {crawl.start_location_text}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {crawl.stop_count} stops in {crawl.start_location_text}
+                                <span className="mx-2">•</span>
+                                {new Date(crawl.created_at).toLocaleDateString()}
+                            </p>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="w-full flex items-center justify-end space-x-2 mt-4 sm:mt-0">
                             <button
                                 onClick={() => handleDeleteCrawl(crawl)}
                                 className="w-10 h-10 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
@@ -360,33 +543,125 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
         </button>
     );
 
-    if (viewingCrawl) {
+    const renderContent = () => {
+        if (viewingCrawl) {
+            return (
+                <PubCrawlDetailView
+                    key={viewingCrawl.id + (viewingCrawl.lastUpdated || '')}
+                    crawl={viewingCrawl}
+                    onBack={() => setViewingCrawl(null)}
+                    onSelectPub={handleSelectPub}
+                    activeCrawl={activeCrawl}
+                    onStartCrawl={onStartCrawl}
+                    onEndCrawl={onEndCrawl}
+                    onToggleCrawlStop={onToggleCrawlStop}
+                    onReorderStops={onReorderStops}
+                    onAddStop={onAddStop}
+                    onDeleteStop={onDeleteStop}
+                    settings={settings}
+                    pubScores={pubScores}
+                    onRenameCrawl={handleRenameCrawl}
+                    onResetCrawl={handleResetCrawl}
+                    setAlertInfo={setAlertInfo}
+                />
+            );
+        }
+        
+        if (isLoadingCrawlDetail) {
+            return (
+                <div className="h-full flex flex-col items-center justify-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-400"></div>
+                    <p className="mt-4 text-gray-500 dark:text-gray-400">Loading your crawl...</p>
+                </div>
+            );
+        }
+
         return (
-            <PubCrawlDetailView
-                crawl={viewingCrawl}
-                onBack={() => setViewingCrawl(null)}
-                onSelectPub={handleSelectPub}
-                activeCrawl={activeCrawl}
-                onStartCrawl={onStartCrawl}
-                onEndCrawl={onEndCrawl}
-                onToggleCrawlStop={onToggleCrawlStop}
-                onReorderStops={onReorderStops}
-                settings={settings}
-                pubScores={pubScores}
-                onRenameCrawl={handleRenameCrawl}
-                onResetCrawl={handleResetCrawl}
-            />
-        );
-    }
-    
-    if (isLoadingCrawlDetail) {
-        return (
-            <div className="h-full flex flex-col items-center justify-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-400"></div>
-                <p className="mt-4 text-gray-500 dark:text-gray-400">Loading your crawl...</p>
+            <div className="flex flex-col relative h-full overflow-y-auto">
+                <header className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
+                    <div className="bg-amber-100 dark:bg-amber-900 border-b border-amber-300 dark:border-amber-700 px-4 py-1.5 sm:py-3 w-full relative z-50">
+                        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1 sm:gap-2">
+                            <p className="text-xs sm:text-sm text-amber-900 dark:text-amber-100 font-medium flex items-center">
+                                <i className="fas fa-flask mr-2 text-amber-600 dark:text-amber-400"></i>
+                                <span>This feature is in <strong>Beta</strong>. We're actively improving it!</span>
+                            </p>
+                            <button
+                                onClick={() => setIsFeedbackModalOpen(true)}
+                                className="text-xs font-bold bg-white dark:bg-gray-800 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-gray-700 px-4 py-2 rounded-full transition-colors whitespace-nowrap shadow-sm"
+                            >
+                                Give Feedback
+                            </button>
+                        </div>
+                    </div>
+                    <div className="p-4 w-full">
+                        <div className="max-w-4xl mx-auto">
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                                <div className="flex items-center space-x-3">
+                                    <i className="fas fa-route text-2xl text-amber-500"></i>
+                                    <div className="flex items-center gap-2">
+                                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Pub Crawl Planner</h1>
+                                        <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">BETA</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="text-sm text-center sm:text-left text-gray-500 dark:text-gray-400 mt-2 sm:mt-0">
+                                Plan, save, and track your ultimate Guinness adventures.
+                            </p>
+                        </div>
+                    </div>
+                </header>
+                 <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <div className="max-w-4xl mx-auto px-4">
+                        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                            <TabButton tabId="my_crawls" label="My Crawls" isActive={activeTab === 'my_crawls'} onClick={() => setActiveTab('my_crawls')} />
+                            <TabButton tabId="community_crawls" label="Community Crawls" isActive={activeTab === 'community_crawls'} onClick={() => setActiveTab('community_crawls')} />
+                        </nav>
+                    </div>
+                </div>
+                <main className="flex-grow bg-gray-100 dark:bg-gray-900 pb-20">
+                   <div className="max-w-4xl mx-auto p-4">
+                        <div className="space-y-4">
+                            {activeTab === 'my_crawls' && (
+                                <>
+                                    <div className="flex flex-col space-y-2">
+                                        <button
+                                            onClick={() => setIsSetupModalOpen(true)}
+                                            disabled={crawlCredits <= 0}
+                                            className={`w-full font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 text-lg ${crawlCredits > 0 ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
+                                        >
+                                            <i className="fas fa-magic"></i>
+                                            <span>Plan a New Crawl</span>
+                                            <span className="ml-2 text-sm font-normal bg-black/10 dark:bg-white/10 px-2 py-0.5 rounded-full">
+                                                {crawlCredits}/5
+                                            </span>
+                                        </button>
+                                        {crawlCredits < 5 && (
+                                            <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                                                {crawlCredits === 0 ? 'Credits reset in:' : 'Next reset in:'} <span className="font-mono font-bold">{timeUntilReset}</span>
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                                        <h2 className="text-xl font-bold text-gray-800 dark:text-white">My Saved Crawls ({savedCrawls.length})</h2>
+                                        <button
+                                            onClick={fetchSavedCrawls}
+                                            disabled={isRefreshing}
+                                            className="w-10 h-10 flex items-center justify-center text-gray-500 dark:text-gray-400 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                            aria-label="Refresh saved crawls"
+                                        >
+                                            <i className={`fas fa-sync-alt ${isRefreshing ? 'animate-spin' : ''}`}></i>
+                                        </button>
+                                    </div>
+                                    {renderMyCrawls()}
+                                </>
+                            )}
+                            {activeTab === 'community_crawls' && renderCommunityCrawls()}
+                        </div>
+                   </div>
+                </main>
             </div>
         );
-    }
+    };
 
     return (
         <>
@@ -422,52 +697,14 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
                     theme="red"
                 />
             )}
-            <div className="h-full flex flex-col">
-                <header className="p-4 flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                    <div className="max-w-4xl mx-auto">
-                        <div className="flex justify-between items-center">
-                            <div className="flex items-center space-x-3">
-                                <i className="fas fa-route text-2xl text-amber-500"></i>
-                                <div className="flex items-center gap-2">
-                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Pub Crawl Planner</h1>
-                                    <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">BETA</span>
-                                </div>
-                            </div>
-                        </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                            Plan, save, and track your ultimate Guinness adventures.
-                        </p>
-                    </div>
-                </header>
-                 <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                    <div className="max-w-4xl mx-auto px-4">
-                        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                            <TabButton tabId="my_crawls" label="My Crawls" isActive={activeTab === 'my_crawls'} onClick={() => setActiveTab('my_crawls')} />
-                            <TabButton tabId="community_crawls" label="Community Crawls" isActive={activeTab === 'community_crawls'} onClick={() => setActiveTab('community_crawls')} />
-                        </nav>
-                    </div>
-                </div>
-                <main className="flex-grow overflow-y-auto bg-gray-100 dark:bg-gray-900">
-                   <div className="max-w-4xl mx-auto p-4">
-                        <div className="space-y-4">
-                            {activeTab === 'my_crawls' && (
-                                <>
-                                    <button
-                                        onClick={() => setIsSetupModalOpen(true)}
-                                        className="w-full bg-amber-500 text-black font-bold py-3 px-4 rounded-lg hover:bg-amber-400 transition-colors flex items-center justify-center space-x-2 text-lg"
-                                    >
-                                        <i className="fas fa-magic"></i>
-                                        <span>Plan a New Crawl</span>
-                                    </button>
-                                    <h2 className="text-xl font-bold text-gray-800 dark:text-white pt-4 border-t border-gray-200 dark:border-gray-700">My Saved Crawls ({savedCrawls.length})</h2>
-                                    {renderMyCrawls()}
-                                </>
-                            )}
-                            {activeTab === 'community_crawls' && renderCommunityCrawls()}
-                        </div>
-                   </div>
-                </main>
-            </div>
+            {isFeedbackModalOpen && (
+                <PubCrawlFeedbackModal
+                    isOpen={isFeedbackModalOpen}
+                    onClose={() => setIsFeedbackModalOpen(false)}
+                    userProfile={userProfile}
+                />
+            )}
+            {renderContent()}
         </>
     );
 };

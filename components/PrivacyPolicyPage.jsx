@@ -21,7 +21,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const PrivacyPolicyPage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Privacy Policy" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: February 9, 2026</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: March 5, 2026</p>
             <p>Your privacy is important to us. This Privacy Policy explains how Stoutly ("we," "us," or "our") collects, uses, and shares information about you when you use our Service.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Information We Collect</h2>
@@ -33,6 +33,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 <li><strong>Photographs:</strong> If you choose to add a photo to your rating, we collect and store the image file you upload. This image will be associated with your rating and profile.</li>
                 <li><strong>Comments:</strong> We collect any comments you post on ratings, which are linked to your account.</li>
                 <li><strong>Posts:</strong> We collect the titles and content of any posts you create on the community feed, along with any pubs you attach to them.</li>
+                <li><strong>Pub Crawl Preferences:</strong> When you use the Pub Crawl Planner, we collect your start location, desired number of stops, and other preferences to generate a route.</li>
                 <li><strong>Marketing Preferences:</strong> We collect your preference for receiving marketing communications from us.</li>
             </ul>
             
@@ -55,6 +56,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 <li>Authenticate users and allow you to sign in to your account.</li>
                 <li>Display your ratings, comments, profile picture, and other profile information to the community (e.g., on leaderboards and pub detail pages).</li>
                 <li>Display the photographs you've submitted alongside your ratings to the community.</li>
+                <li>Generate custom pub crawl routes and itineraries based on your location and preferences using AI services.</li>
                 <li>Analyze your User Content (such as photos and comments) with automated systems, including third-party AI services like the Google Gemini API, to generate insights, curate content, and improve the Service.</li>
                 <li>Personalize your experience (e.g., by saving your theme and distance unit preferences).</li>
                 <li>Communicate with you for password recovery and other essential service notifications.</li>
@@ -71,7 +73,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
                     <ul className="list-disc list-inside space-y-1 pl-6 mt-1">
                         <li><strong>Supabase:</strong> Our backend and database provider. They store your account information, profiles, ratings, comments, and uploaded images.</li>
                         <li><strong>Stripe:</strong> Our payment processor for handling donations. They manage your payment information securely.</li>
-                        <li><strong>Google Gemini API:</strong> For AI-powered analysis of user-generated content like comments and images.</li>
+                        <li><strong>Google Gemini API:</strong> For AI-powered analysis of user-generated content and for generating pub crawl routes.</li>
                         <li><strong>Dicebear:</strong> For generating stylized user avatars.</li>
                         <li><strong>Quickchart.io:</strong> For generating QR codes in our sharing features.</li>
                         <li><strong>OpenStreetMap & Nominatim:</strong> We use map data from OpenStreetMap contributors and the Nominatim search service for geocoding (e.g., finding addresses). This allows us to display maps and find pubs. Their privacy policy can be found on their respective websites.</li>

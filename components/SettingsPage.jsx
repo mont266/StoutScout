@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI } from '../constants.js';
+import { MILES_TO_METERS, MIN_RADIUS_MI, MAX_RADIUS_MI, APP_STORE_URL } from '../constants.js';
 import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
 import { getMobileOS } from '../utils.js';
@@ -51,7 +51,7 @@ const DevSubheading = ({ children }) => (
 );
 
 
-const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, onLogout, handleViewLegal, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, onShowIosInstall, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode, onViewModeration, isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner, onTestTrophyPopup, onViewChangelog, onManageChangelog, hasUnreadChangelog, handleDonationSuccess, onTestDonationPopup, onDeleteAccountRequest }) => {
+const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, onLogout, handleViewLegal, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode, stPaddysModeEnabled, setStPaddysModeEnabled, onViewModeration, isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner, onTestTrophyPopup, onViewChangelog, onManageChangelog, hasUnreadChangelog, handleDonationSuccess, onTestDonationPopup, onDeleteAccountRequest, handleTabChange, onSubTabChange }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [confirmation, setConfirmation] = useState({ isOpen: false });
@@ -94,11 +94,6 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
     setInstallPromptEvent(null);
   };
   
-  const handleIosInstallClick = () => {
-    trackEvent('share', { method: 'Add to Home Screen', content_type: 'app' });
-    onShowIosInstall();
-  };
-
   const confirmToggleGlobalMode = (isActive) => {
     setConfirmation({
         isOpen: true,
@@ -146,13 +141,16 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                 </button>
               )}
               {isIosWebApp && (
-                  <button
-                    onClick={handleIosInstallClick}
+                  <a
+                    href={APP_STORE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => trackEvent('click_app_store_badge')}
                     className="w-full flex items-center justify-center space-x-2 bg-black dark:bg-gray-200 text-white dark:text-black font-bold py-3 px-4 rounded-lg transition-colors"
                   >
                     <i className="fab fa-apple"></i>
-                    <span>Add to Home Screen</span>
-                  </button>
+                    <span>Download on App Store</span>
+                  </a>
               )}
               {isAndroidWebApp && (
                   <a
@@ -231,6 +229,23 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                     <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
                 </label>
             </SettingsItem>
+
+            {(systemFlags.st_paddys_mode || localStPaddysOverride) && (
+                <SettingsItem icon="fa-clover" label="Enable St. Paddy's Theme">
+                    <label htmlFor="user-st-paddy-toggle" className="relative cursor-pointer">
+                        <input
+                            id="user-st-paddy-toggle" type="checkbox" className="sr-only peer"
+                            checked={stPaddysModeEnabled}
+                            onChange={(e) => {
+                                setStPaddysModeEnabled(e.target.checked);
+                                trackEvent('change_setting', { setting_name: 'st_paddys_mode_enabled', value: e.target.checked });
+                            }}
+                        />
+                        <div className="block w-11 h-6 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
+                        <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
+                    </label>
+                </SettingsItem>
+            )}
           </SettingsSection>
 
           {/* Account Section */}
@@ -290,6 +305,7 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
             <SettingsItem icon="fa-newspaper" label="What's New" onClick={onViewChangelog} notification={hasUnreadChangelog} />
             <SettingsItem icon="fa-question-circle" label="Contact Us" onClick={() => setIsContactModalOpen(true)} />
             <SettingsItem icon="fa-comment-alt" label="Give Feedback / Report a Bug" onClick={() => setIsFeedbackModalOpen(true)} />
+            
           </SettingsSection>
 
           {/* Legal Section */}
@@ -302,7 +318,18 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
           {userProfile?.is_developer && (
             <SettingsSection title="Developer Tools" titleColor="text-amber-500 dark:text-amber-400">
                 <DevSubheading>Admin Panels</DevSubheading>
-                <SettingsItem icon="fa-shield-alt" label="Moderation Center" onClick={onViewModeration} />
+                <SettingsItem
+                  icon="fa-shield-alt"
+                  label="Moderation Center"
+                  onClick={() => {
+                    if (isDesktop) {
+                      onViewModeration();
+                    } else {
+                      handleTabChange('community');
+                      onSubTabChange('moderation');
+                    }
+                  }}
+                />
                 <SettingsItem icon="fa-feather-alt" label="Social Content Hub" onClick={onViewSocialHub} />
                 <SettingsItem icon="fa-list-alt" label="Manage Changelog" onClick={onManageChangelog} />
 

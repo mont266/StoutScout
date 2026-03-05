@@ -50,11 +50,8 @@ const DesktopNav = ({ activeTab, onTabChange, onLogout, userProfile, onLoginRequ
   const mainTabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
+    { id: 'pub_crawl', icon: 'fa-route', label: 'Pub Crawl' },
   ];
-
-  if (isPubCrawlPlannerEnabled) {
-      mainTabs.splice(2, 0, { id: 'pub_crawl', icon: 'fa-route', label: 'Pub Crawl' });
-  }
   
   const shopTab = { id: 'shop', icon: 'fa-shopping-bag', label: 'Shop' };
 

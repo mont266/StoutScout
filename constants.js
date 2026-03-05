@@ -7,6 +7,9 @@ export const MIN_RADIUS_MI = 0.5;
 export const MAX_RADIUS_MI = 5;
 export const DEFAULT_RADIUS_MI = 2;
 
+export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=uk.co.stoutly.twa';
+export const APP_STORE_URL = 'https://apps.apple.com/in/app/stoutly/id6758011319';
+
 // The single source of truth for rank progression.
 // Each rank has a name, a Font Awesome icon, and the minimum level required.
 export const RANK_DETAILS = [

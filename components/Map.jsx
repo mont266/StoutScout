@@ -18,11 +18,16 @@ const SearchOriginMarker = () => (
     </div>
 );
 
-const PubIcon = ({ color }) => (
+const PubIcon = ({ color, showClover }) => (
     <div className="w-10 h-10 cursor-pointer drop-shadow-lg relative">
         <svg viewBox="0 0 24 24" fill={color} xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="#000" strokeWidth="1"/>
         </svg>
+        {showClover && (
+            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pb-2 pointer-events-none">
+                <span className="text-[10px] filter drop-shadow-sm">☘️</span>
+            </div>
+        )}
     </div>
 );
 
@@ -131,11 +136,11 @@ const MapComponent = (props) => {
 
     return {
       unrated: () => <PubIcon color={unratedColor} />,
-      rated: () => <PubIcon color={stoutlyAmber} />,
-      selected: () => <PubIcon color={stoutlyAmber} />,
+      rated: () => <PubIcon color={stoutlyAmber} showClover={isStPaddysModeActive} />,
+      selected: () => <PubIcon color={stoutlyAmber} showClover={isStPaddysModeActive} />,
       closed: <ClosedPubIcon />,
     };
-  }, []);
+  }, [isStPaddysModeActive]);
   
   const markers = useMemo(() => pubs.map(pub => {
       if (!pub.location) return null;
