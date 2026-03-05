@@ -23,20 +23,23 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
         setIsSubmitting(true);
 
         try {
-            // Attempt to save to Supabase 'feedback' table
-            // We use a generic 'feedback' table. If it doesn't exist, we'll catch the error.
-            const { error } = await supabase.from('feedback').insert({
-                user_id: userProfile?.id,
-                message: feedback, // Using 'message' as a generic field
-                type: 'pub_crawl_beta',
-                metadata: { source: 'web_planner', user_agent: navigator.userAgent }
-            });
+            // Encode data for Netlify form submission
+            const encode = (data) => {
+                return Object.keys(data)
+                    .map(key => encodeURIComponent(key) + "=" + encodeURIComponent(data[key]))
+                    .join("&");
+            };
 
-            if (error) {
-                console.warn("Could not save feedback to DB:", error);
-                // We proceed to show success to the user anyway, as this is a beta feature
-                // and we don't want to block them if the backend isn't fully ready.
-            }
+            await fetch("/", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: encode({ 
+                    "form-name": "pub-crawl-feedback", 
+                    "feedback": feedback,
+                    "user_id": userProfile?.id || 'anonymous',
+                    "user_agent": navigator.userAgent
+                })
+            });
             
             setSubmitSuccess(true);
             setTimeout(() => {
@@ -45,6 +48,8 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
 
         } catch (err) {
             console.error("Error submitting feedback:", err);
+            // Even if it fails (e.g. network), we can show success to not frustrate the user
+            // or show a specific error if critical. For now, let's assume success for UX.
             setSubmitSuccess(true);
             setTimeout(() => {
                 onClose();
@@ -83,8 +88,12 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
                         <p className="text-gray-600 dark:text-gray-300 mb-4 text-sm">
                             The Pub Crawl Planner is currently in beta. Let us know if you encounter any issues or have suggestions for improvement!
                         </p>
-                        <form onSubmit={handleSubmit}>
+                        <form onSubmit={handleSubmit} name="pub-crawl-feedback" method="POST" data-netlify="true">
+                            <input type="hidden" name="form-name" value="pub-crawl-feedback" />
+                            <input type="hidden" name="user_id" value={userProfile?.id || 'anonymous'} />
+                            <input type="hidden" name="user_agent" value={navigator.userAgent} />
                             <textarea
+                                name="feedback"
                                 className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none h-32"
                                 placeholder="Tell us what you think..."
                                 value={feedback}
