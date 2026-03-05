@@ -35,7 +35,8 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: encode({ 
                     "form-name": "pub-crawl-feedback", 
-                    "feedback": feedback,
+                    "message": feedback,
+                    "feedback_type": "pub_crawl_beta",
                     "user_id": userProfile?.id || 'anonymous',
                     "user_agent": navigator.userAgent
                 })
@@ -92,8 +93,9 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
                             <input type="hidden" name="form-name" value="pub-crawl-feedback" />
                             <input type="hidden" name="user_id" value={userProfile?.id || 'anonymous'} />
                             <input type="hidden" name="user_agent" value={navigator.userAgent} />
+                            <input type="hidden" name="feedback_type" value="pub_crawl_beta" />
                             <textarea
-                                name="feedback"
+                                name="message"
                                 className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none h-32"
                                 placeholder="Tell us what you think..."
                                 value={feedback}
