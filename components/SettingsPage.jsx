@@ -51,13 +51,16 @@ const DevSubheading = ({ children }) => (
 );
 
 
-const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, onLogout, handleViewLegal, onViewSocialHub, onDataRefresh, installPromptEvent, setInstallPromptEvent, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode, stPaddysModeEnabled, setStPaddysModeEnabled, onViewModeration, isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner, onTestTrophyPopup, onViewChangelog, onManageChangelog, hasUnreadChangelog, handleDonationSuccess, onTestDonationPopup, onDeleteAccountRequest, handleTabChange, onSubTabChange }) => {
+const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, onLogout, handleViewLegal, onDataRefresh, installPromptEvent, setInstallPromptEvent, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode, stPaddysModeEnabled, setStPaddysModeEnabled, onViewModeration, onTestTrophyPopup, onViewChangelog, onManageChangelog, hasUnreadChangelog, handleDonationSuccess, onTestDonationPopup, onDeleteAccountRequest, handleTabChange, onSubTabChange, onProfileUpdate }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [confirmation, setConfirmation] = useState({ isOpen: false });
+  const [isUpdatingMapPrivacy, setIsUpdatingMapPrivacy] = useState(false);
   const isDesktop = useIsDesktop();
   
   const isNativeIos = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+
+  const isNative = Capacitor.isNativePlatform();
 
   const handleThemeChange = (theme) => {
     handleSettingsChange({ ...settings, theme });
@@ -92,6 +95,28 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
     const { outcome } = await installPromptEvent.userChoice;
     trackEvent('pwa_install_prompt_result', { outcome });
     setInstallPromptEvent(null);
+  };
+
+  const handleToggleMapPrivacy = async (checked) => {
+      if (!userProfile) return;
+      setIsUpdatingMapPrivacy(true);
+      try {
+          const { error } = await supabase
+              .from('profiles')
+              .update({ is_map_public: checked })
+              .eq('id', userProfile.id);
+          
+          if (error) throw error;
+          
+          if (onProfileUpdate) {
+              onProfileUpdate(userProfile.id);
+          }
+          trackEvent('change_setting', { setting_name: 'is_map_public', value: checked });
+      } catch (error) {
+          setAlertInfo({ isOpen: true, title: 'Error', message: 'Failed to update map privacy.', theme: 'error' });
+      } finally {
+          setIsUpdatingMapPrivacy(false);
+      }
   };
   
   const confirmToggleGlobalMode = (isActive) => {
@@ -230,6 +255,21 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                 </label>
             </SettingsItem>
 
+            <SettingsItem icon="fa-map-pin" label="Show all my pins">
+                <label htmlFor="show-user-rated-pubs-toggle" className="relative cursor-pointer">
+                    <input
+                        id="show-user-rated-pubs-toggle" type="checkbox" className="sr-only peer"
+                        checked={settings.showUserRatedPubs}
+                        onChange={(e) => {
+                            handleSettingsChange({ ...settings, showUserRatedPubs: e.target.checked });
+                            trackEvent('change_setting', { setting_name: 'show_user_rated_pubs', value: e.target.checked });
+                        }}
+                    />
+                    <div className="block w-11 h-6 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
+                    <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
+                </label>
+            </SettingsItem>
+
             {(systemFlags.st_paddys_mode || localStPaddysOverride) && (
                 <SettingsItem icon="fa-clover" label="Enable St. Paddy's Theme">
                     <label htmlFor="user-st-paddy-toggle" className="relative cursor-pointer">
@@ -247,6 +287,45 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                 </SettingsItem>
             )}
           </SettingsSection>
+
+          {/* Privacy & Sharing Section */}
+          {session && userProfile && (
+            <SettingsSection title="Privacy & Sharing">
+                <SettingsItem icon="fa-globe" label="Public Map Profile">
+                    <label className="relative cursor-pointer">
+                        <input
+                            type="checkbox" className="sr-only peer"
+                            checked={userProfile.is_map_public || false}
+                            onChange={(e) => handleToggleMapPrivacy(e.target.checked)}
+                            disabled={isUpdatingMapPrivacy}
+                        />
+                        <div className={`block w-11 h-6 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600 ${isUpdatingMapPrivacy ? 'opacity-50' : ''}`}></div>
+                        <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
+                    </label>
+                </SettingsItem>
+                {userProfile.is_map_public && (
+                    <div className="px-4 pb-4">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                            Your interactive map is public! Share this link with your friends:
+                        </p>
+                        <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-2 rounded-md border border-gray-200 dark:border-gray-700">
+                            <span className="text-sm text-gray-800 dark:text-gray-200 truncate flex-grow">
+                                stoutly.co.uk/map/{userProfile.username}
+                            </span>
+                            <button 
+                                onClick={() => {
+                                    navigator.clipboard.writeText(`https://stoutly.co.uk/map/${userProfile.username}`);
+                                    setAlertInfo({ isOpen: true, title: 'Copied!', message: 'Link copied to clipboard.', theme: 'success' });
+                                }}
+                                className="ml-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 p-1"
+                            >
+                                <i className="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </SettingsSection>
+          )}
 
           {/* Account Section */}
           <SettingsSection title="Account">
@@ -303,9 +382,12 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
           {/* About Stoutly Section */}
           <SettingsSection title="About Stoutly">
             <SettingsItem icon="fa-newspaper" label="What's New" onClick={onViewChangelog} notification={hasUnreadChangelog} />
-            <SettingsItem icon="fa-question-circle" label="Contact Us" onClick={() => setIsContactModalOpen(true)} />
-            <SettingsItem icon="fa-comment-alt" label="Give Feedback / Report a Bug" onClick={() => setIsFeedbackModalOpen(true)} />
-            
+            {!isNative && (
+              <>
+                <SettingsItem icon="fa-question-circle" label="Contact Us" onClick={() => setIsContactModalOpen(true)} />
+                <SettingsItem icon="fa-comment-alt" label="Give Feedback / Report a Bug" onClick={() => setIsFeedbackModalOpen(true)} />
+              </>
+            )}
           </SettingsSection>
 
           {/* Legal Section */}
@@ -330,7 +412,7 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                     }
                   }}
                 />
-                <SettingsItem icon="fa-feather-alt" label="Social Content Hub" onClick={onViewSocialHub} />
+                <SettingsItem icon="fa-feather-alt" label="Social Content Hub" onClick={() => window.open('https://social.stoutly.co.uk', '_blank')} />
                 <SettingsItem icon="fa-list-alt" label="Manage Changelog" onClick={onManageChangelog} />
 
                 <DevSubheading>Global Feature Flags</DevSubheading>
@@ -340,17 +422,6 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                             id="global-st-paddy-toggle" type="checkbox" className="sr-only peer"
                             checked={systemFlags.st_paddys_mode || false}
                             onChange={(e) => confirmToggleGlobalMode(e.target.checked)}
-                        />
-                        <div className="block w-11 h-6 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
-                        <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
-                    </label>
-                </SettingsItem>
-                <SettingsItem icon="fa-route" label="Enable Pub Crawl Planner">
-                     <label htmlFor="pub-crawl-toggle" className="relative cursor-pointer">
-                        <input
-                            id="pub-crawl-toggle" type="checkbox" className="sr-only peer"
-                            checked={isPubCrawlPlannerEnabled}
-                            onChange={(e) => onTogglePubCrawlPlanner(e.target.checked)}
                         />
                         <div className="block w-11 h-6 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
                         <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>

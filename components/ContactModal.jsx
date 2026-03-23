@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { trackEvent } from '../analytics.js';
 import { Capacitor } from '@capacitor/core';
+import { NETLIFY_URL } from '../constants.js';
 
 const ContactModal = ({ userProfile, session, onClose }) => {
     const [name, setName] = useState('');
@@ -35,7 +36,7 @@ const ContactModal = ({ userProfile, session, onClose }) => {
         
         try {
             const postUrl = Capacitor.isNativePlatform() 
-              ? 'https://stoutly.co.uk/.netlify/functions/submit-form' 
+              ? `${NETLIFY_URL}/.netlify/functions/submit-form` 
               : '/';
               
             const response = await fetch(postUrl, {

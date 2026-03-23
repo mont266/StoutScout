@@ -5,6 +5,7 @@ import Avatar from './Avatar.jsx';
 import { trackEvent } from '../analytics.js';
 import { Capacitor } from '@capacitor/core';
 import { formatTimeAgo } from '../utils.js';
+import QRCode from 'react-qr-code';
 
 const SharePostModal = ({ post, onClose }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy Link');
@@ -80,7 +81,9 @@ const SharePostModal = ({ post, onClose }) => {
                         <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{post.content.substring(0, 150)}{post.content.length > 150 ? '...' : ''}</p>
                         
                         <div className="mt-4 flex justify-center items-center gap-4 bg-gray-100 dark:bg-gray-700/50 p-2 rounded-md">
-                            <img src={qrCodeUrl} alt="QR Code for post link" className="w-20 h-20 rounded-md" />
+                            <div className="bg-white p-1 rounded-md">
+                                <QRCode value={qrTextUrl} size={80} level="H" fgColor="#1A120F" bgColor="#FFFFFF" />
+                            </div>
                             <div className="text-left">
                                 <p className="font-bold text-sm">Scan to view Post</p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">See the full post and comments on Stoutly.</p>

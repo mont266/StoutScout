@@ -51,8 +51,14 @@ const MapSearchBar = ({ onPlaceSelected, onClose, isExpanded, userProfile, onPub
             trackEvent('search_live', { search_term: trimmedSearch });
             const accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
             
+            let mapboxSearchTerm = trimmedSearch;
+            const lowerSearch = mapboxSearchTerm.toLowerCase();
+            if (lowerSearch === 'derry' || lowerSearch === 'derry city' || lowerSearch === 'derry, ni' || lowerSearch === 'derry, northern ireland' || lowerSearch === 'derry, uk' || lowerSearch === 'derry, ireland') {
+                mapboxSearchTerm = 'Londonderry, Northern Ireland';
+            }
+            
             try {
-                const placePromise = fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(trimmedSearch)}.json?access_token=${accessToken}&limit=3&types=place,locality,postcode,neighborhood,address,poi`);
+                const placePromise = fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(mapboxSearchTerm)}.json?access_token=${accessToken}&limit=3&types=place,locality,postcode,neighborhood,address,poi`);
                 const pubPromise = supabase
                     .from('pubs')
                     .select('id, name, address, lat, lng, country_code, country_name')
@@ -65,16 +71,27 @@ const MapSearchBar = ({ onPlaceSelected, onClose, isExpanded, userProfile, onPub
 
                 if (placeRes.ok) {
                     const placeData = await placeRes.json();
-                    const placeResults = (placeData.features || []).map(p => ({
-                        id: `place-${p.id}`,
-                        type: 'place',
-                        name: p.text,
-                        description: p.place_name.replace(`${p.text}, `, ''),
-                        data: {
-                            lat: p.center[1],
-                            lng: p.center[0]
+                    const placeResults = (placeData.features || []).map(p => {
+                        let name = p.text;
+                        let description = p.place_name.replace(`${p.text}, `, '');
+                        
+                        // Handle Derry/Londonderry naming in results
+                        if (name === 'Londonderry' && description.includes('Northern Ireland')) {
+                            name = 'Derry / Londonderry';
+                            description = description.replace('Londonderry', 'Derry / Londonderry');
                         }
-                    }));
+
+                        return {
+                            id: `place-${p.id}`,
+                            type: 'place',
+                            name: name,
+                            description: description,
+                            data: {
+                                lat: p.center[1],
+                                lng: p.center[0]
+                            }
+                        };
+                    });
                     combinedResults.push(...placeResults);
                 }
 
@@ -180,7 +197,14 @@ const MapSearchBar = ({ onPlaceSelected, onClose, isExpanded, userProfile, onPub
         trackEvent('search', { search_term: inputValue });
         
         const accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(inputValue)}.json?access_token=${accessToken}&limit=1`;
+        
+        let mapboxSearchTerm = inputValue.trim();
+        const lowerSearch = mapboxSearchTerm.toLowerCase();
+        if (lowerSearch === 'derry' || lowerSearch === 'derry city' || lowerSearch === 'derry, ni' || lowerSearch === 'derry, northern ireland' || lowerSearch === 'derry, uk' || lowerSearch === 'derry, ireland') {
+            mapboxSearchTerm = 'Londonderry, Northern Ireland';
+        }
+
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(mapboxSearchTerm)}.json?access_token=${accessToken}&limit=1`;
         
         try {
             const response = await fetch(url);

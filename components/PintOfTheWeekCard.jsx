@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { trackEvent } from '../analytics.js';
 import Avatar from './Avatar.jsx';
+import CrownIcon from './CrownIcon.jsx';
 import StarRating from './StarRating.jsx';
 import { getCurrencyInfo } from '../utils.js';
 import Icon from './Icon.jsx';
@@ -62,9 +63,14 @@ const PintOfTheWeekCard = ({ report, winner }) => {
                     )}
                     
                     <div className="mt-4 flex items-center space-x-3">
-                        <Avatar avatarId={user.avatar_id} className="w-12 h-12 flex-shrink-0" />
+                        <div className={`flex-shrink-0 rounded-full ${user.is_stoutly_legend ? 'ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}>
+                            <Avatar avatarId={user.avatar_id} className="w-12 h-12 flex-shrink-0" />
+                        </div>
                         <div>
-                            <p className="font-bold text-lg leading-tight">{user.username}</p>
+                            <p className="font-bold text-lg leading-tight flex items-center gap-1">
+                                {user.username}
+                                {user.is_stoutly_legend && <CrownIcon className="w-4 h-4 text-amber-500" title="Stoutly Legend" />}
+                            </p>
                             <p className="text-sm text-gray-600 dark:text-gray-400">at <span className="font-semibold">{pub.name}</span></p>
                         </div>
                     </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Avatar from './Avatar.jsx';
+import CrownIcon from './CrownIcon.jsx';
 import { getRankData, formatTimeAgo } from '../utils.js';
 import CommentsSection from './CommentsSection.jsx';
 
@@ -61,7 +62,7 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
             )}
             {/* Card Header */}
             <div className="p-3 flex items-center space-x-3">
-                <button onClick={() => onViewProfile(user.id, 'post_feed')} className="flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                <button onClick={() => onViewProfile(user.id, 'post_feed')} className={`flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${user.is_stoutly_legend ? 'ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}>
                     <Avatar avatarId={user.avatar_id} className="w-10 h-10" />
                 </button>
                 <div className="flex-grow min-w-0">
@@ -69,6 +70,9 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
                         <button onClick={() => onViewProfile(user.id, 'post_feed')} className="font-semibold text-gray-800 dark:text-gray-200 hover:underline truncate">
                             {user.username}
                         </button>
+                        {user.is_stoutly_legend && (
+                            <CrownIcon className="w-4 h-4 text-amber-500" title="Stoutly Legend" />
+                        )}
                         {user.is_developer && (
                             <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-amber-500/20" title="This user is a Stoutly developer.">
                                 DEV

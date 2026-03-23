@@ -208,6 +208,7 @@ const MapComponent = (props) => {
         style={{ width: '100%', height: '100%' }}
         mapStyle={mapStyle}
         attributionControl={false}
+        projection="globe"
       >
         <NavigationControl position="top-left" />
         

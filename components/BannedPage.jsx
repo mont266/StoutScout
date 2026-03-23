@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { trackEvent } from '../analytics.js';
 import { Capacitor } from '@capacitor/core';
+import { NETLIFY_URL } from '../constants.js';
 
 const BannedPage = ({ userProfile, onLogout }) => {
     const { username, ban_reason, banned_at } = userProfile;
@@ -25,7 +26,7 @@ const BannedPage = ({ userProfile, onLogout }) => {
         try {
             // Use the absolute URL for the Netlify Function on native, relative path for web
             const postUrl = Capacitor.isNativePlatform() 
-              ? 'https://stoutly.co.uk/.netlify/functions/submit-form' 
+              ? `${NETLIFY_URL}/.netlify/functions/submit-form` 
               : '/';
 
             const response = await fetch(postUrl, {

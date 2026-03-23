@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../supabase';
+import { Capacitor } from '@capacitor/core';
+import { NETLIFY_URL } from '../constants';
 
 const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
     const [feedback, setFeedback] = useState('');
@@ -30,7 +32,12 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
                     .join("&");
             };
 
-            await fetch("/", {
+            const isNative = Capacitor.isNativePlatform();
+            const submissionUrl = isNative 
+              ? `${NETLIFY_URL}/.netlify/functions/submit-form` 
+              : "/";
+
+            await fetch(submissionUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: encode({ 

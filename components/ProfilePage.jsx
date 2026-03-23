@@ -4,6 +4,7 @@ import { RANK_DETAILS } from '../constants.js';
 import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import { supabase } from '../supabase.js';
 import StarRating from './StarRating.jsx';
+import CrownIcon from './CrownIcon.jsx';
 import ProfileAvatar from './ProfileAvatar.jsx';
 import ImageModal from './ImageModal.jsx';
 import ReportImageModal from './ReportImageModal.jsx';
@@ -586,7 +587,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
         if (modalOpener) modalOpener();
     };
 
-    const { username, level, is_beta_tester, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, bio } = userProfile;
+    const { username, level, is_beta_tester, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, bio, is_stoutly_legend } = userProfile;
     const reviews = userProfile.reviews || 0;
     
     const rankData = getRankData(level);
@@ -958,12 +959,23 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                                     </div>
 
                                     <div className="mt-4 text-center">
-                                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center justify-center gap-2">
                                             <span>{username}</span>
+                                            {is_stoutly_legend && <CrownIcon className="w-6 h-6 text-amber-500" title="Stoutly Legend" />}
                                         </h1>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">Joined {new Date(userProfile.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</p>
                                     </div>
                                     
+                                    {is_stoutly_legend && (
+                                        <div className="mt-4 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500/10 via-amber-500/20 to-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 p-3 rounded-xl shadow-sm w-full max-w-xs">
+                                            <CrownIcon className="w-6 h-6 fill-amber-500" />
+                                            <div className="text-left">
+                                                <p className="font-bold text-sm uppercase tracking-wider">Stoutly Legend</p>
+                                                <p className="text-xs opacity-80">Achieved by rating over 65 pints</p>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <UserBadges profile={userProfile} className="mt-3" />
                                 </div>
 

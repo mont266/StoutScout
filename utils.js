@@ -118,37 +118,6 @@ export const normalizeReverseGeocodeResult = (mapboxReverseGeocodeResult) => {
 };
 
 
-/**
- * Defines the approximate geographical bounding box for Greater London.
- */
-const LONDON_BOUNDS = {
-  north: 51.691874, // North (e.g., Enfield)
-  south: 51.28676,  // South (e.g., Coulsdon)
-  west: -0.510375, // West (e.g., Hillingdon)
-  east: 0.334015,   // East (e.g., Havering)
-};
-
-/**
- * Determines if a pub is within the geographical boundaries of London
- * based on its latitude and longitude. This is more reliable than
- * checking the address string.
- * @param {object} pub The pub object, which must have a `location` property with `lat` and `lng`.
- * @returns {boolean} True if the pub's coordinates are within the London bounding box.
- */
-export const isLondonPub = (pub) => {
-  // A pub must have location data to be checked.
-  if (!pub || !pub.location || pub.location.lat === undefined || pub.location.lng === undefined) {
-    return false;
-  }
-
-  const { lat, lng } = pub.location;
-
-  // Check if the coordinates fall within the defined London bounding box.
-  const isWithinLatitude = lat >= LONDON_BOUNDS.south && lat <= LONDON_BOUNDS.north;
-  const isWithinLongitude = lng >= LONDON_BOUNDS.west && lng <= LONDON_BOUNDS.east;
-
-  return isWithinLatitude && isWithinLongitude;
-};
 
 
 export const formatTimeAgo = (timestamp) => {
@@ -245,7 +214,7 @@ const CURRENCY_DEFAULTS = {
  * @returns {{symbol: string, code: string, examplePrice: string, tiers: number[]}} The currency info.
  */
 export const getCurrencyInfo = (pubLocationData = {}) => {
-    let { country_code, country_name } = pubLocationData;
+    let { country_code, country_name, local_avg_price } = pubLocationData;
     
     const defaults = {
         symbol: '£',
@@ -257,33 +226,47 @@ export const getCurrencyInfo = (pubLocationData = {}) => {
         country_code = COUNTRY_NAME_TO_CODE[country_name.toLowerCase().trim()];
     }
 
+    let result = defaults;
+
     if (country_code) {
         const code = country_code.toLowerCase().trim();
 
         if (EUROZONE_COUNTRY_CODES.has(code)) {
-            return { symbol: '€', code: 'EUR', ...CURRENCY_DEFAULTS['EUR'] };
-        }
-        
-        const currency = CURRENCY_MAP[code];
-        if (currency) {
-            const currencySpecifics = CURRENCY_DEFAULTS[currency.code] || CURRENCY_DEFAULTS['DEFAULT'];
-            return { ...currency, ...currencySpecifics };
+            result = { symbol: '€', code: 'EUR', ...CURRENCY_DEFAULTS['EUR'] };
+        } else {
+            const currency = CURRENCY_MAP[code];
+            if (currency) {
+                const currencySpecifics = CURRENCY_DEFAULTS[currency.code] || CURRENCY_DEFAULTS['DEFAULT'];
+                result = { ...currency, ...currencySpecifics };
+            }
         }
     }
 
-    return defaults;
+    // Apply dynamic tiers if local_avg_price is available
+    const parsedLocalAvg = parseFloat(local_avg_price);
+    if (parsedLocalAvg && !isNaN(parsedLocalAvg)) {
+        result.tiers = [
+            parsedLocalAvg * 0.85,
+            parsedLocalAvg * 0.95,
+            parsedLocalAvg * 1.10,
+            parsedLocalAvg * 1.25
+        ];
+        result.examplePrice = parsedLocalAvg.toFixed(2);
+        result.isDynamic = true;
+    }
+
+    return result;
 };
 
 /**
  * Converts a price star rating into a human-readable price range string.
  * @param {number} avgStarRating The average star rating for price (1-5).
  * @param {string} currencySymbol The currency symbol to use (e.g., '£', '€', '$').
- * @param {boolean} isLondon Whether to use the London-specific price scale.
  * @param {number[]} tiers The price thresholds for the currency.
  * @returns {string} A formatted price range string, e.g., "£5.50 - £5.99".
  */
-export const getPriceRangeFromStars = (avgStarRating, currencySymbol, isLondon = false, tiers) => {
-    const thresholds = isLondon ? [6.00, 6.75, 7.50, 8.50] : tiers || CURRENCY_DEFAULTS.DEFAULT.tiers;
+export const getPriceRangeFromStars = (avgStarRating, currencySymbol, tiers) => {
+    const thresholds = tiers || CURRENCY_DEFAULTS.DEFAULT.tiers;
     
     const format = (val) => val >= 100 ? val.toFixed(0) : val.toFixed(2);
 
@@ -298,20 +281,19 @@ export const getPriceRangeFromStars = (avgStarRating, currencySymbol, isLondon =
 /**
  * Converts an exact price into a star rating (1-5).
  * @param {number | string | null} price The exact price.
- * @param {boolean} isLondon Whether to use the London-specific price scale.
  * @param {number[]} tiers The price thresholds for the currency.
  * @returns {number} The star rating (0-5).
  */
-export const getStarRatingFromPrice = (price, isLondon = false, tiers) => {
+export const getStarRatingFromPrice = (price, tiers) => {
     if (price === '' || price === null || isNaN(price)) return 0;
     const numericPrice = parseFloat(price);
 
-    const thresholds = isLondon ? [6.00, 6.75, 7.50, 8.50] : tiers || CURRENCY_DEFAULTS.DEFAULT.tiers;
+    const thresholds = tiers || CURRENCY_DEFAULTS.DEFAULT.tiers;
 
-    if (numericPrice < thresholds[0]) return 5;
-    if (numericPrice < thresholds[1]) return 4;
-    if (numericPrice < thresholds[2]) return 3;
-    if (numericPrice < thresholds[3]) return 2;
+    if (numericPrice <= thresholds[0]) return 5;
+    if (numericPrice <= thresholds[1]) return 4;
+    if (numericPrice <= thresholds[2]) return 3;
+    if (numericPrice <= thresholds[3]) return 2;
     return 1;
 };
 
@@ -344,4 +326,34 @@ export const formatCurrency = (price, currencyCode) => {
       style: 'currency',
       currency: currencyCode,
     }).format(price);
+};
+
+/**
+ * Calculates the recent median price from a list of ratings.
+ * @param {Array} ratings The list of ratings for a pub.
+ * @returns {number|null} The recent median price, or null if no valid prices exist.
+ */
+export const getDisplayPrice = (ratings) => {
+    if (!ratings || ratings.length === 0) return null;
+
+    // 1. Get ratings with exact prices, sorted by newest first
+    const validRatings = ratings
+        .filter(r => r.exact_price != null && r.exact_price > 0)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (validRatings.length === 0) return null;
+
+    // 2. Take the 3 most recent prices
+    const recentRatings = validRatings.slice(0, 3);
+    
+    // 3. Sort those 3 prices from lowest to highest
+    const recentPrices = recentRatings.map(r => r.exact_price).sort((a, b) => a - b);
+    
+    // 4. Return the Median (the middle value)
+    const mid = Math.floor(recentPrices.length / 2);
+    if (recentPrices.length % 2 === 0) {
+        return (recentPrices[mid - 1] + recentPrices[mid]) / 2;
+    } else {
+        return recentPrices[mid];
+    }
 };

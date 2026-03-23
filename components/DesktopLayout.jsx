@@ -23,7 +23,6 @@ import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import NotificationToast from './NotificationToast.jsx';
-import SocialContentHub from './SocialContentHub.jsx';
 import ActiveCrawlTracker from './ActiveCrawlTracker.jsx';
 import ShopPage from './ShopPage.jsx';
 
@@ -80,14 +79,12 @@ const DesktopLayout = (props) => {
         isChangingPassword, handleChangePassword,
         userTrophies, allTrophies,
         dbPubs,
-        onViewSocialHub,
         geocodingPubIds,
         isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed,
         isStPaddysModeActive,
         top10PubIds,
         systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode,
         stPaddysModeEnabled, setStPaddysModeEnabled,
-        isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner,
         PubCrawlPage,
         activeCrawl, onStartCrawl, onEndCrawl, onToggleCrawlStop, onReorderStops,
         onAddStop, onDeleteStop,
@@ -127,8 +124,6 @@ const DesktopLayout = (props) => {
         onDeleteAccountRequest,
         
     } = props;
-    
-    const isSocialHubFullScreen = activeTab === 'settings' && settingsSubView === 'social';
 
     const renderContentPanel = () => {
         if (viewingFriendsOf) {
@@ -244,9 +239,6 @@ const DesktopLayout = (props) => {
             if (settingsSubView === 'moderation') {
                 return <ModerationPage onBack={() => handleViewAdminPage(null)} onViewProfile={onViewProfile} onDataRefresh={handleDataRefresh} reports={reports} onFetchReports={onFetchReports} onResolveReport={onResolveReport} onAdminDeleteComment={onAdminDeleteComment} />;
             }
-            if (settingsSubView === 'social') {
-                return <SocialContentHub onBack={() => handleViewAdminPage(null)} userProfile={userProfile} />;
-            }
             if (legalPageView === 'terms') {
                 return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
             }
@@ -261,10 +253,10 @@ const DesktopLayout = (props) => {
                             userProfile={userProfile} 
                             session={session}
                             onViewProfile={onViewProfile}
+                            onProfileUpdate={props.onProfileUpdate}
                             onLogout={onLogout}
                             handleViewLegal={handleViewLegal}
                             onViewModeration={() => handleViewAdminPage('moderation')}
-                            onViewSocialHub={onViewSocialHub}
                             handleDonationSuccess={handleDonationSuccess}
                             installPromptEvent={installPromptEvent}
                             setInstallPromptEvent={setInstallPromptEvent}
@@ -288,8 +280,6 @@ const DesktopLayout = (props) => {
                             onToggleLocalStPaddysMode={onToggleLocalStPaddysMode}
                             stPaddysModeEnabled={stPaddysModeEnabled}
                             setStPaddysModeEnabled={setStPaddysModeEnabled}
-                            isPubCrawlPlannerEnabled={isPubCrawlPlannerEnabled}
-                            onTogglePubCrawlPlanner={onTogglePubCrawlPlanner}
                             onTestTrophyPopup={onTestTrophyPopup}
                             onTestDonationPopup={onTestDonationPopup}
                             onViewChangelog={onViewChangelog}
@@ -319,7 +309,6 @@ const DesktopLayout = (props) => {
                 onLoginRequest={() => setIsAuthOpen(true)}
                 unreadNotificationsCount={unreadNotificationsCount}
                 settings={settings}
-                isPubCrawlPlannerEnabled={isPubCrawlPlannerEnabled}
             />
 
             {/* Main Content Area */}

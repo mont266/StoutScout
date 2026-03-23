@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FilterType } from '../types.js';
 import StarRating from './StarRating.jsx';
-import { getCurrencyInfo, getPriceRangeFromStars, isLondonPub } from '../utils.js';
+import { getCurrencyInfo, getPriceRangeFromStars, getDisplayPrice } from '../utils.js';
 import CoachMark from './CoachMark.jsx';
 import CertifiedBadge from './CertifiedBadge.jsx';
 
@@ -59,20 +59,19 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
                 </div>
             );
         case FilterType.Price:
-            const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
+            const recentMedianPrice = getDisplayPrice(pub.ratings);
             const currencyInfo = getCurrencyInfo(pub);
-            const isLondonNonDynamic = isLondonPub(pub) && !pub.is_dynamic_price_area;
 
-            if (ratingsWithPrice.length > 0) {
-                const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
-                const average = total / ratingsWithPrice.length;
-                return <span className="text-lg font-semibold text-green-600 dark:text-green-400">{currencyInfo.symbol}{average.toFixed(2)}</span>
+            if (recentMedianPrice !== null) {
+                return <span className="text-lg font-semibold text-green-600 dark:text-green-400">{currencyInfo.symbol}{recentMedianPrice.toFixed(2)}</span>
             }
             
-            const avgPrice = getAverageRating(pub.ratings, 'price');
+            const avgPrice = pub.dynamic_price_score !== undefined && pub.dynamic_price_score !== null 
+                ? pub.dynamic_price_score 
+                : getAverageRating(pub.ratings, 'price');
 
             if (avgPrice > 0) {
-                const priceRange = getPriceRangeFromStars(avgPrice, currencyInfo.symbol, isLondonNonDynamic, currencyInfo.tiers);
+                const priceRange = getPriceRangeFromStars(avgPrice, currencyInfo.symbol, currencyInfo.tiers);
                 return (
                     <div className="flex flex-col items-end">
                         <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-0.5">{priceRange}</span>

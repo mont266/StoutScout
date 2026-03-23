@@ -5,7 +5,7 @@ import ImageModal from './ImageModal.jsx';
 import ReportImageModal from './ReportImageModal.jsx';
 import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
-import { formatTimeAgo, getCurrencyInfo, isLondonPub } from '../utils.js';
+import { formatTimeAgo, getCurrencyInfo, getDisplayPrice } from '../utils.js';
 import Avatar from './Avatar.jsx';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import AlertModal from './AlertModal.jsx';
@@ -90,7 +90,7 @@ const PintGallery = ({ ratings, onViewImage }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportComment, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [], onReportContent, onViewPub, isEditRatingFlow }) => {
+const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportContent, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [], onViewPub, isEditRatingFlow }) => {
   const [localPub, setLocalPub] = useState(pub);
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
@@ -105,7 +105,6 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
   const { rates: exchangeRates } = useContext(ExchangeRatesContext);
   const isDesktop = useIsDesktop();
 
-  const isLondonNonDynamic = useMemo(() => isLondonPub(localPub) && !localPub.is_dynamic_price_area, [localPub]);
   const isCertified = localPub.certification_status === 'certified' || localPub.certification_status === 'at_risk';
   const isDeveloper = loggedInUserProfile?.is_developer;
 
@@ -125,7 +124,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
             const fetchFullPubData = async () => {
                 const { data, error } = await supabase
                     .from('pubs')
-                    .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since, is_closed, guinness_zero_confirmations, guinness_zero_denials')
+                    .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since, is_closed, guinness_zero_confirmations, guinness_zero_denials, local_avg_price')
                     .eq('id', pub.id)
                     .single();
                 if (data && !error) {
@@ -216,37 +215,36 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
   };
 
   const avgQuality = getAverageRating(localPub.ratings, 'quality');
-  const avgPrice = getAverageRating(localPub.ratings, 'price');
+  const avgPrice = localPub.dynamic_price_score !== undefined && localPub.dynamic_price_score !== null 
+    ? localPub.dynamic_price_score 
+    : getAverageRating(localPub.ratings, 'price');
   
   const currencyInfo = getCurrencyInfo(localPub);
   
   const priceInfo = useMemo(() => {
-    const ratingsWithPrice = localPub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
-    if (ratingsWithPrice.length === 0) return { text: `${avgPrice.toFixed(1)} / 5`, stars: avgPrice, originalPrice: null, convertedPrice: null, originalCode: null, convertedCode: null };
+    const recentMedianPrice = getDisplayPrice(localPub.ratings);
+    if (recentMedianPrice === null) return { text: `${avgPrice.toFixed(1)} / 5`, stars: avgPrice, originalPrice: null, convertedPrice: null, originalCode: null, convertedCode: null };
 
-    const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
-    const average = total / ratingsWithPrice.length;
-    
     const userHomeCurrency = getCurrencyInfo(loggedInUserProfile || { country_code: 'gb' });
     let convertedPriceText = null;
     let convertedCode = null;
     if (
-        average > 0 && 
+        recentMedianPrice > 0 && 
         exchangeRates &&
         currencyInfo.code !== userHomeCurrency.code &&
         exchangeRates[currencyInfo.code] &&
         exchangeRates[userHomeCurrency.code]
     ) {
-        const priceInGbp = average / exchangeRates[currencyInfo.code];
+        const priceInGbp = recentMedianPrice / exchangeRates[currencyInfo.code];
         const convertedPrice = priceInGbp * exchangeRates[userHomeCurrency.code];
         convertedPriceText = `${userHomeCurrency.symbol}${convertedPrice.toFixed(2)}`;
         convertedCode = userHomeCurrency.code;
     }
 
     return { 
-        text: `${currencyInfo.symbol}${average.toFixed(2)}`, 
+        text: `${currencyInfo.symbol}${recentMedianPrice.toFixed(2)}`, 
         stars: avgPrice,
-        originalPrice: `${currencyInfo.symbol}${average.toFixed(2)}`,
+        originalPrice: `${currencyInfo.symbol}${recentMedianPrice.toFixed(2)}`,
         convertedPrice: convertedPriceText,
         originalCode: currencyInfo.code,
         convertedCode: convertedCode,
@@ -463,7 +461,6 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                             currencyInfo={currencyInfo}
                             isSubmitting={isSubmittingRating}
                             userZeroVote={userZeroVotes.get(localPub.id)}
-                            isLondon={isLondonNonDynamic}
                         />
                     )}
                 </div>
@@ -493,7 +490,6 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                         currencyInfo={currencyInfo}
                         isSubmitting={isSubmittingRating}
                         userZeroVote={userZeroVotes.get(localPub.id)}
-                        isLondon={isLondonNonDynamic}
                     />
                  )}
             </div>
@@ -557,6 +553,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                     <Section>
                         <div className="p-3 bg-gray-200 dark:bg-gray-900 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 break-all animate-fade-in-down">
                             <p><strong>Pub ID:</strong> {localPub.id}</p>
+                            <p><strong>Local Avg Price:</strong> {localPub.local_avg_price ? `${currencyInfo.symbol}${localPub.local_avg_price.toFixed(2)}` : 'N/A'}</p>
                         </div>
                     </Section>
                 )}
@@ -624,7 +621,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                                     )}
                                     <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1 flex items-center justify-center gap-1">
                                         <span>Avg. Price</span>
-                                        {(isLondonNonDynamic || localPub.is_dynamic_price_area || localPub.area_identifier) && <i className="fas fa-hourglass-half text-xs"></i>}
+                                        {(localPub.is_dynamic_price_area || localPub.area_identifier) && <i className="fas fa-hourglass-half text-xs"></i>}
                                     </div>
                                 </div>
 
@@ -697,7 +694,6 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                                             onFetchComments={onFetchComments}
                                             onAddComment={onAddComment}
                                             onDeleteComment={onDeleteComment}
-                                            onReportComment={onReportComment}
                                             onReportContent={onReportContent}
                                             onOpenShareRatingModal={onOpenShareRatingModal}
                                             fallbackLocationData={localPub}

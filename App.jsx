@@ -5,7 +5,7 @@ import { FilterType } from './types.js';
 import { DEFAULT_LOCATION } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { supabase } from './supabase.js';
-import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, normalizePubNameForComparison, isLondonPub, getMobileOS } from './utils.js';
+import { getRankData, getCurrencyInfo, normalizeNominatimResult, normalizeReverseGeocodeResult, normalizePubNameForComparison, getMobileOS, getDisplayPrice } from './utils.js';
 import { initializeAnalytics, trackEvent } from './analytics.js';
 
 import MobileLayout from './components/MobileLayout.jsx';
@@ -230,14 +230,6 @@ const App = () => {
   const [isBackfilling, setIsBackfilling] = useState(false);
 
   // Pub Crawl Planner state
-  const [isPubCrawlPlannerEnabled, setIsPubCrawlPlannerEnabled] = useState(() => {
-    try {
-      const storedValue = localStorage.getItem('stoutly-pub-crawl-enabled');
-      return storedValue ? JSON.parse(storedValue) : false;
-    } catch {
-      return false;
-    }
-  });
   const [activeCrawl, setActiveCrawl] = useState(() => {
     try {
       const storedCrawl = localStorage.getItem('stoutly-active-crawl');
@@ -461,21 +453,31 @@ const App = () => {
   }, [profileViewOrigin]);
 
   const fetchDbPubs = useCallback(async (searchCenter, radius) => {
-    if (!searchCenter) {
+    if (!searchCenter && !showAllDbPubs) {
         setDbPubs([]);
         setIsDbPubsLoaded(true);
         return;
     }
 
-    const { data: pubsData, error: rpcError } = await supabase.rpc('get_pubs_in_radius', {
-      lat_param: searchCenter.lat,
-      lng_param: searchCenter.lng,
-      radius_meters: Math.round(radius), // Fix: ensure radius is an integer for the RPC.
-      limit_count: 500
-    });
+    let pubsData, rpcError;
+
+    if (showAllDbPubs) {
+        const { data, error } = await supabase.from('pubs').select('*').limit(50000);
+        pubsData = data;
+        rpcError = error;
+    } else {
+        const { data, error } = await supabase.rpc('get_pubs_in_radius', {
+          lat_param: searchCenter.lat,
+          lng_param: searchCenter.lng,
+          radius_meters: Math.round(radius),
+          limit_count: 500
+        });
+        pubsData = data;
+        rpcError = error;
+    }
 
     if (rpcError) {
-      console.error("Error fetching rated pubs from DB via RPC:", rpcError);
+      console.error("Error fetching rated pubs from DB:", rpcError);
       setDbPubs([]);
       setIsDbPubsLoaded(true);
       throw rpcError;
@@ -496,17 +498,18 @@ const App = () => {
       guinness_zero_denials: p.guinness_zero_denials,
       certification_status: p.certification_status,
       certified_since: p.certified_since,
+      local_avg_price: p.local_avg_price,
     }));
 
     setDbPubs(formatted);
     setIsDbPubsLoaded(true);
-  }, []);
+  }, [showAllDbPubs]);
   
   const fetchAllRatings = useCallback(async () => {
     // This robust, single-query approach ensures RLS policies for blocking are respected.
     const { data, error } = await supabase
       .from('ratings')
-      .select('*, user:profiles!ratings_user_id_fkey(id, username, avatar_id, level, is_banned)')
+      .select('*, user:profiles!ratings_user_id_fkey(id, username, avatar_id, level, is_banned, is_stoutly_legend)')
       .eq('is_private', false)
       .order('updated_at', { ascending: false });
   
@@ -695,7 +698,7 @@ const App = () => {
     // Fetch notifications
     const { data: notificationsData, error: notificationsError } = await supabase
       .from('notifications')
-      .select('*, actor:actor_id(id, username, avatar_id)')
+      .select('*, actor:actor_id(id, username, avatar_id, is_stoutly_legend)')
       .eq('recipient_id', userId)
       .order('created_at', { ascending: false });
     if (notificationsError) console.error("Error fetching notifications:", notificationsError);
@@ -1011,16 +1014,6 @@ const App = () => {
 
     setActiveTab(tab);
   }, [isDesktop, pubPlacementState, session, userProfile, handleCancelPubPlacement]);
-
-  const handleTogglePubCrawlPlanner = (enabled) => {
-      localStorage.setItem('stoutly-pub-crawl-enabled', JSON.stringify(enabled));
-      setIsPubCrawlPlannerEnabled(enabled);
-      trackEvent('dev_toggle_pub_crawl', { enabled });
-      // If the feature is disabled, navigate away from it if the user is currently on that tab.
-      if (!enabled && activeTab === 'pub_crawl') {
-          handleTabChange('map');
-      }
-  };
   
   const handleEnterCrawlMode = () => {
       trackEvent('enter_crawl_mode');
@@ -1200,7 +1193,7 @@ const App = () => {
         // The pub object might be partial, so we fetch the full record.
         const { data: fetchedPubData, error } = await supabase
             .from('pubs')
-            .select('id, name, address, lat, lng, country_code, country_name, is_closed, guinness_zero_confirmations, guinness_zero_denials, certification_status, certified_since')
+            .select('*')
             .eq('id', pubId)
             .single();
 
@@ -1320,7 +1313,7 @@ const App = () => {
         // Fetch posts for the viewed user
         const { data: posts, error: postsError } = await supabase
             .from('posts')
-            .select('*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))')
+            .select('*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))')
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
@@ -1334,7 +1327,7 @@ const App = () => {
         // We only fetch non-private ratings for other users.
         const { data: ratings, error: ratingsError } = await supabase
             .from('ratings')
-            .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials)')
+            .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials, local_avg_price)')
             .eq('user_id', userId)
             .eq('is_private', false) // Important: respect privacy
             .order('created_at', { ascending: false });
@@ -1403,10 +1396,17 @@ const App = () => {
   const handleSkipCrawlStop = useCallback(async (stopId) => {
     if (!activeCrawl) return;
 
-    trackEvent('skip_crawl_stop', { crawl_id: activeCrawl.id, stop_id: stopId });
+    const isSkipped = activeCrawl.skippedStops.includes(stopId);
+    let newSkippedStops = activeCrawl.skippedStops;
+    let newVisitedStops = activeCrawl.visitedStops.filter(id => id !== stopId);
 
-    const newSkippedStops = [...activeCrawl.skippedStops, stopId];
-    const newVisitedStops = activeCrawl.visitedStops.filter(id => id !== stopId);
+    if (isSkipped) {
+        trackEvent('unskip_crawl_stop', { crawl_id: activeCrawl.id, stop_id: stopId });
+        newSkippedStops = newSkippedStops.filter(id => id !== stopId);
+    } else {
+        trackEvent('skip_crawl_stop', { crawl_id: activeCrawl.id, stop_id: stopId });
+        newSkippedStops = [...newSkippedStops, stopId];
+    }
     
     const updatedCrawl = { ...activeCrawl, visitedStops: newVisitedStops, skippedStops: newSkippedStops };
     setActiveCrawl(updatedCrawl);
@@ -1415,7 +1415,7 @@ const App = () => {
     const { error } = await supabase
         .from('pub_crawl_stops')
         .update({
-            skipped_at: new Date().toISOString(),
+            skipped_at: isSkipped ? null : new Date().toISOString(),
             visited_at: null,
         })
         .eq('id', stopId);
@@ -1966,9 +1966,9 @@ const App = () => {
 
     // The new backend trigger prevents duplicates, so we can process directly.
     // We just need to enrich the notification with the actor's profile data.
-    let actorProfile = { id: newNotification.actor_id, username: 'A user', avatar_id: null };
+    let actorProfile = { id: newNotification.actor_id, username: 'A user', avatar_id: null, is_stoutly_legend: false };
     if (newNotification.actor_id) {
-      const { data, error } = await supabase.from('profiles').select('id, username, avatar_id').eq('id', newNotification.actor_id).single();
+      const { data, error } = await supabase.from('profiles').select('id, username, avatar_id, is_stoutly_legend').eq('id', newNotification.actor_id).single();
       if (!error && data) actorProfile = data;
     }
     const enrichedNotification = { ...newNotification, actor: actorProfile };
@@ -2008,7 +2008,7 @@ const App = () => {
     setToastNotification(null); // Dismiss the toast
   };
 
-  const fetchLevelRequirements = async () => {
+  const fetchLevelRequirements = useCallback(async () => {
     const { data, error } = await supabase
         .from('level_requirements')
         .select('level, total_ratings_required')
@@ -2019,7 +2019,7 @@ const App = () => {
     } else {
         setLevelRequirements(data);
     }
-  };
+  }, []);
   
   const fetchUserData = async () => {
     const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -2085,12 +2085,12 @@ const App = () => {
     const [ratingsResult, postsResult] = await Promise.all([
       supabase
         .from('ratings')
-        .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials)')
+        .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials, local_avg_price)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false }),
       supabase
         .from('posts')
-        .select('*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))')
+        .select('*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
     ]);
@@ -2589,10 +2589,31 @@ const App = () => {
 
     // 3. Filter out any pubs that are outside the current search radius.
     // This handles discrepancies from bounding-box searches.
-    const radiusFilteredPubs = pubsToFilter.filter(pub => {
-        if (!pub.location || !searchOrigin) return false; // Should not happen but safe guard.
-        return getDistance(pub.location, searchOrigin) <= settings.radius;
-    });
+    let radiusFilteredPubs = pubsToFilter;
+    if (!showAllDbPubs) {
+        radiusFilteredPubs = pubsToFilter.filter(pub => {
+            if (!pub.location || !searchOrigin) return false; // Should not happen but safe guard.
+            return getDistance(pub.location, searchOrigin) <= settings.radius;
+        });
+    }
+
+    if (settings.showUserRatedPubs && userRatings) {
+        const existingPubIds = new Set(radiusFilteredPubs.map(p => p.id));
+        userRatings.forEach(rating => {
+            if (rating.pubId && rating.pubLocation && !existingPubIds.has(rating.pubId)) {
+                radiusFilteredPubs.push({
+                    id: rating.pubId,
+                    name: rating.pubName,
+                    address: rating.pubAddress,
+                    location: rating.pubLocation,
+                    country_code: rating.pubCountryCode,
+                    country_name: rating.pubCountryName,
+                    is_closed: closedOsmPubIds.has(rating.pubId) || closedStoutlyPubIds.has(rating.pubId),
+                });
+                existingPubIds.add(rating.pubId);
+            }
+        });
+    }
 
     // 4. Attach ratings and scores to the final list of pubs to be displayed.
     const finalPubsList = radiusFilteredPubs.map(pub => {
@@ -2617,7 +2638,7 @@ const App = () => {
         setInitialSearchComplete(true);
     }
 
-  }, [showAllDbPubs, mapSearchResults, dbPubs, allRatings, allRatedPubsData, pubScores, searchOrigin, getDistance, closedOsmPubIds, closedStoutlyPubIds, osmPubOverrides, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded, isClosedStoutlyPubsLoaded, settings.radius]);
+  }, [showAllDbPubs, mapSearchResults, dbPubs, allRatings, allRatedPubsData, pubScores, searchOrigin, getDistance, closedOsmPubIds, closedStoutlyPubIds, osmPubOverrides, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded, isClosedStoutlyPubsLoaded, settings.radius, settings.showUserRatedPubs, userRatings]);
 
   // This effect will run after pubs are loaded and look for any without an address
   useEffect(() => {
@@ -2793,23 +2814,14 @@ const App = () => {
 
   const getComparablePrice = useCallback((pub) => {
       if (!pub?.ratings?.length) return 999;
-      const ratingsWithExactPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
-      if (ratingsWithExactPrice.length > 0) {
-          return ratingsWithExactPrice.reduce((acc, r) => acc + r.exact_price, 0) / ratingsWithExactPrice.length;
+      const recentMedianPrice = getDisplayPrice(pub.ratings);
+      if (recentMedianPrice !== null) {
+          return recentMedianPrice;
       }
       
       const avgStarRating = getAverageRating(pub.ratings, 'price');
-      const isLondonNonDynamic = isLondonPub(pub) && !pub.is_dynamic_price_area;
 
       if (avgStarRating === 0) return 999;
-
-      if (isLondonNonDynamic) {
-          if (avgStarRating > 4.5) return 5.50;  // < 6.00
-          if (avgStarRating > 3.5) return 6.37;  // 6.00 - 6.74
-          if (avgStarRating > 2.5) return 7.12;  // 6.75 - 7.49
-          if (avgStarRating > 1.5) return 8.00;  // 7.50 - 8.49
-          return 9.00;  // > 8.49
-      }
 
       // Original logic
       if (avgStarRating > 4.5) return 4.25; if (avgStarRating > 3.5) return 5.00;
@@ -2852,7 +2864,7 @@ const App = () => {
     
     const { data: updatedPubData, error: pubFetchError } = await supabase
         .from('pubs')
-        .select('id, name, address, lat, lng, country_code, country_name, is_closed, guinness_zero_confirmations, guinness_zero_denials, certification_status, certified_since')
+        .select('*')
         .eq('id', pubId)
         .single();
 
@@ -2931,8 +2943,24 @@ const App = () => {
             imageUrl = supabase.storage.from('pint-images').getPublicUrl(fileName).data.publicUrl;
         }
 
+        let imputed_price = null;
+        if (exact_price) {
+            imputed_price = parseFloat(exact_price);
+        } else if (price && currencyInfo.tiers) {
+            const t = currencyInfo.tiers;
+            if (price === 5) imputed_price = t[0] - ((t[1] - t[0]) / 2);
+            else if (price === 4) imputed_price = (t[0] + t[1]) / 2;
+            else if (price === 3) imputed_price = (t[1] + t[2]) / 2;
+            else if (price === 2) imputed_price = (t[2] + t[3]) / 2;
+            else if (price === 1) imputed_price = t[3] + ((t[3] - t[2]) / 2);
+            
+            imputed_price = Math.round(imputed_price * 100) / 100;
+        }
+
         const ratingPayload = { 
             pub_id: pubId, user_id: session.user.id, price, quality, exact_price, is_private, image_url: imageUrl, message,
+            local_avg_at_time: selectedPub.local_avg_price ? parseFloat(selectedPub.local_avg_price) : null,
+            imputed_price: imputed_price
         };
         const { error: dbError } = isUpdating
           ? await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
@@ -3192,6 +3220,13 @@ const App = () => {
     trackEvent('change_filter', { filter_type: newFilter });
   };
   
+  useEffect(() => {
+    if (mapRef.current) {
+        const searchCenter = mapRef.current.getCenter();
+        fetchDbPubs({ lat: searchCenter.lat, lng: searchCenter.lng }, settings.radius);
+    }
+  }, [showAllDbPubs, fetchDbPubs, settings.radius]);
+
   const handleToggleShowAllDbPubs = () => {
       trackEvent('dev_toggle_all_pubs', { enabled: !showAllDbPubs });
       setShowAllDbPubs(prev => !prev);
@@ -3299,8 +3334,6 @@ const App = () => {
     setSettingsSubView(page);
     setActiveTab('settings'); // Switch to settings tab to host the admin page
   };
-
-  const onViewSocialHub = () => handleViewAdminPage('social');
 
   const handleUpdatePlacementLocation = useCallback((newLocation) => {
     setFinalPlacementLocation(newLocation);
@@ -3722,7 +3755,7 @@ const App = () => {
     setIsCommentsLoading(true);
     const { data, error } = await supabase
       .from('comments')
-      .select('*, user:user_id(id, username, avatar_id, level, is_developer)')
+      .select('*, user:user_id(id, username, avatar_id, level, is_developer, is_stoutly_legend)')
       .eq('rating_id', ratingId)
       .order('created_at', { ascending: true });
 
@@ -3756,7 +3789,7 @@ const App = () => {
     setIsPostCommentsLoading(true);
     const { data, error } = await supabase
       .from('post_comments')
-      .select('*, user:user_id(id, username, avatar_id, level, is_developer)')
+      .select('*, user:user_id(id, username, avatar_id, level, is_developer, is_stoutly_legend)')
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
@@ -4103,7 +4136,7 @@ const App = () => {
     const { data: newComment, error } = await supabase
       .from('comments')
       .insert(payload)
-      .select('*, user:user_id(id, username, avatar_id, level, is_developer)')
+      .select('*, user:user_id(id, username, avatar_id, level, is_developer, is_stoutly_legend)')
       .single();
 
     if (error) {
@@ -4182,14 +4215,12 @@ const App = () => {
       isChangingPassword, handleChangePassword,
       userTrophies, allTrophies, fetchUserTrophies, setUnlockedTrophiesToShow,
       dbPubs,
-      onViewSocialHub,
       geocodingPubIds,
       isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed,
       isStPaddysModeActive,
       top10PubIds,
       systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode: handleToggleGlobalStPaddysMode, onToggleLocalStPaddysMode: handleToggleLocalStPaddysMode,
       stPaddysModeEnabled, setStPaddysModeEnabled,
-      isPubCrawlPlannerEnabled, onTogglePubCrawlPlanner: handleTogglePubCrawlPlanner,
       PubCrawlPage,
       activeCrawl, onStartCrawl: handleStartCrawl, onEndCrawl: handleEndCrawl, onToggleCrawlStop: handleToggleCrawlStop, onReorderStops: handleReorderStops,
       onAddStop: handleAddStop, onDeleteStop: handleDeleteStop,
@@ -4236,6 +4267,7 @@ const App = () => {
       handleUnblockUser,
       socialsUpdateCount,
       onDeleteAccountRequest: handleDeleteAccountRequest,
+      onProfileUpdate: handleProfileUpdate,
   };
 
   const Layout = isDesktop ? DesktopLayout : MobileLayout;

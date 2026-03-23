@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Avatar from './Avatar.jsx';
+import CrownIcon from './CrownIcon.jsx';
 import { trackEvent } from '../analytics.js';
 import StarRating from './StarRating.jsx';
 import { getCurrencyInfo } from '../utils.js';
@@ -66,9 +67,14 @@ const SocialContentCard = ({ content }) => {
                 <div className="md:col-span-1 space-y-3">
                     <h4 className="font-bold text-gray-800 dark:text-white">Original Content</h4>
                     <div className="flex items-center space-x-2">
-                        <Avatar avatarId={user.avatar_id} className="w-8 h-8 flex-shrink-0" />
+                        <div className={`flex-shrink-0 rounded-full ${user.is_stoutly_legend ? 'ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}>
+                            <Avatar avatarId={user.avatar_id} className="w-8 h-8 flex-shrink-0" />
+                        </div>
                         <div>
-                            <p className="font-semibold text-sm text-gray-700 dark:text-gray-300">{user.username}</p>
+                            <p className="font-semibold text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                                {user.username}
+                                {user.is_stoutly_legend && <CrownIcon className="w-3 h-3 text-amber-500" title="Stoutly Legend" />}
+                            </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">at {pub.name}</p>
                         </div>
                     </div>

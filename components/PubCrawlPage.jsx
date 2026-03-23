@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabase.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import { trackEvent } from '../analytics.js';
+import { Capacitor } from '@capacitor/core';
 import PubCrawlSetupModal from './PubCrawlSetupModal.jsx';
 import PubCrawlGenerationView from './PubCrawlGenerationView.jsx';
 import PubCrawlDetailView from './PubCrawlDetailView.jsx';
@@ -579,20 +580,22 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
         return (
             <div className="flex flex-col relative h-full overflow-y-auto">
                 <header className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
-                    <div className="bg-amber-100 dark:bg-amber-900 border-b border-amber-300 dark:border-amber-700 px-4 py-1.5 sm:py-3 w-full relative z-50">
-                        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1 sm:gap-2">
-                            <p className="text-xs sm:text-sm text-amber-900 dark:text-amber-100 font-medium flex items-center">
-                                <i className="fas fa-flask mr-2 text-amber-600 dark:text-amber-400"></i>
-                                <span>This feature is in <strong>Beta</strong>. We're actively improving it!</span>
-                            </p>
-                            <button
-                                onClick={() => setIsFeedbackModalOpen(true)}
-                                className="text-xs font-bold bg-white dark:bg-gray-800 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-gray-700 px-4 py-2 rounded-full transition-colors whitespace-nowrap shadow-sm"
-                            >
-                                Give Feedback
-                            </button>
+                    {!Capacitor.isNativePlatform() && (
+                        <div className="bg-amber-100 dark:bg-amber-900 border-b border-amber-300 dark:border-amber-700 px-4 py-1.5 sm:py-3 w-full relative z-50">
+                            <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1 sm:gap-2">
+                                <p className="text-xs sm:text-sm text-amber-900 dark:text-amber-100 font-medium flex items-center">
+                                    <i className="fas fa-flask mr-2 text-amber-600 dark:text-amber-400"></i>
+                                    <span>This feature is in <strong>Beta</strong>. We're actively improving it!</span>
+                                </p>
+                                <button
+                                    onClick={() => setIsFeedbackModalOpen(true)}
+                                    className="text-xs font-bold bg-white dark:bg-gray-800 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-gray-700 px-4 py-2 rounded-full transition-colors whitespace-nowrap shadow-sm"
+                                >
+                                    Give Feedback
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )}
                     <div className="p-4 w-full">
                         <div className="max-w-4xl mx-auto">
                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">

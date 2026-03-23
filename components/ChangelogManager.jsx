@@ -159,6 +159,27 @@ const ChangelogManager = ({ onClose }) => {
         setItemToDelete(null);
     };
 
+    const handleExportTxt = (item) => {
+        let content = `${item.version} - ${item.title || 'Update'}\n`;
+        content += `Release Date: ${new Date(item.release_date).toLocaleDateString()}\n\n`;
+        
+        if (item.changes && item.changes.length > 0) {
+            item.changes.forEach(change => {
+                content += `- ${change.description}\n`;
+            });
+        }
+        
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `changelog_${item.version.replace(/\s+/g, '_')}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     const modalContent = (
         <div
             className="fixed inset-0 bg-black/60 z-[1300] flex items-center justify-center p-4 animate-modal-fade-in"
@@ -207,8 +228,9 @@ const ChangelogManager = ({ onClose }) => {
                                             </span>
                                         </div>
                                         <div className="flex items-center space-x-2">
-                                            <button onClick={() => { setCurrentItem(item); setView('form'); }} className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"><i className="fas fa-pencil-alt"></i></button>
-                                            <button onClick={() => setItemToDelete(item)} className="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full"><i className="fas fa-trash-alt"></i></button>
+                                            <button onClick={() => handleExportTxt(item)} className="w-8 h-8 flex items-center justify-center text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-full" title="Export to TXT"><i className="fas fa-download"></i></button>
+                                            <button onClick={() => { setCurrentItem(item); setView('form'); }} className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full" title="Edit"><i className="fas fa-pencil-alt"></i></button>
+                                            <button onClick={() => setItemToDelete(item)} className="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full" title="Delete"><i className="fas fa-trash-alt"></i></button>
                                         </div>
                                     </li>
                                 ))}

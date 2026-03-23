@@ -5,6 +5,7 @@ import Avatar from './Avatar.jsx';
 import { getRankData } from '../utils.js';
 import { trackEvent } from '../analytics.js';
 import { Capacitor } from '@capacitor/core';
+import QRCode from 'react-qr-code';
 
 const StatCard = ({ label, value }) => (
     <div className="bg-gray-100 dark:bg-gray-700/50 p-2 rounded-md flex flex-col items-center justify-center">
@@ -112,7 +113,9 @@ const ShareProfileModal = ({ user, onClose }) => {
                         </div>
                         
                         <div className="mt-4 flex justify-center items-center gap-4 bg-gray-100 dark:bg-gray-700/50 p-2 rounded-md">
-                            <img src={qrCodeUrl} alt="QR Code for profile link" className="w-20 h-20 rounded-md" />
+                            <div className="bg-white p-2 rounded-md">
+                                <QRCode value={qrTextUrl} size={120} level="H" fgColor="#1A120F" bgColor="#FFFFFF" />
+                            </div>
                             <div className="text-left">
                                 <p className="font-bold text-sm">Scan to view Profile</p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">See their stats and ratings on Stoutly.</p>

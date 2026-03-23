@@ -477,6 +477,7 @@ const PubCrawlDetailView = ({ crawl, onBack, onGiveFeedback, onSelectPub, active
                             initialViewState={{ bounds: bounds, fitBoundsOptions: { padding: 40 } }}
                             style={{ height: '100%', width: '100%' }}
                             mapStyle={mapStyle}
+                            projection="globe"
                         >
                             {stops.map((stop, index) => (
                                 <Marker key={stop.id} longitude={stop.pub.location.lng} latitude={stop.pub.location.lat}>

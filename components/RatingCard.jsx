@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import Avatar from './Avatar.jsx';
+import CrownIcon from './CrownIcon.jsx';
 import StarRating from './StarRating.jsx';
-import { getRankData, formatTimeAgo, getCurrencyInfo } from '../utils.js';
+import { getRankData, formatTimeAgo, getCurrencyInfo, getStarRatingFromPrice } from '../utils.js';
 import CommentsSection from './CommentsSection.jsx';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 
@@ -17,6 +18,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
     const pubLng = rating.pub?.lng || rating.pub_lng || rating.pubLocation?.lng || fallbackLocationData?.location?.lng;
     const pubCountryCode = rating.pub?.country_code || rating.pub_country_code || rating.pubCountryCode || fallbackLocationData?.country_code;
     const pubCountryName = rating.pub?.country_name || rating.pub_country_name || rating.pubCountryName || fallbackLocationData?.country_name;
+    const pubLocalAvgPrice = rating.pub?.local_avg_price || rating.pub_local_avg_price || fallbackLocationData?.local_avg_price;
 
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
     const { rates: exchangeRates } = useContext(ExchangeRatesContext);
@@ -31,11 +33,16 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
     const effectiveLocationData = {
         country_code: pubCountryCode,
         country_name: pubCountryName,
-        address: pubAddress
+        address: pubAddress,
+        local_avg_price: pubLocalAvgPrice
     };
     
     const currencyInfo = getCurrencyInfo(effectiveLocationData);
     const rankData = user.level ? getRankData(user.level) : null;
+    
+    // Dynamically calculate the star rating based on the exact_price and the CURRENT local_avg_price
+    // If exact_price is missing, fallback to the static price rating saved in the database
+    const displayPriceRating = exact_price > 0 ? getStarRatingFromPrice(exact_price, currencyInfo.tiers) : price;
     
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -128,7 +135,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
         <div data-rating-id={id} className="relative bg-white dark:bg-gray-800 rounded-lg shadow-md">
             {/* Card Header */}
             <div className="p-3 flex items-center space-x-3">
-                <button onClick={() => onViewProfile(user.id, 'community')} className="flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                <button onClick={() => onViewProfile(user.id, 'community')} className={`flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${user.is_stoutly_legend ? 'ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}>
                      <Avatar avatarId={user.avatar_id} className="w-10 h-10" />
                 </button>
                 <div className="flex-grow min-w-0">
@@ -136,6 +143,9 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                         <button onClick={() => onViewProfile(user.id, 'community')} className="font-semibold text-gray-800 dark:text-gray-200 hover:underline truncate">
                             {user.username}
                         </button>
+                        {user.is_stoutly_legend && (
+                            <CrownIcon className="w-4 h-4 text-amber-500" title="Stoutly Legend" />
+                        )}
                         {rankData && (
                             <i className={`fas ${rankData.icon} text-sm text-amber-500 dark:text-amber-400`} title={rankData.name}></i>
                         )}
@@ -223,7 +233,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                     <div className="flex items-center space-x-4">
                         <div className="flex items-center space-x-1 text-sm" title="Price">
                             <i className="fas fa-tag text-green-500/80"></i>
-                            <StarRating rating={price} color="text-green-400" />
+                            <StarRating rating={displayPriceRating} color="text-green-400" />
                         </div>
                             <div className="flex items-center space-x-1 text-sm" title="Quality">
                             <i className="fas fa-beer text-amber-500/80"></i>

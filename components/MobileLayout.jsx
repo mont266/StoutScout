@@ -29,14 +29,13 @@ import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
 import NotificationToast from './NotificationToast.jsx';
-import SocialContentHub from './SocialContentHub.jsx';
 
 // Specific UI Elements
 import ActiveCrawlTracker from './ActiveCrawlTracker.jsx';
 import LocationPermissionPrompt from './LocationPermissionPrompt.jsx';
 import PlacementConfirmationBar from './PlacementConfirmationBar.jsx';
 
-const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount, isPubCrawlPlannerEnabled, userProfile, settings, isNavShrunk }) => {
+const TabBar = ({ activeTab, onTabChange, unreadNotificationsCount, userProfile, settings, isNavShrunk }) => {
   const baseTabs = [
     { id: 'map', icon: 'fa-map-marked-alt', label: 'Explore' },
     { id: 'community', icon: 'fa-users', label: 'Community' },
@@ -124,10 +123,8 @@ const MobileLayout = (props) => {
         onOpenSharePostModal,
         scrollToSection, onScrollComplete,
         isChangingPassword, handleChangePassword,
-        onViewSocialHub,
         geocodingPubIds,
         isStPaddysModeActive,
-        isPubCrawlPlannerEnabled,
         activeCrawl, onStartCrawl, onEndCrawl,
         onEnterCrawlMode,
         handleAddPubClick,
@@ -238,9 +235,6 @@ const MobileLayout = (props) => {
         if (activeTab === 'settings') {
             if (settingsSubView === 'moderation') {
                 return <ModerationPage onBack={() => handleViewAdminPage(null)} {...props} />;
-            }
-             if (settingsSubView === 'social') {
-                return <SocialContentHub onBack={() => handleViewAdminPage(null)} {...props} />;
             }
             if (legalPageView === 'terms') return <TermsOfUsePage onBack={() => handleViewLegal(null)} />;
             if (legalPageView === 'privacy') return <PrivacyPolicyPage onBack={() => handleViewLegal(null)} />;
@@ -409,7 +403,6 @@ const MobileLayout = (props) => {
                 activeTab={activeTab} 
                 onTabChange={handleTabChange} 
                 unreadNotificationsCount={unreadNotificationsCount} 
-                isPubCrawlPlannerEnabled={isPubCrawlPlannerEnabled}
                 userProfile={userProfile}
                 settings={settings}
                 isNavShrunk={isNavShrunk}

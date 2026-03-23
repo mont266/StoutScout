@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { getDistance } from 'geolib';
+import { Capacitor } from '@capacitor/core';
 import Map, { Marker, Source, Layer, NavigationControl, GeolocateControl } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import PubDetails from './PubDetails.jsx';
@@ -53,6 +54,7 @@ const CrawlModePage = (props) => {
     const geolocateControlRef = useRef(null);
     const stopCardRefs = useRef({});
     const isProgrammaticScroll = useRef(false);
+    const scrollTimeoutRef = useRef(null);
     const isInitialMapLoad = useRef(true);
     const [routeGeoJSON, setRouteGeoJSON] = useState(null);
     const [isRouteLoading, setIsRouteLoading] = useState(true);
@@ -168,6 +170,8 @@ const CrawlModePage = (props) => {
 
         if (!isDesktop && carouselRef.current && stopCardRefs.current[currentStopIndex]) {
             isProgrammaticScroll.current = true;
+            if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+
             const carousel = carouselRef.current;
             const stopCard = stopCardRefs.current[currentStopIndex];
             const scrollLeft = stopCard.offsetLeft - (carousel.offsetWidth / 2) + (stopCard.offsetWidth / 2);
@@ -177,9 +181,9 @@ const CrawlModePage = (props) => {
                 behavior: 'smooth'
             });
 
-            setTimeout(() => {
+            scrollTimeoutRef.current = setTimeout(() => {
                 isProgrammaticScroll.current = false;
-            }, 1000); // Debounce to avoid conflict with user scroll
+            }, 1500); // Debounce to avoid conflict with user scroll
         }
         }, [currentStopIndex, activeCrawl.stops, isDesktop]);
 
@@ -452,7 +456,7 @@ const CrawlModePage = (props) => {
                     ></div>
                 </div>
             </header>
-            
+
             <div className={`relative flex-1 min-h-0 flex ${isDesktop ? 'flex-row' : 'flex-col'}`}>
                 {isDesktop && (
                     <div className="w-96 flex-shrink-0 flex flex-col bg-gray-800 border-r border-gray-700">
@@ -508,6 +512,7 @@ const CrawlModePage = (props) => {
                         bearing={isNavigationModeActive ? mapRef.current?.getBearing() : 0}
                         mapStyle={mapStyle}
                         padding={mapPadding}
+                        projection="globe"
                     >
                                                 <GeolocateControl
                             ref={geolocateControlRef}

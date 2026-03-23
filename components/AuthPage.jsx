@@ -218,6 +218,22 @@ const AuthPage = ({ onClose }) => {
             throw new Error(ageValidationError);
         }
         
+        // Check if username is already taken
+        const { data: existingUser, error: checkError } = await supabase
+            .from('profiles')
+            .select('username')
+            .ilike('username', username)
+            .maybeSingle();
+
+        if (checkError) {
+            console.error("Error checking username:", checkError);
+            throw new Error("Could not verify username availability. Please try again.");
+        }
+
+        if (existingUser) {
+            throw new Error("Username is already taken. Please choose another one.");
+        }
+
         const signupUtmSource = sessionStorage.getItem('stoutly-utm-source');
 
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -231,7 +247,7 @@ const AuthPage = ({ onClose }) => {
               dob,
               country_code: countryCode,
             },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: 'app.stoutly.co.uk/auth/callback',
           },
         });
 

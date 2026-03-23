@@ -4,8 +4,9 @@ import Icon from './Icon.jsx';
 import StarRating from './StarRating.jsx';
 import { trackEvent } from '../analytics.js';
 import { Capacitor } from '@capacitor/core';
-import { getCurrencyInfo } from '../utils.js';
+import { getCurrencyInfo, getDisplayPrice } from '../utils.js';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
+import QRCode from 'react-qr-code';
 
 const ScoreGauge = ({ score }) => {
     if (score === null || score === undefined) return null;
@@ -88,33 +89,32 @@ const ShareModal = ({ pub, onClose, loggedInUserProfile }) => {
     const currencyInfo = getCurrencyInfo(pub);
 
     const priceInfo = useMemo(() => {
-        const ratingsWithPrice = pub.ratings.filter(r => r.exact_price != null && r.exact_price > 0);
-        const avgStarPrice = pub.ratings.length > 0 ? pub.ratings.reduce((acc, r) => acc + r.price, 0) / pub.ratings.length : 0;
-        if (ratingsWithPrice.length === 0) return { text: null, stars: avgStarPrice, originalPrice: null, convertedPrice: null, originalCode: null, convertedCode: null };
+        const recentMedianPrice = getDisplayPrice(pub.ratings);
+        const avgStarPrice = pub.dynamic_price_score !== undefined && pub.dynamic_price_score !== null
+            ? pub.dynamic_price_score
+            : pub.ratings.length > 0 ? pub.ratings.reduce((acc, r) => acc + r.price, 0) / pub.ratings.length : 0;
+        if (recentMedianPrice === null) return { text: null, stars: avgStarPrice, originalPrice: null, convertedPrice: null, originalCode: null, convertedCode: null };
 
-        const total = ratingsWithPrice.reduce((acc, r) => acc + r.exact_price, 0);
-        const average = total / ratingsWithPrice.length;
-        
         const userHomeCurrency = getCurrencyInfo(loggedInUserProfile || { country_code: 'gb' });
         let convertedPriceText = null;
         let convertedCode = null;
         if (
-            average > 0 && 
+            recentMedianPrice > 0 && 
             exchangeRates &&
             currencyInfo.code !== userHomeCurrency.code &&
             exchangeRates[currencyInfo.code] &&
             exchangeRates[userHomeCurrency.code]
         ) {
-            const priceInGbp = average / exchangeRates[currencyInfo.code];
+            const priceInGbp = recentMedianPrice / exchangeRates[currencyInfo.code];
             const convertedPrice = priceInGbp * exchangeRates[userHomeCurrency.code];
             convertedPriceText = `${userHomeCurrency.symbol}${convertedPrice.toFixed(2)}`;
             convertedCode = userHomeCurrency.code;
         }
 
         return { 
-            text: `${currencyInfo.symbol}${average.toFixed(2)}`, 
+            text: `${currencyInfo.symbol}${recentMedianPrice.toFixed(2)}`, 
             stars: avgStarPrice,
-            originalPrice: `${currencyInfo.symbol}${average.toFixed(2)}`,
+            originalPrice: `${currencyInfo.symbol}${recentMedianPrice.toFixed(2)}`,
             convertedPrice: convertedPriceText,
             originalCode: currencyInfo.code,
             convertedCode: convertedCode,
@@ -229,7 +229,9 @@ const ShareModal = ({ pub, onClose, loggedInUserProfile }) => {
                         )}
                         
                         <div className="mt-4 flex justify-center items-center gap-4 bg-gray-100 dark:bg-gray-700/50 p-2 rounded-md">
-                            <img src={qrCodeUrl} alt="QR Code for pub link" className="w-20 h-20 rounded-md" />
+                            <div className="bg-white p-1 rounded-md">
+                                <QRCode value={qrTextUrl} size={80} level="H" fgColor="#1A120F" bgColor="#FFFFFF" />
+                            </div>
                             <div className="text-left">
                                 <p className="font-bold text-sm">Scan or Share</p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">Get a direct link to this pub on Stoutly.</p>

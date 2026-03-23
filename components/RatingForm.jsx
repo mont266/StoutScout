@@ -6,7 +6,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 
-const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote, isLondon = false }) => {
+const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImageUrl, isSubmitting, existingIsPrivate, userZeroVote }) => {
   const [price, setPrice] = useState(0);
   const [quality, setQuality] = useState(0);
   const [priceInput, setPriceInput] = useState('');
@@ -26,11 +26,11 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
   const [validationError, setValidationError] = useState(null);
   const isDesktop = useIsDesktop();
 
-  const { symbol: currencySymbol = '£', examplePrice = '5.70', tiers } = currencyInfo;
+  const { symbol: currencySymbol = '£', examplePrice = '5.70', tiers, isDynamic } = currencyInfo;
 
   // Dynamically create price labels based on the currency symbol and tiers
   const priceLabels = useMemo(() => {
-    const thresholds = isLondon ? [6.00, 6.75, 7.50, 8.50] : tiers;
+    const thresholds = tiers;
     if (!thresholds) return [];
 
     const format = (val) => val >= 100 ? val.toFixed(0) : val.toFixed(2);
@@ -42,7 +42,7 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
         `Cheap\n(e.g., ${currencySymbol}${format(thresholds[0])} - ${currencySymbol}${format(thresholds[1]-0.01)})`,
         `Very Cheap\n(e.g., < ${currencySymbol}${format(thresholds[0])})`
     ];
-  }, [currencySymbol, isLondon, tiers]);
+  }, [currencySymbol, tiers, isDynamic]);
 
   // This effect resets the main form fields when the rating being edited changes.
   useEffect(() => {
@@ -76,7 +76,7 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
   const handlePriceInputChange = (e) => {
     const newPrice = e.target.value;
     setPriceInput(newPrice);
-    setPrice(getStarRatingFromPrice(newPrice, isLondon, tiers));
+    setPrice(getStarRatingFromPrice(newPrice, tiers));
   };
   
   const handlePriceStarChange = (newStarRating) => {

@@ -7,9 +7,9 @@ import ScrollToTopButton from './ScrollToTopButton.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import CreatePostInput from './CreatePostInput.jsx';
 
-const PAGE_SIZE = 10; // Used when filtering to a single content type
-const RATINGS_PER_PAGE_MIXED = 7;
-const POSTS_PER_PAGE_MIXED = 3;
+const PAGE_SIZE = 20; // Used when filtering to a single content type
+const RATINGS_PER_PAGE_MIXED = 15;
+const POSTS_PER_PAGE_MIXED = 5;
 
 
 const filterOptions = [
@@ -35,11 +35,10 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     const [feedItems, setFeedItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
-    const loaderRef = useRef(null);
     const filterMenuRef = useRef(null);
+    const offsetsRef = useRef({ rating: 0, post: 0 });
     
     const [pullPosition, setPullPosition] = useState(0);
     const [isPulling, setIsPulling] = useState(false);
@@ -52,23 +51,29 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     const [isScrolled, setIsScrolled] = useState(false);
     const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
 
-    const isRefreshing = loading && page === 1;
+    const isRefreshing = loading && offsetsRef.current.rating === 0 && offsetsRef.current.post === 0;
 
     const dbPubsMap = useMemo(() => {
         return new Map((dbPubs || []).map(p => [p.id, p]));
     }, [dbPubs]);
 
-    const fetchFeedItems = useCallback(async (pageNum) => {
+    const fetchFeedItems = useCallback(async (isRefresh = false) => {
         setLoading(true);
         setError(null);
-        if (pageNum === 1) trackEvent('view_community_feed', { filter, content_filter: contentFilter, post_sub_filter: postSubFilter });
+        
+        if (isRefresh) {
+            offsetsRef.current = { rating: 0, post: 0 };
+            trackEvent('view_community_feed', { filter, content_filter: contentFilter, post_sub_filter: postSubFilter });
+        }
+        
+        const { rating: ratingOffset, post: postOffset } = offsetsRef.current;
     
-       try {
+        try {
             let ratingsQuery = contentFilter !== 'posts'
-                ? supabase.from('ratings').select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer), pub:pub_id!inner(id, name, address, lat, lng, country_code, country_name)`).eq('is_private', false).eq('user.is_banned', false)
+                ? supabase.from('ratings').select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend), pub:pub_id!inner(id, name, address, lat, lng, country_code, country_name, local_avg_price)`).eq('is_private', false).eq('user.is_banned', false)
                 : null;
             let postsQuery = contentFilter !== 'ratings'
-                ? supabase.from('posts').select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))`).eq('user.is_banned', false)
+                ? supabase.from('posts').select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))`).eq('user.is_banned', false)
                 : null;
 
             // Handle time period filter
@@ -97,20 +102,17 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                 }
             }
             
-            const from = (pageNum - 1);
             const promises = [];
 
             // Handle pagination
             if (ratingsQuery) {
-                const pageSize = contentFilter === 'ratings' ? PAGE_SIZE : RATINGS_PER_PAGE_MIXED;
-                promises.push(ratingsQuery.range(from * pageSize, from * pageSize + pageSize - 1));
+                promises.push(ratingsQuery.range(ratingOffset, ratingOffset + PAGE_SIZE - 1));
             } else {
                 promises.push(Promise.resolve({ data: [], error: null }));
             }
 
             if (postsQuery) {
-                const pageSize = contentFilter === 'posts' ? PAGE_SIZE : POSTS_PER_PAGE_MIXED;
-                promises.push(postsQuery.range(from * pageSize, from * pageSize + pageSize - 1));
+                promises.push(postsQuery.range(postOffset, postOffset + PAGE_SIZE - 1));
             } else {
                 promises.push(Promise.resolve({ data: [], error: null }));
             }
@@ -125,19 +127,41 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
 
             const combined = [...newRatings, ...newPosts];
 
+            combined.sort((a, b) => {
+                if (filter.sortBy === 'like_count') {
+                    const diff = (b.like_count || 0) - (a.like_count || 0);
+                    if (diff !== 0) return diff;
+                }
+                return new Date(b.created_at) - new Date(a.created_at);
+            });
+
+            const topItems = combined.slice(0, PAGE_SIZE);
+
+            const rCount = topItems.filter(item => item.item_type === 'rating').length;
+            const pCount = topItems.filter(item => item.item_type === 'post').length;
+
+            offsetsRef.current = {
+                rating: ratingOffset + rCount,
+                post: postOffset + pCount
+            };
+
             // Client-side filtering as a safeguard against RLS issues
-            const filtered = combined.filter(item => item.user && !blockList.has(item.user.id));
-            
+            const validTopItems = topItems.filter(item => item.user && !blockList.has(item.user.id));
+
             setFeedItems(prev => {
-                const allItems = pageNum === 1 ? filtered : [...prev, ...filtered];
+                const allItems = isRefresh ? validTopItems : [...prev, ...validTopItems];
                 const uniqueItems = Array.from(new Map(allItems.map(item => [`${item.item_type}-${item.id}`, item])).values());
-                // Re-sort everything by creation date after merging
-                return uniqueItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));;
+                // Re-sort everything by the selected filter after merging
+                return uniqueItems.sort((a, b) => {
+                    if (filter.sortBy === 'like_count') {
+                        const diff = (b.like_count || 0) - (a.like_count || 0);
+                        if (diff !== 0) return diff;
+                    }
+                    return new Date(b.created_at) - new Date(a.created_at);
+                });
             });
     
-            if (contentFilter === 'ratings') setHasMore(newRatings.length === PAGE_SIZE);
-            else if (contentFilter === 'posts') setHasMore(newPosts.length === PAGE_SIZE);
-            else setHasMore(newRatings.length === RATINGS_PER_PAGE_MIXED || newPosts.length === POSTS_PER_PAGE_MIXED);
+            setHasMore(newRatings.length === PAGE_SIZE || newPosts.length === PAGE_SIZE);
      
         } catch (err) {
             console.error("Error fetching community feed:", err);
@@ -238,37 +262,34 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     const handleRefresh = useCallback((method = 'button') => {
         if (loading) return;
         trackEvent('refresh_feed', { feed_type: 'community', method });
-        setPage(1);
         setHasMore(true);
-        fetchFeedItems(1);
+        fetchFeedItems(true);
     }, [fetchFeedItems, loading]);
 
     useEffect(() => {
-        setPage(1);
         setHasMore(true);
         setFeedItems([]);
-        fetchFeedItems(1);
+        fetchFeedItems(true);
     }, [fetchFeedItems, postSuccessCount, socialsUpdateCount]);
 
-    useEffect(() => {
-        const observer = new IntersectionObserver(
-            entries => {
-                if (entries[0].isIntersecting && !loading && hasMore) {
-                    setPage(prevPage => prevPage + 1);
-                }
-            },
-            { threshold: 1.0, rootMargin: '0px 0px 200px 0px' }
-        );
+    const loadingRef = useRef(loading);
+    const hasMoreRef = useRef(hasMore);
 
-        if (loaderRef.current) observer.observe(loaderRef.current);
-        return () => {
-            if (loaderRef.current) observer.unobserve(loaderRef.current);
-        };
+    useEffect(() => {
+        loadingRef.current = loading;
+        hasMoreRef.current = hasMore;
     }, [loading, hasMore]);
 
-    useEffect(() => {
-        if (page > 1) fetchFeedItems(page);
-    }, [page, fetchFeedItems]);
+    const observerRef = useRef(null);
+    const lastElementRef = useCallback(node => {
+        if (observerRef.current) observerRef.current.disconnect();
+        observerRef.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMoreRef.current && !loadingRef.current) {
+                fetchFeedItems(false);
+            }
+        }, { threshold: 1.0, rootMargin: '0px 0px 200px 0px' });
+        if (node) observerRef.current.observe(node);
+    }, [fetchFeedItems]);
     
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -353,7 +374,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
     const activeFilterLabel = filterOptions.find(opt => opt.sortBy === filter.sortBy && opt.timePeriod === filter.timePeriod)?.label || 'Newest';
 
     const renderContent = () => {
-        if (loading && page === 1 && !isPulling) {
+        if (loading && feedItems.length === 0 && !isPulling) {
             return (
                 <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 p-8 text-center min-h-[400px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400"></div>
@@ -437,8 +458,8 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                     }
                     return null;
                 })}
-                <div ref={loaderRef} className="h-10 text-center">
-                    {loading && page > 1 && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400 mx-auto mt-4"></div>}
+                <div ref={lastElementRef} className="h-10 text-center">
+                    {loading && feedItems.length > 0 && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-400 mx-auto mt-4"></div>}
                     {!loading && !hasMore && <p className="text-gray-500 dark:text-gray-400 mt-4">You've seen it all!</p>}
                 </div>
             </div>

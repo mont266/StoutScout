@@ -7,6 +7,7 @@ import { trackEvent } from '../analytics.js';
 import { getCurrencyInfo } from '../utils.js';
 import { Capacitor } from '@capacitor/core';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
+import QRCode from 'react-qr-code';
 
 const ShareRatingModal = ({ rating, onClose, loggedInUserProfile }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy Link');
@@ -168,6 +169,16 @@ const ShareRatingModal = ({ rating, onClose, loggedInUserProfile }) => {
                                     </div>
                                 </div>
                             )}
+
+                            <div className="mt-4 flex justify-center items-center gap-4 bg-gray-100 dark:bg-gray-700/50 p-2 rounded-md">
+                                <div className="bg-white p-1 rounded-md">
+                                    <QRCode value={shareUrl} size={80} level="H" fgColor="#1A120F" bgColor="#FFFFFF" />
+                                </div>
+                                <div className="text-left">
+                                    <p className="font-bold text-sm">Scan to view Rating</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">See the full rating on Stoutly.</p>
+                                </div>
+                            </div>
 
                             <div className="text-center text-xl font-extrabold text-amber-500 dark:text-amber-400 mt-4 tracking-wider">
                                 app.stoutly.co.uk

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.js';
 import { getRankData } from '../utils.js';
 import Avatar from './Avatar.jsx';
+import CrownIcon from './CrownIcon.jsx';
 import { trackEvent } from '../analytics.js';
 
 const LeaderboardPage = ({ onViewProfile }) => {
@@ -130,11 +131,14 @@ const LeaderboardPage = ({ onViewProfile }) => {
                                 >
                                     <div className="flex items-center space-x-4">
                                         <div className="w-8 text-center flex-shrink-0">{renderMedal(index + 1)}</div>
-                                        <div className="flex-shrink-0">
+                                        <div className={`flex-shrink-0 rounded-full ${item.is_stoutly_legend ? 'ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}>
                                             <Avatar avatarId={item.avatar_id} className="w-12 h-12" />
                                         </div>
                                         <div className="flex-grow min-w-0">
-                                            <p className="font-bold text-lg text-gray-900 dark:text-white truncate group-hover:underline" title={item.username}>{item.username}</p>
+                                            <p className="font-bold text-lg text-gray-900 dark:text-white truncate group-hover:underline flex items-center gap-1" title={item.username}>
+                                                {item.username}
+                                                {item.is_stoutly_legend && <CrownIcon className="w-4 h-4 text-amber-500 flex-shrink-0" title="Stoutly Legend" />}
+                                            </p>
                                             <div className="flex items-center space-x-2">
                                                 <i className={`fas ${rankData.icon} text-amber-500 dark:text-amber-400 text-xs w-3 text-center`} title={`Rank: ${rankData.name}`}></i>
                                                 <span className="text-sm text-gray-500 dark:text-gray-400">Level {item.level || 1}</span>

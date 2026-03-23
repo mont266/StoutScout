@@ -14,9 +14,10 @@ const loadingMessages = [
 
 const PubCrawlGenerationView = ({ onCancel }) => {
     const [currentMessage, setCurrentMessage] = useState(loadingMessages[0]);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
     useEffect(() => {
-        const interval = setInterval(() => {
+        const messageInterval = setInterval(() => {
             setCurrentMessage(prev => {
                 const currentIndex = loadingMessages.indexOf(prev);
                 const nextIndex = (currentIndex + 1) % loadingMessages.length;
@@ -24,8 +25,21 @@ const PubCrawlGenerationView = ({ onCancel }) => {
             });
         }, 2500);
 
-        return () => clearInterval(interval);
+        const timerInterval = setInterval(() => {
+            setElapsedSeconds(prev => prev + 1);
+        }, 1000);
+
+        return () => {
+            clearInterval(messageInterval);
+            clearInterval(timerInterval);
+        };
     }, []);
+
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
 
     const modalContent = (
         <div
@@ -41,9 +55,19 @@ const PubCrawlGenerationView = ({ onCancel }) => {
             <p className="text-gray-300 text-center transition-opacity duration-500">
                 {currentMessage}
             </p>
-            <p className="text-amber-400 text-sm text-center mt-4 font-medium animate-pulse">
+            
+            <div className="mt-6 flex flex-col items-center bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+                <p className="text-amber-400 text-sm font-medium mb-1">
+                    Estimated time: 1-2 minutes
+                </p>
+                <p className="text-gray-400 text-xs font-mono">
+                    Elapsed: {formatTime(elapsedSeconds)}
+                </p>
+            </div>
+
+            <p className="text-amber-400 text-sm text-center mt-6 font-medium animate-pulse">
                 <i className="fas fa-exclamation-triangle mr-2"></i>
-                Please do not minimise the app or switch tabs while we plan your route.
+                Please do not minimize the app or switch tabs while we plan your route.
             </p>
             <button
                 onClick={onCancel}
