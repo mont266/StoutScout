@@ -11,6 +11,7 @@ export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=uk.
 export const APP_STORE_URL = 'https://apps.apple.com/in/app/stoutly/id6758011319';
 
 // The single source of truth for rank progression.
+export const NETLIFY_URL = 'https://app.stoutly.co.uk';
 // Each rank has a name, a Font Awesome icon, and the minimum level required.
 export const RANK_DETAILS = [
   { name: "Stout Sprout",       icon: "fa-seedling",       minLevel: 1 },
