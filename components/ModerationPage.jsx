@@ -180,11 +180,60 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reports, onFetch
     };
 
     const handleApproveEdit = async (suggestionId) => {
-        // ... (implementation exists in App.jsx and can be moved here if needed)
+        setProcessingActionId(suggestionId);
+        try {
+            const suggestion = suggestedEdits.find(s => s.id === suggestionId);
+            if (!suggestion) throw new Error("Suggestion not found");
+
+            // Update pub
+            const { data: updatedPubData, error: updatePubError } = await supabase
+                .from('pubs')
+                .update(suggestion.suggested_data)
+                .eq('id', suggestion.pub_id)
+                .select();
+            
+            if (updatePubError) throw updatePubError;
+            if (!updatedPubData || updatedPubData.length === 0) {
+                throw new Error("Failed to update pub. You may not have permission.");
+            }
+
+            // Update suggestion status
+            const { error: updateStatusError } = await supabase
+                .from('pub_edit_suggestions')
+                .update({ status: 'approved' })
+                .eq('id', suggestionId);
+            
+            if (updateStatusError) throw updateStatusError;
+
+            setSuggestedEdits(prev => prev.filter(s => s.id !== suggestionId));
+            setAlertInfo({ isOpen: true, title: 'Success', message: 'Edit approved successfully.', theme: 'success' });
+            if (onDataRefresh) onDataRefresh();
+        } catch (err) {
+            console.error("Error approving edit:", err);
+            setAlertInfo({ isOpen: true, title: 'Error', message: 'Failed to approve edit: ' + err.message, theme: 'error' });
+        } finally {
+            setProcessingActionId(null);
+        }
     };
     
     const handleRejectEdit = async (suggestionId) => {
-        // ...
+        setProcessingActionId(suggestionId);
+        try {
+            const { error } = await supabase
+                .from('pub_edit_suggestions')
+                .update({ status: 'rejected' })
+                .eq('id', suggestionId);
+            
+            if (error) throw error;
+            
+            setSuggestedEdits(prev => prev.filter(s => s.id !== suggestionId));
+            setAlertInfo({ isOpen: true, title: 'Success', message: 'Edit rejected.', theme: 'success' });
+        } catch (err) {
+            console.error("Error rejecting edit:", err);
+            setAlertInfo({ isOpen: true, title: 'Error', message: 'Failed to reject edit: ' + err.message, theme: 'error' });
+        } finally {
+            setProcessingActionId(null);
+        }
     };
 
     const confirmIgnoreFlag = (userId) => {
@@ -242,8 +291,64 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reports, onFetch
     };
     
     const renderSuggestedEdits = () => {
-        // ... implementation
-        return <div className="text-center text-gray-500 p-6">Edits section coming soon.</div>
+        if (loading.edits) return <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-400 mx-auto mt-8"></div>;
+        if (error.edits) return <div className="text-center text-red-500 p-6 bg-red-500/10 rounded-lg">{error.edits}</div>;
+        if (suggestedEdits.length === 0) return (
+            <div className="text-center text-gray-500 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <i className="fas fa-check-circle fa-2x mb-2 text-green-500"></i>
+                <p className="font-semibold">All clear!</p>
+                <p className="text-sm">No suggested edits are currently waiting for review.</p>
+            </div>
+        );
+
+        return (
+            <ul className="space-y-4">
+                {suggestedEdits.map(edit => (
+                    <li key={edit.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg shadow-md border-l-4 border-amber-500 flex flex-col sm:flex-row">
+                        <div className="p-3 flex-grow">
+                            <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <p className="font-bold text-gray-900 dark:text-white">Pub: {edit.pub?.name || edit.pub_id}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Suggested {formatTimeAgo(new Date(edit.created_at).getTime())} by <button onClick={() => onViewProfile(edit.user_id, 'moderation')} className="font-semibold hover:underline text-amber-600 dark:text-amber-400">{edit.user?.username || 'Unknown'}</button>
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-3 p-3 bg-gray-100 dark:bg-gray-900/50 rounded-md">
+                                <h5 className="font-semibold text-sm mb-1 text-gray-700 dark:text-gray-300">Suggested Changes:</h5>
+                                <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                    {edit.suggested_data?.name && <li>Name: <span className="font-semibold">{edit.suggested_data.name}</span></li>}
+                                    {edit.suggested_data?.is_closed !== undefined && <li>Marked as Closed: <span className="font-semibold">{edit.suggested_data.is_closed ? 'Yes' : 'No'}</span></li>}
+                                </ul>
+                                {edit.notes && (
+                                    <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                        <span className="font-semibold">Notes:</span>
+                                        <p className="italic mt-1">"{edit.notes}"</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex-shrink-0 p-3 flex sm:flex-col items-center justify-around sm:justify-center gap-2 border-t sm:border-t-0 sm:border-l border-gray-200 dark:border-gray-700">
+                            <button 
+                                onClick={() => handleApproveEdit(edit.id)}
+                                disabled={processingActionId === edit.id}
+                                className="w-full sm:w-auto bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-300 font-bold py-2 px-4 rounded-lg hover:bg-green-200 dark:hover:bg-green-700/50 transition-colors text-sm disabled:opacity-50"
+                            >
+                                {processingActionId === edit.id ? '...' : 'Approve'}
+                            </button>
+                            <button 
+                                onClick={() => handleRejectEdit(edit.id)}
+                                disabled={processingActionId === edit.id}
+                                className="w-full sm:w-auto bg-red-100 text-red-800 dark:bg-red-800/50 dark:text-red-300 font-bold py-2 px-4 rounded-lg hover:bg-red-200 dark:hover:bg-red-700/50 transition-colors text-sm disabled:opacity-50"
+                            >
+                                {processingActionId === edit.id ? '...' : 'Reject'}
+                            </button>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        );
     };
 
     const renderAiFlags = () => {
@@ -281,6 +386,7 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reports, onFetch
                         <div className="flex">
                             <TabButton label="User Reports" count={(reports || []).length} isActive={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
                             <TabButton label="Flagged Users" count={flaggedUsers.length} isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+                            <TabButton label="Suggested Edits" count={suggestedEdits.length} isActive={activeTab === 'edits'} onClick={() => setActiveTab('edits')} />
                             <TabButton label="AI Moderator" count={aiFlags.length} isActive={activeTab === 'ai'} onClick={() => setActiveTab('ai')} />
                         </div>
                     </div>
@@ -293,6 +399,14 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reports, onFetch
                             <div>
                                 <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">User Submitted Reports ({reports.length})</h4>
                                 {renderReports()}
+                            </div>
+                        </div>
+                    )}
+                    {activeTab === 'edits' && (
+                        <div className="space-y-6">
+                            <div>
+                                <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">Suggested Edits ({suggestedEdits.length})</h4>
+                                {renderSuggestedEdits()}
                             </div>
                         </div>
                     )}

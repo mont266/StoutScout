@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect, useContext } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useContext, useCallback } from 'react';
 import StarRating from './StarRating.jsx';
 import RatingForm from './RatingForm.jsx';
 import ImageModal from './ImageModal.jsx';
@@ -250,6 +250,28 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
         convertedCode: convertedCode,
     };
   }, [localPub.ratings, avgPrice, currencyInfo, loggedInUserProfile, exchangeRates]);
+
+  const handleLocalToggleLike = useCallback((ratingToToggle) => {
+    if (!loggedInUserProfile) {
+        onToggleLike(ratingToToggle);
+        return;
+    }
+    setLocalPub(prevPub => {
+        if (!prevPub.ratings) return prevPub;
+        const newRatings = prevPub.ratings.map(rating => {
+            if (rating.id === ratingToToggle.id) {
+                const isLiked = userLikes.has(ratingToToggle.id);
+                const newLikeCount = isLiked
+                    ? Math.max(0, (rating.like_count || 1) - 1)
+                    : (rating.like_count || 0) + 1;
+                return { ...rating, like_count: newLikeCount };
+            }
+            return rating;
+        });
+        return { ...prevPub, ratings: newRatings };
+    });
+    onToggleLike(ratingToToggle);
+  }, [loggedInUserProfile, userLikes, onToggleLike]);
 
   const handleInitiateReport = (ratingToReport) => {
     setImageToView(null); // Close the image modal first
@@ -683,7 +705,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                                             key={rating.id}
                                             rating={rating}
                                             userLikes={userLikes}
-                                            onToggleLike={onToggleLike}
+                                            onToggleLike={handleLocalToggleLike}
                                             onViewProfile={onViewProfile}
                                             onLoginRequest={onLoginRequest}
                                             onViewImage={setImageToView}

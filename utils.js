@@ -174,7 +174,8 @@ const CURRENCY_MAP = {
     'br': { symbol: 'R$', code: 'BRL' }, 'in': { symbol: '₹', code: 'INR' },
     'mx': { symbol: 'Mex$', code: 'MXN' }, 'ru': { symbol: '₽', code: 'RUB' },
     'kr': { symbol: '₩', code: 'KRW' }, 'th': { symbol: '฿', code: 'THB' },
-    'pe': { symbol: 'S/', code: 'PEN' },
+    'pe': { symbol: 'S/', code: 'PEN' }, 'vn': { symbol: '₫', code: 'VND' },
+    'id': { symbol: 'Rp', code: 'IDR' },
 };
 
 // This map helps resolve full country names to their 2-letter codes.
@@ -188,7 +189,7 @@ const COUNTRY_NAME_TO_CODE = {
     'japan': 'jp', 'singapore': 'sg', 'united arab emirates': 'ae',
     'south africa': 'za', 'turkey': 'tr', 'austria': 'at',
     'czech republic': 'cz', 'peru': 'pe', 'south korea': 'kr',
-    'morocco': 'ma',
+    'morocco': 'ma', 'vietnam': 'vn', 'indonesia': 'id',
 };
 
 // Tier thresholds for price ratings. A price < tiers[0] gets 5 stars.
@@ -206,6 +207,8 @@ const CURRENCY_DEFAULTS = {
     'KRW':    { examplePrice: '9000', tiers: [7000, 9000, 11000, 13000] },
     'PEN':    { examplePrice: '15', tiers: [12, 15, 18, 22] },
     'MAD':    { examplePrice: '30', tiers: [25, 30, 40, 50] },
+    'VND':    { examplePrice: '80000', tiers: [50000, 80000, 100000, 120000] },
+    'IDR':    { examplePrice: '50000', tiers: [35000, 50000, 75000, 100000] },
 };
 
 /**

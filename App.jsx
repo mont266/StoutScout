@@ -501,6 +501,23 @@ const App = () => {
       local_avg_price: p.local_avg_price,
     }));
 
+    // If we are not in showAllDbPubs, we might be missing the address for stoutly- pubs
+    // if the get_pubs_in_radius RPC doesn't return it. Let's fetch it directly.
+    if (!showAllDbPubs) {
+        const stoutlyPubIds = formatted.filter(p => p.id.startsWith('stoutly-') && !p.address).map(p => p.id);
+        if (stoutlyPubIds.length > 0) {
+            const { data: addressData } = await supabase.from('pubs').select('id, address').in('id', stoutlyPubIds);
+            if (addressData) {
+                const addressMap = new Map(addressData.map(d => [d.id, d.address]));
+                formatted.forEach(p => {
+                    if (addressMap.has(p.id) && addressMap.get(p.id)) {
+                        p.address = addressMap.get(p.id);
+                    }
+                });
+            }
+        }
+    }
+
     setDbPubs(formatted);
     setIsDbPubsLoaded(true);
   }, [showAllDbPubs]);
@@ -1341,7 +1358,7 @@ const App = () => {
             created_at: r.created_at,
             updated_at: r.updated_at,
             pubName: r.pubs?.name || 'Unknown',
-            pubAddress: r.pubs?.address || 'Unknown',
+            pubAddress: r.pubs?.address || 'Address unknown',
             pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
             image_url: r.image_url,
             is_private: r.is_private,
@@ -2107,7 +2124,7 @@ const App = () => {
           created_at: r.created_at,
           updated_at: r.updated_at,
           pubName: r.pubs?.name || 'Unknown',
-          pubAddress: r.pubs?.address || 'Unknown',
+          pubAddress: r.pubs?.address || 'Address unknown',
           pubLocation: r.pubs && r.pubs.lat && r.pubs.lng ? { lat: r.pubs.lat, lng: r.pubs.lng } : null,
           image_url: r.image_url,
           is_private: r.is_private || false,
@@ -3250,6 +3267,30 @@ const App = () => {
     isLiked ? newUserLikes.delete(ratingId) : newUserLikes.add(ratingId);
     setUserLikes(newUserLikes);
 
+    // --- Optimistic UI update for like count in allRatings ---
+    const originalAllRatings = allRatings;
+    setAllRatings(prevAllRatings => {
+        const newAllRatings = new Map(prevAllRatings);
+        const pubId = rating.pub_id || rating.pubId || rating.pub?.id;
+        if (pubId) {
+            const pubRatings = newAllRatings.get(pubId);
+            if (pubRatings) {
+                const ratingIndex = pubRatings.findIndex(r => r.id === ratingId);
+                if (ratingIndex > -1) {
+                    const updatedRating = { ...pubRatings[ratingIndex] };
+                    updatedRating.like_count = isLiked 
+                        ? Math.max(0, (updatedRating.like_count || 1) - 1) 
+                        : (updatedRating.like_count || 0) + 1;
+                    
+                    const newPubRatings = [...pubRatings];
+                    newPubRatings[ratingIndex] = updatedRating;
+                    newAllRatings.set(pubId, newPubRatings);
+                }
+            }
+        }
+        return newAllRatings;
+    });
+
     // --- DB call ---
     try {
         if (isLiked) {
@@ -3263,6 +3304,7 @@ const App = () => {
         console.error("Error toggling like:", error);
         // Revert heart color on error
         setUserLikes(originalUserLikes);
+        setAllRatings(originalAllRatings);
         setAlertInfo({
             isOpen: true,
             title: 'Action Failed',
@@ -3270,7 +3312,7 @@ const App = () => {
             theme: 'error',
         });
     }
-  }, [session, userLikes, setAlertInfo, setIsAuthOpen]);
+  }, [session, userLikes, allRatings, setAlertInfo, setIsAuthOpen]);
   
   const handleTogglePostLike = useCallback(async (post) => {
     if (!session) {
@@ -3290,6 +3332,27 @@ const App = () => {
     isLiked ? newUserPostLikes.delete(postId) : newUserPostLikes.add(postId);
     setUserPostLikes(newUserPostLikes);
 
+    // --- Optimistic UI update for like count in userPosts and viewedPosts ---
+    const originalUserPosts = userPosts;
+    const originalViewedPosts = viewedPosts;
+
+    const updatePostLikeCount = (posts) => {
+        return posts.map(p => {
+            if (p.id === postId) {
+                const newLikeCount = isLiked 
+                    ? Math.max(0, (p.like_count || 1) - 1) 
+                    : (p.like_count || 0) + 1;
+                return { ...p, like_count: newLikeCount };
+            }
+            return p;
+        });
+    };
+
+    setUserPosts(prev => updatePostLikeCount(prev));
+    if (viewedPosts.length > 0) {
+        setViewedPosts(prev => updatePostLikeCount(prev));
+    }
+
     // --- DB call ---
     try {
         if (isLiked) {
@@ -3303,6 +3366,8 @@ const App = () => {
         console.error("Error toggling post like:", error);
         // Revert heart color on error
         setUserPostLikes(originalUserPostLikes);
+        setUserPosts(originalUserPosts);
+        setViewedPosts(originalViewedPosts);
         setAlertInfo({
             isOpen: true,
             title: 'Action Failed',
@@ -4003,8 +4068,6 @@ const App = () => {
         p_lng: pubToEdit.location?.lng,
         p_suggested_data: suggestionData.suggested_data,
         p_notes: suggestionData.notes,
-        p_country_code: suggestionData.country_code,
-        p_country_name: suggestionData.country_name,
     });
 
     setIsSuggestEditModalOpen(false);
