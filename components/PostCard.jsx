@@ -7,7 +7,7 @@ import CommentsSection from './CommentsSection.jsx';
 const COLLAPSED_LIMIT = 3;
 const CONTENT_TRUNCATION_LENGTH = 250;
 
-const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginRequest, onViewPub, loggedInUserProfile, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent }) => {
+const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginRequest, onViewPub, loggedInUserProfile, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent, highlightedCommentId }) => {
     const { user, title, content, created_at, like_count, comment_count, attached_pubs, is_announcement } = post;
     const [isPubsExpanded, setIsPubsExpanded] = useState(false);
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
@@ -34,13 +34,22 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
     };
 
     useEffect(() => {
-        if (isCommentsVisible && onFetchCommentsForPost) {
-            // Only fetch if comments aren't already loaded
-            if (!commentsByPost || !commentsByPost.has(post.id)) {
+        if (highlightedCommentId) {
+            setIsCommentsVisible(true);
+            if (onFetchCommentsForPost) {
                 onFetchCommentsForPost(post.id);
             }
         }
-    }, [isCommentsVisible, post.id, onFetchCommentsForPost, commentsByPost]);
+    }, [highlightedCommentId, post.id, onFetchCommentsForPost]);
+
+    useEffect(() => {
+        if (isCommentsVisible && onFetchCommentsForPost) {
+            // Only fetch if comments aren't already loaded, unless forced by highlight
+            if ((!commentsByPost || !commentsByPost.has(post.id)) && !highlightedCommentId) {
+                onFetchCommentsForPost(post.id);
+            }
+        }
+    }, [isCommentsVisible, post.id, onFetchCommentsForPost, commentsByPost, highlightedCommentId]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -238,6 +247,7 @@ const PostCard = ({ post, onToggleLike, userPostLikes, onViewProfile, onLoginReq
                     onLoginRequest={onLoginRequest}
                     onViewProfile={onViewProfile}
                     onFetchComments={onFetchCommentsForPost}
+                    highlightedCommentId={highlightedCommentId}
                 />
             )}
         </div>

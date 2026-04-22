@@ -220,7 +220,7 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                         onDeletePost={onDeletePost}
                         blockList={blockList}
                     />}
-                    {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} />}
+                    {activeSubTab === 'leaderboard' && <LeaderboardPage onViewProfile={(id) => onViewProfile(id, 'leaderboard')} onViewPub={onViewPub} />}
                     {activeSubTab === 'notifications' && <NotificationsPage notifications={notifications} onFriendAction={onFriendAction} onViewProfile={(id) => onViewProfile(id, 'notifications')} onDataRefresh={onDataRefresh} onViewPub={onViewPub} friendships={friendships} onDeleteNotification={onDeleteNotification} />}
                 </div>
 

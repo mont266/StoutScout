@@ -320,6 +320,16 @@ const CrawlModePage = (props) => {
             onDeleteComment, onReportContent, userZeroVotes, onGuinnessZeroVote,
             onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal,
             setAlertInfo, pubScores,
+            userPostLikes: props.userPostLikes,
+            onTogglePostLike: props.onTogglePostLike,
+            commentsByPost: props.commentsByPost,
+            isPostCommentsLoading: props.isPostCommentsLoading,
+            onFetchCommentsForPost: props.onFetchCommentsForPost,
+            onAddPostComment: props.onAddPostComment,
+            onDeletePostComment: props.onDeletePostComment,
+            onEditPost: props.onEditPost,
+            onDeletePost: props.onDeletePost,
+            onOpenSharePostModal: props.onOpenSharePostModal
         };
         return <PubDetails {...pubDetailsProps} />;
     }

@@ -318,8 +318,18 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                                     setAlertInfo({ isOpen: true, title: 'Copied!', message: 'Link copied to clipboard.', theme: 'success' });
                                 }}
                                 className="ml-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 p-1"
+                                title="Copy link"
                             >
                                 <i className="fas fa-copy"></i>
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    window.open(`https://stoutly.co.uk/map/${userProfile.username}`, '_blank', 'noopener,noreferrer');
+                                }}
+                                className="ml-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 p-1"
+                                title="Open in browser"
+                            >
+                                <i className="fas fa-external-link-alt"></i>
                             </button>
                         </div>
                     </div>

@@ -19,6 +19,7 @@ import ProfileStatsView from './ProfileStatsView.jsx';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import PostCard from './PostCard.jsx';
+import RankExplanationModal from './RankExplanationModal.jsx';
 
 // Action sheet modal for profile editing options
 const EditProfileActionsModal = ({ isOpen, onClose, onEditAvatar, onEditUsername, onEditBio, onEditSocials, onOpenUpdateDetailsModal, userProfile }) => {
@@ -474,6 +475,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
     const { onlineUserIds } = useContext(OnlineStatusContext);
     const [isEditActionsModalOpen, setIsEditActionsModalOpen] = useState(false);
     const [isTrophyModalOpen, setIsTrophyModalOpen] = useState(false);
+    const [isRankModalOpen, setIsRankModalOpen] = useState(false);
     const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
     const mainScrollRef = useRef(null);
     const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
@@ -588,7 +590,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
     };
 
     const { username, level, is_beta_tester, is_banned, avatar_id, removed_image_count, is_early_bird, is_team_member, bio, is_stoutly_legend } = userProfile;
-    const reviews = userProfile.reviews || 0;
+    const reviews = userRatings ? userRatings.length : (userProfile.reviews || 0);
     
     const rankData = getRankData(level);
     
@@ -796,7 +798,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                                 </div>
                                  {r.rating.exact_price && (
                                     <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">
-                                        Paid: <span className="font-bold text-gray-700 dark:text-white">{currencyInfo.symbol}{r.rating.exact_price.toFixed(2)}</span>
+                                        Paid: <span className="font-bold text-gray-700 dark:text-white">{currencyInfo.symbol}{r.rating.exact_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </p>
                                  )}
                                 {r.image_url && (
@@ -921,6 +923,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
             {alertInfo.isOpen && <AlertModal {...alertInfo} onClose={() => setAlertInfo({ isOpen: false })} />}
             {isEditActionsModalOpen && <EditProfileActionsModal userProfile={userProfile} isOpen={isEditActionsModalOpen} onClose={() => setIsEditActionsModalOpen(false)} onEditAvatar={() => handleOpenModal(onAvatarChangeClick)} onEditUsername={() => handleOpenModal(onEditUsernameClick)} onEditBio={() => handleOpenModal(onEditBioClick)} onEditSocials={() => handleOpenModal(onEditSocialsClick)} onOpenUpdateDetailsModal={() => handleOpenModal(onOpenUpdateDetailsModal)} />}
             {isTrophyModalOpen && <TrophyModal isOpen={isTrophyModalOpen} onClose={() => setIsTrophyModalOpen(false)} trophiesWithStatus={trophiesWithStatus} userStats={userStatsForTrophies} onNavigateToSettings={isViewingOwnProfile ? onNavigateToSettings : null} />}
+            <RankExplanationModal isOpen={isRankModalOpen} onClose={() => setIsRankModalOpen(false)} currentLevel={level} userRatings={userRatings} levelRequirements={levelRequirements} />
             {!isDesktop && <StatsModal isOpen={isStatsModalOpen} onClose={() => onSetIsStatsModalOpen(false)} userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />}
             {isDesktop && <DesktopStatsModal isOpen={isStatsModalOpen} onClose={() => onSetIsStatsModalOpen(false)} userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />}
             
@@ -953,7 +956,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                                 <div className="flex flex-col items-center">
                                     <div className="relative">
                                         <div className={`p-1.5 rounded-full border-4 ${getProfileBorderColor()}`}>
-                                            <ProfileAvatar userProfile={userProfile} levelRequirements={levelRequirements} size={isDesktop ? 128 : 96} onClick={isViewingOwnProfile ? onAvatarChangeClick : null} />
+                                            <ProfileAvatar userProfile={userProfile} levelRequirements={levelRequirements} size={isDesktop ? 128 : 96} onClick={isViewingOwnProfile ? onAvatarChangeClick : null} userRatings={userRatings} />
                                         </div>
                                         {isOnline && <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-gray-800" title="Online"></div>}
                                     </div>
@@ -988,10 +991,17 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                                         <p className="text-2xl font-bold">{displayFriendCount}</p>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Friends</p>
                                     </button>
-                                    <div>
-                                        <p className="text-2xl font-bold">{level}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Level</p>
-                                    </div>
+                                    {isViewingOwnProfile ? (
+                                        <button onClick={() => setIsRankModalOpen(true)} className="text-center group">
+                                            <p className="text-2xl font-bold group-hover:text-amber-500 transition-colors">{level}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors">Level</p>
+                                        </button>
+                                    ) : (
+                                        <div className="text-center">
+                                            <p className="text-2xl font-bold">{level}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Level</p>
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 {(bio || userProfile.instagram_handle || userProfile.youtube_handle || userProfile.x_handle) && (
@@ -1026,12 +1036,25 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                         
                         {isDeveloper && (
                             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md">
-                                <button onClick={() => setIsDevInfoVisible(v => !v)} className="w-full font-bold text-amber-600 dark:text-amber-400 text-left">Developer Info</button>
+                                <button onClick={() => setIsDevInfoVisible(v => !v)} className="w-full font-bold text-amber-600 dark:text-amber-400 flex justify-between items-center text-left">
+                                    <span>Developer Info</span>
+                                    <i className={`fas fa-chevron-${isDevInfoVisible ? 'up' : 'down'} text-sm`}></i>
+                                </button>
                                 {isDevInfoVisible && (
                                     <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 text-xs font-mono text-gray-600 dark:text-gray-400 break-all space-y-1">
                                         <p><strong>ID:</strong> {userProfile.id}</p>
-                                        <p><strong>Email:</strong> {userProfile.email || 'Not available'}</p>
-                                        <p><strong>Last Sign In:</strong> {userProfile.last_sign_in_at ? new Date(userProfile.last_sign_in_at).toLocaleString() : 'N/A'}</p>
+                                        <p><strong>Username:</strong> {userProfile.username || 'null'}</p>
+                                        {userProfile.email && <p><strong>Email:</strong> {userProfile.email}</p>}
+                                        <p><strong>Created:</strong> {userProfile.created_at ? new Date(userProfile.created_at).toLocaleString() : 'N/A'}</p>
+                                        {userProfile.last_sign_in_at && <p><strong>Last Sign In:</strong> {new Date(userProfile.last_sign_in_at).toLocaleString()}</p>}
+                                        <p><strong>Role:</strong> {userProfile.is_developer ? 'Developer' : userProfile.is_moderator ? 'Moderator' : 'User'}</p>
+                                        <p><strong>Verified:</strong> {userProfile.is_verified ? 'Yes' : 'No'}</p>
+                                        <p><strong>Legend:</strong> {userProfile.is_stoutly_legend ? 'Yes' : 'No'}</p>
+                                        <p><strong>Banned:</strong> {userProfile.is_banned ? 'Yes' : 'No'}</p>
+                                        <p><strong>XP:</strong> {userProfile.xp || 0}</p>
+                                        <p><strong>Bio Length:</strong> {userProfile.bio ? userProfile.bio.length : 0} chars</p>
+                                        <p><strong>Has Avatar:</strong> {userProfile.avatar_id ? 'Yes' : 'No'}</p>
+                                        <p><strong>Data Stats:</strong> Ratings: {userRatings?.length || 0} | Posts: {userPosts?.length || 0} | Trophies: {userTrophies?.length || 0}</p>
                                     </div>
                                 )}
                             </div>

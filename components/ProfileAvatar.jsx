@@ -1,7 +1,7 @@
 import React from 'react';
 import Avatar from './Avatar.jsx';
 
-const ProfileAvatar = ({ userProfile, levelRequirements, size = 48, onClick }) => {
+const ProfileAvatar = ({ userProfile, levelRequirements, size = 48, onClick, userRatings }) => {
     
     const getLevelProgress = () => {
         if (!levelRequirements || levelRequirements.length === 0 || !userProfile?.level) {
@@ -9,7 +9,7 @@ const ProfileAvatar = ({ userProfile, levelRequirements, size = 48, onClick }) =
         }
         
         const { level } = userProfile;
-        const reviews = Number(userProfile.reviews) || 0;
+        const reviews = userRatings ? userRatings.length : (Number(userProfile.reviews) || 0);
         const currentLevelInfo = levelRequirements.find(lr => lr.level === level);
         const nextLevelInfo = levelRequirements.find(lr => lr.level === level + 1);
         

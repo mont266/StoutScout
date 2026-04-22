@@ -57,17 +57,21 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
     useEffect(() => {
         if (highlightedCommentId) {
             setIsCommentsVisible(true);
-        }
-    }, [highlightedCommentId]);
-
-    useEffect(() => {
-        if (isCommentsVisible && onFetchComments) {
-            // Only fetch if comments aren't already loaded for this rating
-            if (!comments) {
+            if (onFetchComments) {
+                // Always fetch if we highlight something, to ensure we have the newest comments
                 onFetchComments(id);
             }
         }
-    }, [isCommentsVisible, id, onFetchComments, comments]);
+    }, [highlightedCommentId, id, onFetchComments]);
+
+    useEffect(() => {
+        if (isCommentsVisible && onFetchComments) {
+            // Only fetch if comments aren't already loaded for this rating, unless forced by highlight
+            if (!comments && !highlightedCommentId) {
+                onFetchComments(id);
+            }
+        }
+    }, [isCommentsVisible, id, onFetchComments, comments, highlightedCommentId]);
 
     const handlePubClick = () => {
         if (!onViewPub) return;
@@ -248,7 +252,7 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                             <span className="text-sm text-gray-600 dark:text-gray-400 mt-1">Price Paid:</span>
                             <div className="text-right">
                                 <span className="font-bold text-lg text-gray-800 dark:text-white bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded" title={currencyInfo.code}>
-                                    {currencyInfo.symbol}{exact_price.toFixed(2)}
+                                    {currencyInfo.symbol}{exact_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                                 {convertedPriceText && <div className="text-xs font-normal text-gray-500 dark:text-gray-400 mt-1" title={userHomeCurrency.code}>{convertedPriceText}</div>}
                             </div>

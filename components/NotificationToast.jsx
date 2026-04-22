@@ -34,8 +34,17 @@ const NotificationToast = ({ notification, onClick, onClose }) => {
     message = 'has accepted your friend request.';
     icon = 'fa-user-check';
   } else if (type === 'new_comment') {
-    message = 'commented on your rating.';
+    let commentText = 'commented on your rating.';
+    if (metadata?.type === 'reply') commentText = 'replied to your comment.';
+    else if (metadata?.type === 'post_comment') commentText = 'commented on your post.';
+    else if (metadata?.type === 'post_reply') commentText = 'replied to your comment on a post.';
+    message = commentText;
     icon = 'fa-comment';
+  } else if (type === 'mention') {
+    let mentionText = 'mentioned you in a comment.';
+    if (metadata?.type === 'post_comment' || metadata?.type === 'post_reply') mentionText = 'mentioned you on a post.';
+    message = mentionText;
+    icon = 'fa-at';
   } else if (type === 'like_milestone') {
     message = `Your rating received ${metadata?.like_count || 'many'} likes! 🎉`;
     icon = 'fa-heart';

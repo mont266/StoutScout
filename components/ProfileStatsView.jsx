@@ -24,6 +24,7 @@ const StatCard = ({ icon, title, children, className = '', onClick }) => (
 const FALLBACK_RATES_TO_GBP = {
     EUR: 0.85, USD: 0.79, AUD: 0.52, GBP: 1,
     TRY: 0.024, PLN: 0.20, ILS: 0.21, CAD: 0.58,
+    VND: 0.000031, IDR: 0.00005,
 };
 
 // Fallback display rates (how many units of foreign currency is 1 GBP).
@@ -32,6 +33,8 @@ const FALLBACK_DISPLAY_CURRENCIES = {
     EUR: { symbol: '€', rate: 1.18 },
     USD: { symbol: '$', rate: 1.27 },
     AUD: { symbol: 'A$', rate: 1.91 },
+    VND: { symbol: '₫', rate: 32000 },
+    IDR: { symbol: 'Rp', rate: 20000 },
 };
 
 
@@ -219,6 +222,8 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
                 EUR: { symbol: '€', rate: exchangeRates['EUR'] || FALLBACK_DISPLAY_CURRENCIES.EUR.rate },
                 USD: { symbol: '$', rate: exchangeRates['USD'] || FALLBACK_DISPLAY_CURRENCIES.USD.rate },
                 AUD: { symbol: 'A$', rate: exchangeRates['AUD'] || FALLBACK_DISPLAY_CURRENCIES.AUD.rate },
+                VND: { symbol: '₫', rate: exchangeRates['VND'] || FALLBACK_DISPLAY_CURRENCIES.VND.rate },
+                IDR: { symbol: 'Rp', rate: exchangeRates['IDR'] || FALLBACK_DISPLAY_CURRENCIES.IDR.rate },
             };
         }
         return FALLBACK_DISPLAY_CURRENCIES;
@@ -244,7 +249,7 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
         }
 
         const ratingsForNextRank = nextRankLevelInfo.total_ratings_required;
-        const currentRatings = userProfile.reviews || 0;
+        const currentRatings = userRatings ? userRatings.length : (userProfile.reviews || 0);
         const ratingsNeeded = Math.max(0, ratingsForNextRank - currentRatings);
 
         return {

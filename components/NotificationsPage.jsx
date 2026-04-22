@@ -55,10 +55,29 @@ const NotificationItem = ({ notification, onViewProfile, onFriendAction, onNavig
             break;
         case 'new_comment':
              iconClass = 'fa-comment';
+             
+             let text = ' commented on your rating.';
+             if (metadata?.type === 'reply') text = ' replied to your comment.';
+             else if (metadata?.type === 'post_comment') text = ' commented on your post.';
+             else if (metadata?.type === 'post_reply') text = ' replied to your comment on a post.';
+             
              content = (
                 <p className="text-sm text-gray-700 dark:text-gray-300">
                     <button onClick={(e) => { e.stopPropagation(); onViewProfile(actor.id, 'notifications'); }} className="font-semibold hover:underline">{actor.username}</button>
-                    <span> commented on your rating.</span>
+                    <span>{text}</span>
+                </p>
+            );
+            break;
+        case 'mention':
+             iconClass = 'fa-at';
+             
+             let mentionText = ' mentioned you in a comment.';
+             if (metadata?.type === 'post_comment' || metadata?.type === 'post_reply') mentionText = ' mentioned you on a post.';
+             
+             content = (
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                    <button onClick={(e) => { e.stopPropagation(); onViewProfile(actor.id, 'notifications'); }} className="font-semibold hover:underline">{actor.username}</button>
+                    <span>{mentionText}</span>
                 </p>
             );
             break;
@@ -191,13 +210,85 @@ const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDat
             let contextData = null;
             let highlightRatingId = null;
             let highlightCommentId = null;
+            let highlightPostId = null;
 
-            if (notification.type === 'new_comment' || notification.type === 'like_milestone') {
-                const { data, error } = await supabase.rpc('get_context_for_rating', { p_rating_id: notification.entity_id }).single();
-                if (error) throw error;
-                contextData = data;
-                if (data) {
-                    highlightRatingId = notification.entity_id;
+            if (notification.type === 'new_comment' || notification.type === 'like_milestone' || notification.type === 'mention') {
+                if (notification.metadata && (notification.metadata.type === 'post_comment' || notification.metadata.type === 'post_reply')) {
+                    highlightPostId = notification.metadata.post_id;
+                    highlightCommentId = 'expand';
+                    const pubId = notification.metadata.pub_id;
+                    // Ensure pubId exists before querying
+                    if (pubId) {
+                        const { data, error } = await supabase.from('pubs').select('id, name, address, lat, lng').eq('id', pubId).single();
+                        if (data) {
+                             contextData = {
+                                  pub_id: data.id,
+                                  pub_name: data.name,
+                                  pub_address: data.address,
+                                  pub_lat: data.lat,
+                                  pub_lng: data.lng
+                             }
+                        }
+                    } else if (highlightPostId) {
+                        // Fallback if pubId isn't in metadata: fetch pub_id from the post itself
+                        const { data: postData } = await supabase.from('posts').select('pub_id').eq('id', highlightPostId).single();
+                        if (postData && postData.pub_id) {
+                            const { data, error } = await supabase.from('pubs').select('id, name, address, lat, lng').eq('id', postData.pub_id).single();
+                            if (data) {
+                                 contextData = {
+                                      pub_id: data.id,
+                                      pub_name: data.name,
+                                      pub_address: data.address,
+                                      pub_lat: data.lat,
+                                      pub_lng: data.lng
+                                 };
+                            }
+                        }
+                    }
+                } else {
+                    const ratingIdToUse = notification.metadata?.rating_id || notification.entity_id;
+                    const { data, error } = await supabase.rpc('get_context_for_rating', { p_rating_id: ratingIdToUse }).single();
+                    // If RPC fails (e.g. entity_id was a comment ID and not a rating ID due to old trigger logic), try fallback
+                    if (error || !data) {
+                        // If it's a comment_id instead of a rating_id (e.g. from backend mention trigger)
+                        const { data: commentData } = await supabase.from('comments').select('rating_id').eq('id', ratingIdToUse).single();
+                        if (commentData && commentData.rating_id) {
+                            const { data: fbData } = await supabase.rpc('get_context_for_rating', { p_rating_id: commentData.rating_id }).single();
+                            contextData = fbData;
+                            if (fbData) {
+                                highlightRatingId = commentData.rating_id;
+                                highlightCommentId = ratingIdToUse; // highlight the specific comment
+                            }
+                        } else {
+                            // Might be a post_comment instead
+                            const { data: postCommentData } = await supabase.from('post_comments').select('post_id').eq('id', ratingIdToUse).single();
+                            if (postCommentData && postCommentData.post_id) {
+                                highlightPostId = postCommentData.post_id;
+                                highlightCommentId = ratingIdToUse; // highlight the specific comment
+                                const { data: postData } = await supabase.from('posts').select('pub_id').eq('id', highlightPostId).single();
+                                if (postData && postData.pub_id) {
+                                    const { data: pubData } = await supabase.from('pubs').select('id, name, address, lat, lng').eq('id', postData.pub_id).single();
+                                    if (pubData) {
+                                        contextData = {
+                                              pub_id: pubData.id,
+                                              pub_name: pubData.name,
+                                              pub_address: pubData.address,
+                                              pub_lat: pubData.lat,
+                                              pub_lng: pubData.lng
+                                         };
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        contextData = data;
+                        if (data) {
+                            highlightRatingId = ratingIdToUse;
+                            if (notification.type === 'new_comment' || notification.type === 'mention') {
+                                highlightCommentId = 'expand';
+                            }
+                        }
+                    }
                 }
             }
 
@@ -209,7 +300,7 @@ const NotificationsPage = ({ notifications, onFriendAction, onViewProfile, onDat
                     address: contextData.pub_address,
                     location: { lat: contextData.pub_lat, lng: contextData.pub_lng },
                 };
-                onViewPub(pubForSelection, { highlightRatingId, highlightCommentId });
+                onViewPub(pubForSelection, { highlightRatingId, highlightCommentId, highlightPostId });
             } else if (notification.type === 'friend_request_accepted') {
                 onViewProfile(notification.actor.id, 'notifications');
             }

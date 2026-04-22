@@ -15,6 +15,7 @@ import RatingCard from './RatingCard.jsx';
 import CertifiedExplanationModal from './CertifiedExplanationModal.jsx';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
+import PostCard from './PostCard.jsx';
 
 const Section = React.forwardRef(({ title, children, ...props }, ref) => (
     <section ref={ref} {...props} aria-labelledby={title ? `section-title-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined}>
@@ -90,7 +91,7 @@ const PintGallery = ({ ratings, onViewImage }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportContent, highlightedRatingId, highlightedCommentId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [], onViewPub, isEditRatingFlow }) => {
+const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportContent, highlightedRatingId, highlightedCommentId, highlightedPostId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [], onViewPub, isEditRatingFlow, userPostLikes, onTogglePostLike, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, onEditPost, onDeletePost, onOpenSharePostModal, pubScores }) => {
   const [localPub, setLocalPub] = useState(pub);
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
@@ -99,11 +100,40 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [visibleComments, setVisibleComments] = useState({});
   const ratingsListRef = useRef(null);
+  const postsListRef = useRef(null);
   const yourRatingSectionRef = useRef(null);
   const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
   const [isCertifiedModalOpen, setIsCertifiedModalOpen] = useState(false);
   const { rates: exchangeRates } = useContext(ExchangeRatesContext);
   const isDesktop = useIsDesktop();
+  const [pubPosts, setPubPosts] = useState([]);
+  const [isFetchingPosts, setIsFetchingPosts] = useState(false);
+
+  useEffect(() => {
+    const fetchPubPosts = async () => {
+        if (!localPub.id) return;
+        setIsFetchingPosts(true);
+        try {
+            const { data, error } = await supabase
+                .from('posts')
+                .select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend), attached_pubs:post_pubs!inner(pub_id, pub:pubs(id, name, address, lat, lng))`)
+                .eq('attached_pubs.pub_id', localPub.id)
+                .eq('user.is_banned', false)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Error fetching pub posts:", error);
+            } else {
+                setPubPosts(data || []);
+            }
+        } catch (err) {
+            console.error("Error in fetchPubPosts:", err);
+        } finally {
+            setIsFetchingPosts(false);
+        }
+    };
+    fetchPubPosts();
+  }, [localPub.id]);
 
   const isCertified = localPub.certification_status === 'certified' || localPub.certification_status === 'at_risk';
   const isDeveloper = loggedInUserProfile?.is_developer;
@@ -186,6 +216,21 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
       }, 350); // Increased from 100 to wait for panel transition to complete
     }
   }, [highlightedRatingId, localPub.ratings]);
+
+  useEffect(() => {
+    if (highlightedPostId && postsListRef.current) {
+      setTimeout(() => {
+        const element = postsListRef.current.querySelector(`[data-post-id="${highlightedPostId}"]`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('highlight-rating');
+          setTimeout(() => {
+            element.classList.remove('highlight-rating');
+          }, 2500);
+        }
+      }, 350);
+    }
+  }, [highlightedPostId, pubPosts]);
   
     useEffect(() => {
         if (highlightedCommentId) {
@@ -733,6 +778,37 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                         }
                     </div>
                 </Section>
+                
+                {pubPosts && pubPosts.length > 0 && (
+                    <Section title="Community Posts" className="mt-4">
+                        <div ref={postsListRef} className="space-y-3">
+                            {pubPosts.map(post => (
+                                <div key={post.id} data-post-id={post.id}>
+                                    <PostCard
+                                        post={post}
+                                        userPostLikes={userPostLikes}
+                                        onToggleLike={onTogglePostLike}
+                                        onViewProfile={onViewProfile}
+                                        onLoginRequest={onLoginRequest}
+                                        onViewPub={onViewPub}
+                                        loggedInUserProfile={loggedInUserProfile}
+                                        commentsByPost={commentsByPost}
+                                        isPostCommentsLoading={isPostCommentsLoading}
+                                        onFetchCommentsForPost={onFetchCommentsForPost}
+                                        onAddPostComment={onAddPostComment}
+                                        onDeletePostComment={onDeletePostComment}
+                                        pubScores={pubScores}
+                                        onEditPost={onEditPost}
+                                        onDeletePost={onDeletePost}
+                                        onOpenSharePostModal={onOpenSharePostModal}
+                                        onReportContent={onReportContent}
+                                        highlightedCommentId={post.id === highlightedPostId ? highlightedCommentId : null}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </Section>
+                )}
             </div>
         </main>
     </div>

@@ -155,6 +155,7 @@ const App = () => {
   const [levelRequirements, setLevelRequirements] = useState([]);
   
   const [dbPubs, setDbPubs] = useState([]);
+  const [fetchedPubsDict, setFetchedPubsDict] = useState({});
   const [closedOsmPubIds, setClosedOsmPubIds] = useState(new Set());
   const [closedStoutlyPubIds, setClosedStoutlyPubIds] = useState(new Set());
   const [osmPubOverrides, setOsmPubOverrides] = useState(new Map());
@@ -524,19 +525,37 @@ const App = () => {
   
   const fetchAllRatings = useCallback(async () => {
     // This robust, single-query approach ensures RLS policies for blocking are respected.
-    const { data, error } = await supabase
-      .from('ratings')
-      .select('*, user:profiles!ratings_user_id_fkey(id, username, avatar_id, level, is_banned, is_stoutly_legend)')
-      .eq('is_private', false)
-      .order('updated_at', { ascending: false });
-  
-    if (error) {
-      console.error("Critical error fetching ratings with profiles:", error);
-      return;
+    let allData = [];
+    let hasMore = true;
+    let page = 0;
+    const pageSize = 1000;
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('ratings')
+        .select('*, user:profiles!ratings_user_id_fkey(id, username, avatar_id, level, is_banned, is_stoutly_legend)')
+        .eq('is_private', false)
+        .order('updated_at', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) {
+        console.error("Critical error fetching ratings with profiles:", error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        page++;
+        if (data.length < pageSize) {
+          hasMore = false;
+        }
+      } else {
+        hasMore = false;
+      }
     }
-  
+
     const ratingsMap = new Map();
-    for (const rating of data || []) {
+    for (const rating of allData) {
       // The server-side join ensures that `rating.user` will be null if the author's
       // profile is blocked or inaccessible due to RLS. We also check for banned status.
       if (!rating.user || rating.user.is_banned) {
@@ -1185,11 +1204,12 @@ const App = () => {
   }, [session, setAlertInfo]);
 
   const handleSelectPub = useCallback(async (pub, highlightOptions = {}) => {
-    const { highlightRatingId: ratingId, highlightCommentId: commentId, expandRatingForm } = highlightOptions;
+    const { highlightRatingId: ratingId, highlightCommentId: commentId, highlightPostId: postId, expandRatingForm } = highlightOptions;
     const pubId = pub ? pub.id : null;
     
     setHighlightedRatingId(ratingId || null);
     setHighlightedCommentId(commentId || null);
+    setHighlightedPostId(postId || null);
     setIsEditRatingFlow(!!expandRatingForm);
 
     if (pubId && pubId !== selectedPubId) {
@@ -1232,14 +1252,8 @@ const App = () => {
                 location: { lat: fetchedPubData.lat, lng: fetchedPubData.lng },
             };
             
-            // Add the fetched pub to the source-of-truth list (`dbPubs`). This will trigger
-            // the useEffect that computes the main `pubs` list, making the pub available.
-            setDbPubs(currentDbPubs => {
-                if (currentDbPubs.some(p => p.id === pubId)) {
-                    return currentDbPubs; // Avoid duplicates
-                }
-                return [...currentDbPubs, formattedPub];
-            });
+            // Add the fetched pub to our explicit dictionary so it survives radius refreshes.
+            setFetchedPubsDict(prev => ({ ...prev, [pubId]: formattedPub }));
 
             pubToSelect = formattedPub;
         }
@@ -1248,6 +1262,7 @@ const App = () => {
     setSelectedPubId(pubId);
     setActiveTab('map');
     if (pubToSelect?.location && mapRef.current) {
+        initialFlyToDone.current = true; // Prevent initial location fetch from hijacking the map
         mapRef.current.flyTo({
             center: [pubToSelect.location.lng, pubToSelect.location.lat],
             zoom: 16,
@@ -2154,6 +2169,11 @@ const App = () => {
 
             // Update the state with the corrected profile object
             setUserProfile({ ...profile });
+            
+            // Sync the corrected count back to the database in the background
+            supabase.from('profiles').update({ reviews: profile.reviews, level: profile.level }).eq('id', profile.id).then(({ error }) => {
+                if (error) console.error("Failed to sync profile reviews count:", error);
+            });
         }
     }
     setUserRatings(mappedUserRatings);
@@ -2571,6 +2591,18 @@ const App = () => {
         });
       });
 
+      // 1.5 Add explicitly fetched pubs (to ensure they survive radius map updates)
+      Object.values(fetchedPubsDict).forEach(fetchedPub => {
+        if (!processedPubs.has(fetchedPub.id)) {
+            const override = osmPubOverrides.get(fetchedPub.id);
+            processedPubs.set(fetchedPub.id, {
+              ...fetchedPub,
+              name: override?.name || fetchedPub.name,
+              is_closed: !!fetchedPub.is_closed || closedOsmPubIds.has(fetchedPub.id) || closedStoutlyPubIds.has(fetchedPub.id),
+            });
+        }
+      });
+
       // 2. Merge with Mapbox results.
       mapSearchResults.forEach(mapboxPub => {
         const override = osmPubOverrides.get(mapboxPub.id);
@@ -2609,6 +2641,7 @@ const App = () => {
     let radiusFilteredPubs = pubsToFilter;
     if (!showAllDbPubs) {
         radiusFilteredPubs = pubsToFilter.filter(pub => {
+            if (fetchedPubsDict[pub.id]) return true; // ALWAYS include explicitly fetched pubs
             if (!pub.location || !searchOrigin) return false; // Should not happen but safe guard.
             return getDistance(pub.location, searchOrigin) <= settings.radius;
         });
@@ -2617,6 +2650,12 @@ const App = () => {
     if (settings.showUserRatedPubs && userRatings) {
         const existingPubIds = new Set(radiusFilteredPubs.map(p => p.id));
         userRatings.forEach(rating => {
+            // Apply radius filtering to user rated pubs as well, except in dev mode.
+            if (!showAllDbPubs && searchOrigin && rating.pubLocation) {
+                if (getDistance(rating.pubLocation, searchOrigin) > settings.radius) {
+                    return;
+                }
+            }
             if (rating.pubId && rating.pubLocation && !existingPubIds.has(rating.pubId)) {
                 radiusFilteredPubs.push({
                     id: rating.pubId,
@@ -2655,7 +2694,7 @@ const App = () => {
         setInitialSearchComplete(true);
     }
 
-  }, [showAllDbPubs, mapSearchResults, dbPubs, allRatings, allRatedPubsData, pubScores, searchOrigin, getDistance, closedOsmPubIds, closedStoutlyPubIds, osmPubOverrides, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded, isClosedStoutlyPubsLoaded, settings.radius, settings.showUserRatedPubs, userRatings]);
+  }, [showAllDbPubs, mapSearchResults, dbPubs, fetchedPubsDict, allRatings, allRatedPubsData, pubScores, searchOrigin, getDistance, closedOsmPubIds, closedStoutlyPubIds, osmPubOverrides, normalizePubNameForComparison, isDbPubsLoaded, isClosedOsmPubsLoaded, isOsmOverridesLoaded, isClosedStoutlyPubsLoaded, settings.radius, settings.showUserRatedPubs, userRatings]);
 
   // This effect will run after pubs are loaded and look for any without an address
   useEffect(() => {
@@ -3887,8 +3926,38 @@ const App = () => {
         setAlertInfo({ isOpen: true, title: 'Error', message: `Could not post comment: ${error.message}`, theme: 'error' });
     } else {
       await fetchCommentsForPost(postId);
+      
+      try {
+          let postOwnerId = null;
+          let postPubId = null;
+          const { data: postData } = await supabase.from('posts').select('user_id, pub_id').eq('id', postId).single();
+          if (postData) {
+              postOwnerId = postData.user_id;
+              postPubId = postData.pub_id;
+          }
+
+          const parentComment = parentCommentId ? commentsByPost.get(postId)?.find(c => c.id === parentCommentId) : null;
+          const targetUserId = parentComment ? parentComment.user_id : postOwnerId;
+
+          if (targetUserId && targetUserId !== session.user.id) {
+              const notifyPayload = {
+                  recipient_id: targetUserId,
+                  actor_id: session.user.id,
+                  type: 'new_comment',
+                  entity_id: postId,
+                  metadata: {
+                      type: parentComment ? 'post_reply' : 'post_comment',
+                      post_id: postId,
+                      pub_id: postPubId 
+                  }
+              };
+              await supabase.from('notifications').insert(notifyPayload);
+          }
+      } catch (e) {
+          console.error("Error creating post notification", e);
+      }
     }
-  }, [session, setAlertInfo, fetchCommentsForPost, setIsAuthOpen]);
+  }, [session, setAlertInfo, fetchCommentsForPost, setIsAuthOpen, commentsByPost]);
 
   const handleDeletePostComment = useCallback(async (commentId, postId) => {
     trackEvent('delete_post_comment', { comment_id: commentId });
@@ -4221,8 +4290,34 @@ const App = () => {
     } else {
       // Re-fetch all comments for the rating to get the updated thread structure
       await fetchCommentsForRating(ratingId);
+      
+      // Attempt manual notification push
+      try {
+          const rating = allRatings?.find(r => r.id === ratingId);
+          const targetUserId = parentCommentId 
+              ? commentsByRating.get(ratingId)?.find(c => c.id === parentCommentId)?.user_id 
+              : rating?.user_id;
+
+          if (targetUserId && targetUserId !== session.user.id) {
+              const notifyPayload = {
+                  recipient_id: targetUserId,
+                  actor_id: session.user.id,
+                  type: 'new_comment',
+                  entity_id: ratingId,
+                  metadata: {
+                      type: parentCommentId ? 'reply' : 'rating_comment',
+                      rating_id: ratingId,
+                      pub_id: rating?.pub_id
+                  }
+              };
+              const { error: notifError } = await supabase.from('notifications').insert(notifyPayload);
+              if (notifError) console.error("TEST NOTIF ERROR:", notifError);
+          }
+      } catch (e) {
+          console.error("NOTIF CATCH ERROR", e);
+      }
     }
-  }, [session, setAlertInfo, fetchCommentsForRating, setIsAuthOpen]);
+  }, [session, setAlertInfo, fetchCommentsForRating, setIsAuthOpen, allRatings, commentsByRating]);
 
   const layoutProps = {
       isDesktop,
@@ -4382,6 +4477,16 @@ const App = () => {
                 userLocation={userLocation}
                 allRatings={allRatings}
                 isActiveCrawl={isCrawlModeActive}
+                userPostLikes={userPostLikes}
+                onTogglePostLike={handleTogglePostLike}
+                commentsByPost={commentsByPost}
+                isPostCommentsLoading={isPostCommentsLoading}
+                onFetchCommentsForPost={fetchCommentsForPost}
+                onAddPostComment={handleAddPostComment}
+                onDeletePostComment={handleDeletePostComment}
+                onEditPost={handleEditPost}
+                onDeletePost={handleDeletePost}
+                onOpenSharePostModal={setSharePostModalPost}
               />
             </div>
           ) : (
