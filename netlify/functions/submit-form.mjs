@@ -1,5 +1,4 @@
 // netlify/functions/submit-form.mjs
-import fetch from 'node-fetch';
 
 export const handler = async (event) => {
   // --- CORS Preflight Check ---
@@ -30,22 +29,26 @@ export const handler = async (event) => {
   };
 
   try {
-    const body = new URLSearchParams(event.body);
+    let rawBody = event.body || '';
+    if (event.isBase64Encoded && rawBody) {
+      rawBody = Buffer.from(rawBody, 'base64').toString('utf8');
+    }
+    const body = new URLSearchParams(rawBody);
     const formName = body.get('form-name');
 
     if (!formName) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing form-name in submission.' }),
+        body: JSON.stringify({ error: 'Missing form-name in submission.', receivedBody: rawBody }),
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       };
     }
     
     // The URL for the Netlify site where the form is defined.
     // process.env.URL is a built-in Netlify environment variable.
-    const siteUrl = process.env.URL;
-    if (!siteUrl) {
-      throw new Error("Site URL is not available in environment variables.");
+    let siteUrl = process.env.URL || 'https://app.stoutly.co.uk';
+    if (!siteUrl.endsWith('/')) {
+      siteUrl += '/';
     }
 
     // Forward the submission to Netlify's internal form handler
