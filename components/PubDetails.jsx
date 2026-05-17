@@ -16,6 +16,8 @@ import CertifiedExplanationModal from './CertifiedExplanationModal.jsx';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import PostCard from './PostCard.jsx';
+import CheckInModal from './CheckInModal.jsx';
+import CheckInCard from './CheckInCard.jsx';
 
 const Section = React.forwardRef(({ title, children, ...props }, ref) => (
     <section ref={ref} {...props} aria-labelledby={title ? `section-title-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined}>
@@ -91,7 +93,7 @@ const PintGallery = ({ ratings, onViewImage }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportContent, highlightedRatingId, highlightedCommentId, highlightedPostId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [], onViewPub, isEditRatingFlow, userPostLikes, onTogglePostLike, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, onEditPost, onDeletePost, onOpenSharePostModal, pubScores }) => {
+const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportContent, highlightedRatingId, highlightedCommentId, highlightedPostId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [], onViewPub, isEditRatingFlow, userPostLikes, onTogglePostLike, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, onEditPost, onDeletePost, onOpenSharePostModal, pubScores, dbPubs, getDistance, userLocation, onDeleteRating, handleAddXP, handleRemoveXP }) => {
   const [localPub, setLocalPub] = useState(pub);
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
@@ -102,12 +104,51 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
   const ratingsListRef = useRef(null);
   const postsListRef = useRef(null);
   const yourRatingSectionRef = useRef(null);
+  const communityActivityRef = useRef(null);
   const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
   const [isCertifiedModalOpen, setIsCertifiedModalOpen] = useState(false);
   const { rates: exchangeRates } = useContext(ExchangeRatesContext);
   const isDesktop = useIsDesktop();
   const [pubPosts, setPubPosts] = useState([]);
   const [isFetchingPosts, setIsFetchingPosts] = useState(false);
+  const [pubCheckins, setPubCheckins] = useState([]);
+  const [isFetchingCheckins, setIsFetchingCheckins] = useState(false);
+  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [feedFilter, setFeedFilter] = useState('all'); // 'all', 'ratings', 'posts', 'checkins'
+  const [showMineOnly, setShowMineOnly] = useState(false);
+  const [isAddressExpanded, setIsAddressExpanded] = useState(false);
+  const [simulateProximity, setSimulateProximity] = useState(false);
+
+  const areaStats = useMemo(() => {
+      if (!localPub || !localPub.pub_score || !dbPubs || !getDistance) return null;
+      
+      const AREA_RADIUS_METERS = 5000; // 5km radius
+      const MIN_PUBS_FOR_AVERAGE = 3;
+      
+      let totalScore = 0;
+      let count = 0;
+      
+      for (const p of dbPubs) {
+          if (!p.location?.lat || !p.location?.lng) continue; 
+          
+          const pScore = p.pub_score !== undefined ? p.pub_score : (pubScores && pubScores.get(p.id));
+          if (pScore == null) continue;
+
+          const dist = getDistance({lat: localPub.location?.lat, lng: localPub.location?.lng}, {lat: p.location.lat, lng: p.location.lng});
+          if (dist <= AREA_RADIUS_METERS) {
+              totalScore += pScore;
+              count++;
+          }
+      }
+      
+      if (count >= MIN_PUBS_FOR_AVERAGE) {
+          return {
+              average: Math.round(totalScore / count),
+              count
+          };
+      }
+      return null;
+  }, [localPub, dbPubs, pubScores, getDistance]);
 
   useEffect(() => {
     const fetchPubPosts = async () => {
@@ -132,8 +173,85 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
             setIsFetchingPosts(false);
         }
     };
+
+    const fetchPubCheckins = async () => {
+        if (!localPub.id) return;
+        setIsFetchingCheckins(true);
+        try {
+            const { data, error } = await supabase
+                .from('pub_checkins')
+                .select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend)`)
+                .eq('pub_id', localPub.id)
+                .eq('user.is_banned', false)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Error fetching pub checkins:", error);
+            } else {
+                const formattedData = (data || []).map(checkin => ({
+                    ...checkin,
+                    pub: {
+                        id: localPub.id,
+                        name: localPub.name,
+                        address: localPub.address,
+                        lat: localPub.lat,
+                        lng: localPub.lng,
+                        country_code: localPub.country_code,
+                        country_name: localPub.country_name
+                    }
+                }));
+                setPubCheckins(formattedData);
+            }
+        } catch (err) {
+            console.error("Error in fetchPubCheckins:", err);
+        } finally {
+            setIsFetchingCheckins(false);
+        }
+    };
+
     fetchPubPosts();
+    fetchPubCheckins();
   }, [localPub.id]);
+
+  const combinedFeed = useMemo(() => {
+    let feedItems = [];
+
+    // Add Ratings
+    if (localPub.ratings && (feedFilter === 'all' || feedFilter === 'ratings')) {
+        let ratingItems = localPub.ratings.map(r => ({ ...r, feedType: 'rating' }));
+        if (showMineOnly && session) {
+            ratingItems = ratingItems.filter(r => r.user_id === session.user.id);
+        }
+        feedItems = feedItems.concat(ratingItems);
+    }
+
+    // Add Posts
+    if (pubPosts && (feedFilter === 'all' || feedFilter === 'posts')) {
+        let postItems = pubPosts.map(p => ({ ...p, feedType: 'post' }));
+        if (showMineOnly && session) {
+            postItems = postItems.filter(p => p.user_id === session.user.id);
+        }
+        feedItems = feedItems.concat(postItems);
+    }
+
+    // Add Checkins
+    if (pubCheckins && (feedFilter === 'all' || feedFilter === 'checkins')) {
+        let checkinItems = pubCheckins.map(c => ({ ...c, feedType: 'checkin' }));
+        if (showMineOnly && session) {
+            checkinItems = checkinItems.filter(c => c.user_id === session.user.id);
+        }
+        feedItems = feedItems.concat(checkinItems);
+    }
+
+    // Sort by date (newest first)
+    feedItems.sort((a, b) => {
+        const dateA = new Date(a.created_at || a.timestamp);
+        const dateB = new Date(b.created_at || b.timestamp);
+        return dateB - dateA;
+    });
+
+    return feedItems;
+  }, [localPub.ratings, pubPosts, pubCheckins, feedFilter, showMineOnly, session]);
 
   const isCertified = localPub.certification_status === 'certified' || localPub.certification_status === 'at_risk';
   const isDeveloper = loggedInUserProfile?.is_developer;
@@ -154,7 +272,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
             const fetchFullPubData = async () => {
                 const { data, error } = await supabase
                     .from('pubs')
-                    .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since, is_closed, guinness_zero_confirmations, guinness_zero_denials, local_avg_price')
+                    .select('id, name, address, lat, lng, country_code, country_name, certification_status, certified_since, is_closed, guinness_zero_confirmations, guinness_zero_denials, local_avg_price, checkin_count')
                     .eq('id', pub.id)
                     .single();
                 if (data && !error) {
@@ -252,10 +370,13 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
         }
     }, [highlightedCommentId, localPub.ratings, commentsByRating]);
 
-  const handleScrollToRatings = () => {
-    if (ratingsListRef.current) {
-        ratingsListRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        trackEvent('click_scroll_to_ratings', { pub_id: localPub.id });
+  const handleScrollToCommunityActivity = (filterType) => {
+    if (filterType) {
+        setFeedFilter(filterType);
+    }
+    if (communityActivityRef.current) {
+        communityActivityRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        trackEvent('click_scroll_to_community_activity', { pub_id: localPub.id, filter: filterType });
     }
   };
 
@@ -426,57 +547,14 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
         }
     }
     
-    const currentUserVote = userZeroVotes ? userZeroVotes.get(localPub.id) : undefined;
-    
     return (
         <Section title="Guinness 0.0 Status">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                <div className="flex items-center space-x-3 mb-3">
+                <div className="flex items-center space-x-3">
                     <i className={`fas ${statusIcon} text-2xl ${statusColor}`}></i>
                     <div>
                         <h4 className={`text-lg font-bold ${statusColor}`}>{status}</h4>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-                    </div>
-                </div>
-                <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Is this correct?</p>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => onGuinnessZeroVote(localPub.id, true)}
-                            disabled={currentUserVote === true}
-                            className={`w-1/3 py-2 text-sm rounded-lg font-bold transition-colors flex items-center justify-center space-x-2 disabled:cursor-not-allowed ${
-                                currentUserVote === true 
-                                ? 'bg-green-500 text-white shadow' 
-                                : 'bg-green-100 dark:bg-green-800/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800'
-                            }`}
-                        >
-                            <i className="fas fa-check"></i>
-                            <span>Yes</span>
-                        </button>
-                        <button
-                            onClick={() => onGuinnessZeroVote(localPub.id, false)}
-                            disabled={currentUserVote === false}
-                            className={`w-1/3 py-2 text-sm rounded-lg font-bold transition-colors flex items-center justify-center space-x-2 disabled:cursor-not-allowed ${
-                                currentUserVote === false 
-                                ? 'bg-red-500 text-white shadow' 
-                                : 'bg-red-100 dark:bg-red-800/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800'
-                            }`}
-                        >
-                             <i className="fas fa-times"></i>
-                            <span>No</span>
-                        </button>
-                        <button
-                            onClick={() => onClearGuinnessZeroVote(localPub.id)}
-                            disabled={currentUserVote === undefined}
-                            className={`w-1/3 py-2 text-sm rounded-lg font-bold transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                                currentUserVote !== undefined
-                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                                : 'bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-500' // Inactive and disabled style
-                            }`}
-                        >
-                             <i className="fas fa-question"></i>
-                            <span>Not Sure</span>
-                        </button>
                     </div>
                 </div>
             </div>
@@ -486,6 +564,74 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
 
   const renderYourRatingSection = () => {
     if (localPub.is_closed) return null;
+
+    const handleCheckInClick = () => {
+        if (!session) {
+            onLoginRequest();
+            return;
+        }
+        if (!canCheckIn) {
+            return;
+        }
+        setIsCheckInModalOpen(true);
+    };
+
+    let canCheckIn = true;
+    let timeUntilNextCheckIn = null;
+    let isNearPub = false;
+
+    if (userLocation && localPub && localPub.location && getDistance) {
+        const distanceToPub = getDistance(userLocation, localPub.location);
+        if (distanceToPub <= 250 || simulateProximity) { // 250 meters
+            isNearPub = true;
+        }
+    }
+
+    if (!existingUserRating) {
+        canCheckIn = false;
+        timeUntilNextCheckIn = "Rate this pub first.";
+    } else {
+        const ratingTime = new Date(existingUserRating.timestamp).getTime();
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+        const timeDiffFromRating = Date.now() - ratingTime;
+        
+        if (timeDiffFromRating < twentyFourHours) {
+            canCheckIn = false;
+            const msUntilAvailable = twentyFourHours - timeDiffFromRating;
+            const hoursWait = Math.floor(msUntilAvailable / (60 * 60 * 1000));
+            const minsWait = Math.floor((msUntilAvailable % (60 * 60 * 1000)) / (60 * 1000));
+            if (hoursWait > 0) {
+                timeUntilNextCheckIn = `Unlock in ${hoursWait}h ${minsWait}m`;
+            } else {
+                timeUntilNextCheckIn = `Unlock in ${minsWait}m`;
+            }
+        }
+    }
+
+    if (canCheckIn && !isNearPub) {
+        canCheckIn = false;
+        timeUntilNextCheckIn = "You must be near the pub to check in.";
+    }
+
+    if (canCheckIn && session && pubCheckins && pubCheckins.length > 0) {
+        const userCheckins = pubCheckins.filter(c => c.user_id === session.user.id);
+        if (userCheckins.length > 0) {
+            const mostRecentCheckInTime = new Date(userCheckins[0].created_at).getTime();
+            const twelveHours = 12 * 60 * 60 * 1000;
+            const timeDiff = Date.now() - mostRecentCheckInTime;
+            if (timeDiff < twelveHours) {
+                canCheckIn = false;
+                const msUntilNext = twelveHours - timeDiff;
+                const hoursWait = Math.floor(msUntilNext / (60 * 60 * 1000));
+                const minsWait = Math.floor((msUntilNext % (60 * 60 * 1000)) / (60 * 1000));
+                if (hoursWait > 0) {
+                    timeUntilNextCheckIn = `Available in ${hoursWait}h ${minsWait}m`;
+                } else {
+                    timeUntilNextCheckIn = `Available in ${minsWait}m`;
+                }
+            }
+        }
+    }
 
     if (!session) {
         return (
@@ -505,16 +651,39 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
     
     if (existingUserRating) {
         return (
-            <Section title="Your Rating" ref={yourRatingSectionRef}>
-                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+            <Section title="Your Rating & Check-in" ref={yourRatingSectionRef}>
+                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md divide-y divide-gray-100 dark:divide-gray-700">
+                    <button 
+                        onClick={handleCheckInClick}
+                        disabled={!canCheckIn}
+                        className={`w-full text-left p-4 rounded-t-lg flex justify-between items-center transition-colors ${canCheckIn ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : 'cursor-not-allowed opacity-60 bg-gray-50 dark:bg-gray-800/50'}`}
+                    >
+                        <div className="flex items-center space-x-3">
+                            <div className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center ${canCheckIn ? 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                                <i className="fas fa-location-dot"></i>
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-lg text-gray-800 dark:text-white">Check In</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    {canCheckIn ? 'Back again? Let us know quickly!' : timeUntilNextCheckIn}
+                                </p>
+                            </div>
+                        </div>
+                        <i className={`fas fa-chevron-right ${canCheckIn ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}`}></i>
+                    </button>
                     {!isRatingFormExpanded && (
                          <button 
                             onClick={() => setIsRatingFormExpanded(true)}
-                            className="w-full text-left p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg flex justify-between items-center"
+                            className="w-full text-left p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-b-lg flex justify-between items-center transition-colors"
                          >
-                            <div>
-                                <h4 className="font-bold text-lg text-gray-800 dark:text-white">Update Your Rating</h4>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">You rated this pub on {new Date(existingUserRating.timestamp).toLocaleDateString()}.</p>
+                            <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                                    <i className="fas fa-solid fa-pen"></i>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-lg text-gray-800 dark:text-white">Update Your Rating</h4>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">You rated this pub on {new Date(existingUserRating.timestamp).toLocaleDateString()}.</p>
+                                </div>
                             </div>
                             <i className="fas fa-chevron-down text-gray-500 dark:text-gray-400"></i>
                         </button>
@@ -537,16 +706,39 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
 
     // New rating, form is inside a collapsible section
     return (
-        <Section title="Your Rating" ref={yourRatingSectionRef}>
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+        <Section title="Your Rating & Check-in" ref={yourRatingSectionRef}>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md divide-y divide-gray-100 dark:divide-gray-700">
+                <button 
+                    onClick={handleCheckInClick}
+                    disabled={!canCheckIn}
+                    className={`w-full text-left p-4 rounded-t-lg flex justify-between items-center transition-colors ${canCheckIn ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : 'cursor-not-allowed opacity-60 bg-gray-50 dark:bg-gray-800/50'}`}
+                >
+                    <div className="flex items-center space-x-3">
+                        <div className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center ${canCheckIn ? 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                            <i className="fas fa-location-dot"></i>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-lg text-gray-800 dark:text-white">Check In</h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {canCheckIn ? 'Back again? Let us know quickly!' : timeUntilNextCheckIn}
+                            </p>
+                        </div>
+                    </div>
+                    <i className={`fas fa-chevron-right ${canCheckIn ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}`}></i>
+                </button>
                 {!isRatingFormExpanded && (
                     <button 
                         onClick={() => setIsRatingFormExpanded(true)}
-                        className="w-full text-left p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg flex justify-between items-center"
+                        className="w-full text-left p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-b-lg flex justify-between items-center transition-colors"
                     >
-                        <div>
-                            <h4 className="font-bold text-lg text-gray-800 dark:text-white">Rate This Pub</h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Share your experience with the community.</p>
+                        <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                                <i className="fas fa-star"></i>
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-lg text-gray-800 dark:text-white">Rate This Pub</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Share your experience with the community.</p>
+                            </div>
                         </div>
                          <i className="fas fa-chevron-down text-gray-500 dark:text-gray-400"></i>
                     </button>
@@ -567,7 +759,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
 
   return (
     <>
-    {imageToView && <ImageModal rating={imageToView} onClose={() => setImageToView(null)} onReport={() => handleInitiateReport(imageToView)} canReport={loggedInUserProfile && loggedInUserProfile.id !== imageToView.user.id} canAdminRemove={isDeveloper} onAdminRemove={confirmAdminRemoveImage} />}
+    {imageToView && <ImageModal rating={imageToView} onClose={() => setImageToView(null)} onReport={() => handleInitiateReport(imageToView)} canReport={loggedInUserProfile && loggedInUserProfile.id !== imageToView.user.id} canAdminRemove={isDeveloper} onAdminRemove={confirmAdminRemoveImage} isDeveloper={isDeveloper} />}
     {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
     {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={isActionLoading} onClose={() => setConfirmation({ isOpen: false })} />}
     {isCertifiedModalOpen && <CertifiedExplanationModal isOpen={isCertifiedModalOpen} onClose={() => setIsCertifiedModalOpen(false)} />}
@@ -586,7 +778,11 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                     <h1 className="text-xl font-bold text-gray-900 dark:text-white truncate" title={localPub.name}>
                         {localPub.name}
                     </h1>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={localPub.address}>
+                    <p 
+                        className={`text-xs text-gray-500 dark:text-gray-400 ${isAddressExpanded ? '' : 'truncate'} cursor-pointer md:cursor-auto active:bg-gray-100 dark:active:bg-gray-800 rounded`} 
+                        title={localPub.address}
+                        onClick={() => !isDesktop && setIsAddressExpanded(!isAddressExpanded)}
+                    >
                         {localPub.address}
                     </p>
                 </div>
@@ -605,8 +801,16 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                     </button>
                 )}
                  <button
+                    onClick={() => onOpenSuggestEditModal(localPub)}
+                    className="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors h-10 w-10 flex flex-shrink-0 items-center justify-center rounded-full"
+                    aria-label="Suggest an edit"
+                    title="Suggest an edit"
+                >
+                    <i className="fas fa-edit fa-lg"></i>
+                </button>
+                 <button
                     onClick={() => onOpenShareModal(localPub)}
-                    className="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors h-10 w-10 flex items-center justify-center rounded-full"
+                    className="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors h-10 w-10 flex flex-shrink-0 items-center justify-center rounded-full"
                     aria-label="Share pub"
                 >
                     <i className="fas fa-share-alt fa-lg"></i>
@@ -618,9 +822,15 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
             <div className={`w-full ${isDesktop ? 'max-w-3xl mx-auto' : ''} p-4 space-y-6`}>
                 {isDevInfoVisible && isDeveloper && (
                     <Section>
-                        <div className="p-3 bg-gray-200 dark:bg-gray-900 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 break-all animate-fade-in-down">
+                        <div className="p-3 bg-gray-200 dark:bg-gray-900 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 break-all animate-fade-in-down space-y-2">
                             <p><strong>Pub ID:</strong> {localPub.id}</p>
                             <p><strong>Local Avg Price:</strong> {localPub.local_avg_price ? `${currencyInfo.symbol}${localPub.local_avg_price.toFixed(2)}` : 'N/A'}</p>
+                            <button
+                                onClick={() => setSimulateProximity(!simulateProximity)}
+                                className={`px-2 py-1 rounded text-white ${simulateProximity ? 'bg-amber-600' : 'bg-gray-500 hover:bg-gray-600'} transition-colors mt-2`}
+                            >
+                                {simulateProximity ? 'Simulate Proximity: ON' : 'Simulate Proximity: OFF'}
+                            </button>
                         </div>
                     </Section>
                 )}
@@ -642,6 +852,20 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                                     </button>
                                 </div>
                                 <ScoreGauge score={localPub.pub_score} />
+                                {areaStats && localPub.pub_score != null && (
+                                    <div className={`mt-3 text-xs font-medium flex items-center justify-center space-x-1.5 opacity-90 animate-fade-in-up ${
+                                        localPub.pub_score > areaStats.average 
+                                            ? 'text-emerald-600 dark:text-emerald-400' 
+                                            : 'text-gray-500 dark:text-gray-400'
+                                    }`}>
+                                        <i className={`fas ${localPub.pub_score > areaStats.average ? 'fa-arrow-trend-up' : 'fa-map-location-dot'}`}></i>
+                                        <span>
+                                            {localPub.pub_score > areaStats.average 
+                                                ? `Above area average of ${areaStats.average}` 
+                                                : `Area average: ${areaStats.average}`}
+                                        </span>
+                                    </div>
+                                )}
                                 {rank && (
                                     <div className="mt-4 animate-fade-in-down">
                                         <span className="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-sm font-bold px-4 py-2 rounded-full border border-amber-200 dark:border-amber-800/60">
@@ -667,16 +891,16 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
 
                         {/* Small Stat Cards Section */}
                         <Section>
-                            <div className="flex gap-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                 {/* Quality Card */}
-                                <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
+                                <div className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
                                     <i className="fas fa-beer text-3xl text-amber-500 mb-2"></i>
                                     <div className="text-xl font-bold text-gray-900 dark:text-white">{avgQuality.toFixed(1)} / 5</div>
                                     <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1">Quality</div>
                                 </div>
 
                                 {/* Avg. Price Card */}
-                                <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
+                                <div className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center">
                                     <i className="fas fa-tag text-3xl text-green-500 mb-2"></i>
                                     {priceInfo.originalPrice ? (
                                         <div>
@@ -692,10 +916,17 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                                     </div>
                                 </div>
 
-                                {/* Ratings Card */}
                                 <button
-                                    onClick={handleScrollToRatings}
-                                    className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+                                    onClick={() => handleScrollToCommunityActivity('checkins')}
+                                    className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+                                >
+                                    <i className="fas fa-location-dot text-3xl text-green-500 mb-2"></i>
+                                    <div className="text-xl font-bold text-gray-900 dark:text-white">{pubCheckins?.length || 0}</div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400 uppercase mt-1">Check-ins</div>
+                                </button>
+                                <button
+                                    onClick={() => handleScrollToCommunityActivity('ratings')}
+                                    className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center flex flex-col items-center justify-center transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                                     aria-label={`Scroll to ${localPub.ratings.length} community ratings`}
                                 >
                                     <i className="fas fa-users text-3xl text-blue-500 mb-2"></i>
@@ -712,106 +943,196 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                     </div>
                 )}
 
-                <GuinnessZeroStatus />
-
-                <div className="text-center mt-2">
-                    <button
-                        onClick={() => onOpenSuggestEditModal(localPub)}
-                        className="text-sm text-gray-500 dark:text-gray-400 hover:underline"
-                    >
-                        <i className="fas fa-edit mr-1"></i>Suggest an edit
-                    </button>
-                </div>
-
                 {renderYourRatingSection()}
+
+                <GuinnessZeroStatus />
                 
                 <PintGallery ratings={localPub.ratings} onViewImage={setImageToView} />
 
-                <Section title="Community Ratings" className="mt-4">
-                    <div ref={ratingsListRef} className="space-y-3">
-                        {
-                            (() => {
-                                // We now show the user's own rating in this list.
-                                // We sort them to show the user's rating first, followed by the newest ratings.
-                                const sortedRatings = [...localPub.ratings].sort((a, b) => {
-                                    if (existingUserRating) {
-                                        if (a.id === existingUserRating.id) return -1; // a comes first
-                                        if (b.id === existingUserRating.id) return 1;  // b comes first
-                                    }
-                                    // For all other ratings, sort by updated date (newest first)
-                                    const dateA = new Date(a.updated_at || a.created_at);
-                                    const dateB = new Date(b.updated_at || b.created_at);
-                                    return dateB - dateA;
-                                });
+                <Section ref={communityActivityRef} title="Community Activity" className="mt-4">
+                    <div className="flex space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+                        <button
+                            onClick={() => setFeedFilter('all')}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                                feedFilter === 'all' 
+                                    ? 'bg-amber-500 text-black' 
+                                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            All
+                        </button>
+                        <button
+                            onClick={() => setFeedFilter('ratings')}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                                feedFilter === 'ratings' 
+                                    ? 'bg-amber-500 text-black' 
+                                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            Ratings
+                        </button>
+                        <button
+                            onClick={() => setFeedFilter('posts')}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                                feedFilter === 'posts' 
+                                    ? 'bg-amber-500 text-black' 
+                                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            Posts
+                        </button>
+                        <button
+                            onClick={() => setFeedFilter('checkins')}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                                feedFilter === 'checkins' 
+                                    ? 'bg-amber-500 text-black' 
+                                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            Check-ins
+                        </button>
+                    </div>
 
-                                if (sortedRatings.length > 0) {
-                                    return sortedRatings.map(rating => (
-                                        <RatingCard 
-                                            key={rating.id}
-                                            rating={rating}
-                                            userLikes={userLikes}
-                                            onToggleLike={handleLocalToggleLike}
-                                            onViewProfile={onViewProfile}
-                                            onLoginRequest={onLoginRequest}
-                                            onViewImage={setImageToView}
-                                            onViewPub={onViewPub}
-                                            loggedInUserProfile={loggedInUserProfile}
-                                            comments={commentsByRating.get(rating.id)}
-                                            isCommentsLoading={isCommentsLoading}
-                                            onFetchComments={onFetchComments}
-                                            onAddComment={onAddComment}
-                                            onDeleteComment={onDeleteComment}
-                                            onReportContent={onReportContent}
-                                            onOpenShareRatingModal={onOpenShareRatingModal}
-                                            fallbackLocationData={localPub}
-                                            highlightedCommentId={rating.id === highlightedRatingId ? highlightedCommentId : null}
-                                        />
-                                    ));
-                                } else {
+                    {session && (
+                        <div className="flex justify-end mb-4 pr-1">
+                            <label className="flex items-center cursor-pointer">
+                                <span className="mr-2 text-sm text-gray-600 dark:text-gray-400">Show Mine</span>
+                                <div className="relative">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer"
+                                        checked={showMineOnly}
+                                        onChange={(e) => setShowMineOnly(e.target.checked)}
+                                    />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-amber-500"></div>
+                                </div>
+                            </label>
+                        </div>
+                    )}
+
+                    <div className="space-y-3">
+                        {combinedFeed.length > 0 ? (
+                            combinedFeed.map(item => {
+                                if (item.feedType === 'rating') {
                                     return (
-                                        <div className="text-center p-4 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                                            <p>No community ratings yet. Be the first!</p>
+                                        <div key={`rating-${item.id}`} ref={rating => { if(rating && item.id === highlightedRatingId) { ratingsListRef.current = rating.parentNode } }}>
+                                            <RatingCard 
+                                                rating={item}
+                                                userLikes={userLikes}
+                                                onToggleLike={handleLocalToggleLike}
+                                                onViewProfile={onViewProfile}
+                                                onLoginRequest={onLoginRequest}
+                                                onViewImage={setImageToView}
+                                                onViewPub={onViewPub}
+                                                loggedInUserProfile={loggedInUserProfile}
+                                                comments={commentsByRating.get(item.id)}
+                                                isCommentsLoading={isCommentsLoading}
+                                                onFetchComments={onFetchComments}
+                                                onAddComment={onAddComment}
+                                                onDeleteComment={onDeleteComment}
+                                                onReportContent={onReportContent}
+                                                onOpenShareRatingModal={onOpenShareRatingModal}
+                                                fallbackLocationData={localPub}
+                                                highlightedCommentId={item.id === highlightedRatingId ? highlightedCommentId : null}
+                                                onDeleteRating={onDeleteRating}
+                                            />
                                         </div>
                                     );
+                                } else if (item.feedType === 'post') {
+                                    return (
+                                        <div key={`post-${item.id}`} data-post-id={item.id} ref={post => { if(post && item.id === highlightedPostId) { postsListRef.current = post.parentNode } }}>
+                                            <PostCard
+                                                post={item}
+                                                userPostLikes={userPostLikes}
+                                                onToggleLike={onTogglePostLike}
+                                                onViewProfile={onViewProfile}
+                                                onLoginRequest={onLoginRequest}
+                                                onViewPub={onViewPub}
+                                                loggedInUserProfile={loggedInUserProfile}
+                                                commentsByPost={commentsByPost}
+                                                isPostCommentsLoading={isPostCommentsLoading}
+                                                onFetchCommentsForPost={onFetchCommentsForPost}
+                                                onAddPostComment={onAddPostComment}
+                                                onDeletePostComment={onDeletePostComment}
+                                                pubScores={pubScores}
+                                                onEditPost={onEditPost}
+                                                onDeletePost={onDeletePost}
+                                                onOpenSharePostModal={onOpenSharePostModal}
+                                                onReportContent={onReportContent}
+                                                highlightedCommentId={item.id === highlightedPostId ? highlightedCommentId : null}
+                                            />
+                                        </div>
+                                    );
+                                } else if (item.feedType === 'checkin') {
+                                    return (
+                                        <CheckInCard 
+                                            key={`checkin-${item.id}`} 
+                                            checkin={item} 
+                                            onViewProfile={onViewProfile} 
+                                            onViewImage={setImageToView}
+                                            currentUser={session?.user}
+                                            onDeleteCheckin={async (checkinId) => {
+                                                const { error } = await supabase.from('pub_checkins').delete().eq('id', checkinId).eq('user_id', session?.user?.id);
+                                                if (error) {
+                                                    console.error("Error deleting checkin:", error);
+                                                    setAlertInfo({ isOpen: true, title: "Error", message: "Failed to delete check-in." });
+                                                } else {
+                                                    setPubCheckins(prev => prev.filter(c => c.id !== checkinId));
+                                                    if (handleRemoveXP) handleRemoveXP(25);
+                                                    setAlertInfo({ isOpen: true, title: "Success", message: "Check-in deleted.", theme: "success" });
+                                                }
+                                            }}
+                                            onUpdateAmount={async (checkinId, amount) => {
+                                                const { error } = await supabase.from('pub_checkins').update({ amount_drank: amount }).eq('id', checkinId).eq('user_id', session?.user?.id);
+                                                if (error) {
+                                                    console.error("Error updating checkin amount:", error.message || error.details || error);
+                                                    setAlertInfo({ isOpen: true, title: "Error", message: `Failed to update check-in: ${error.message || error.details || 'Unknown error'}` });
+                                                } else {
+                                                    setPubCheckins(prev => prev.map(c => c.id === checkinId ? { ...c, amount_drank: amount } : c));
+                                                    setAlertInfo({ isOpen: true, title: "Success", message: "Number of pints added!", theme: "success" });
+                                                }
+                                            }}
+                                        />
+                                    );
                                 }
-                            })()
-                        }
+                                return null;
+                            })
+                        ) : (
+                            <div className="text-center p-4 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                                <p>No activity found. Be the first!</p>
+                            </div>
+                        )}
                     </div>
                 </Section>
-                
-                {pubPosts && pubPosts.length > 0 && (
-                    <Section title="Community Posts" className="mt-4">
-                        <div ref={postsListRef} className="space-y-3">
-                            {pubPosts.map(post => (
-                                <div key={post.id} data-post-id={post.id}>
-                                    <PostCard
-                                        post={post}
-                                        userPostLikes={userPostLikes}
-                                        onToggleLike={onTogglePostLike}
-                                        onViewProfile={onViewProfile}
-                                        onLoginRequest={onLoginRequest}
-                                        onViewPub={onViewPub}
-                                        loggedInUserProfile={loggedInUserProfile}
-                                        commentsByPost={commentsByPost}
-                                        isPostCommentsLoading={isPostCommentsLoading}
-                                        onFetchCommentsForPost={onFetchCommentsForPost}
-                                        onAddPostComment={onAddPostComment}
-                                        onDeletePostComment={onDeletePostComment}
-                                        pubScores={pubScores}
-                                        onEditPost={onEditPost}
-                                        onDeletePost={onDeletePost}
-                                        onOpenSharePostModal={onOpenSharePostModal}
-                                        onReportContent={onReportContent}
-                                        highlightedCommentId={post.id === highlightedPostId ? highlightedCommentId : null}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    </Section>
-                )}
             </div>
         </main>
     </div>
+    {isCheckInModalOpen && (
+        <CheckInModal
+            pub={localPub}
+            userProfile={loggedInUserProfile}
+            onClose={() => setIsCheckInModalOpen(false)}
+            existingUserRating={existingUserRating}
+            onSuccess={(newCheckin) => {
+                setPubCheckins(prev => [newCheckin, ...prev]);
+                setLocalPub(prev => ({
+                    ...prev,
+                    checkin_count: (prev.checkin_count || 0) + 1
+                }));
+                setIsCheckInModalOpen(false);
+                if (handleAddXP) handleAddXP(25, 'Checking into a Pub');
+                if (setAlertInfo) {
+                    setAlertInfo({
+                        isOpen: true,
+                        title: 'Check-in Successful',
+                        message: 'Your check-in has been successfully posted!',
+                        theme: 'success'
+                    });
+                }
+                if (onDataRefresh) onDataRefresh();
+            }}
+        />
+    )}
     </>
   );
 };

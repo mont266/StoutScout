@@ -17,30 +17,41 @@ const BannedPage = ({ userProfile, onLogout }) => {
         setFormState({ loading: true, success: false, error: null });
         trackEvent('generate_lead', { lead_type: 'ban_appeal' });
 
-        const formData = new FormData();
-        formData.append('form-name', 'ban-appeal');
-        formData.append('user_id', userProfile.id);
-        formData.append('username', username);
-        formData.append('appeal_reason', appealReason);
+        const params = new URLSearchParams();
+        params.append('form-name', 'ban-appeal');
+        params.append('user_id', userProfile.id);
+        params.append('username', username);
+        params.append('appeal_reason', appealReason);
 
         try {
-            // Use the absolute URL for the Netlify Function on native, relative path for web
-            const postUrl = Capacitor.isNativePlatform() 
-              ? `${NETLIFY_URL}/.netlify/functions/submit-form` 
-              : '/';
-
-            const response = await fetch(postUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams(formData).toString(),
-            });
-
-            if (response.ok) {
-                setFormState({ loading: false, success: true, error: null });
-                trackEvent('ban_appeal_success');
+            if (Capacitor.isNativePlatform()) {
+                const { CapacitorHttp } = await import('@capacitor/core');
+                const response = await CapacitorHttp.post({
+                    url: `${NETLIFY_URL}/`,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    data: params.toString(),
+                });
+                
+                if (response.status >= 200 && response.status < 300) {
+                    setFormState({ loading: false, success: true, error: null });
+                    trackEvent('ban_appeal_success');
+                } else {
+                    throw new Error(`Form submission failed: ${response.status}`);
+                }
             } else {
-                const errorText = await response.text();
-                throw new Error(`Form submission failed: ${response.status} ${response.statusText}. ${errorText}`);
+                const response = await fetch('/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params.toString(),
+                });
+    
+                if (response.ok) {
+                    setFormState({ loading: false, success: true, error: null });
+                    trackEvent('ban_appeal_success');
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(`Form submission failed: ${response.status} ${response.statusText}. ${errorText}`);
+                }
             }
         } catch (error) {
             setFormState({ loading: false, success: false, error: error.message });

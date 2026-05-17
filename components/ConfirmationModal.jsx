@@ -23,6 +23,20 @@ const THEME_CLASSES = {
         border: 'border-blue-500',
         button: 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 focus:ring-blue-500',
     },
+    amber: {
+        icon: 'fa-globe',
+        iconBg: 'bg-amber-100 dark:bg-amber-900/50',
+        iconText: 'text-amber-600 dark:text-amber-400',
+        border: 'border-amber-500',
+        button: 'bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 focus:ring-amber-400 text-black',
+    },
+    gray: {
+        icon: 'fa-cog',
+        iconBg: 'bg-gray-100 dark:bg-gray-800',
+        iconText: 'text-gray-600 dark:text-gray-400',
+        border: 'border-gray-500',
+        button: 'bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 focus:ring-gray-500',
+    },
 };
 
 
@@ -86,11 +100,11 @@ const ConfirmationModal = ({
                         type="button"
                         onClick={onConfirm}
                         disabled={isLoading}
-                        className={`w-full sm:w-1/2 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:cursor-wait flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${themeClasses.button}`}
+                        className={`w-full sm:w-1/2 font-bold py-2 px-4 rounded-lg transition-colors disabled:cursor-wait flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${themeClasses.button.includes('text-') ? themeClasses.button : themeClasses.button + ' text-white'}`}
                     >
                         {isLoading ? (
                             <>
-                                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white mr-2"></div>
+                                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current mr-2"></div>
                                 <span>Processing...</span>
                             </>
                         ) : (

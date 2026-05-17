@@ -7,7 +7,7 @@ import { trackEvent } from '../analytics.js';
 
 const PAGE_SIZE = 12;
 
-const ImageGallery = ({ totalImages, onBack, onViewProfile }) => {
+const ImageGallery = ({ totalImages, onBack, onViewProfile, isDeveloper }) => {
     const [images, setImages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -121,6 +121,7 @@ const ImageGallery = ({ totalImages, onBack, onViewProfile }) => {
                     onClose={() => setImageToView(null)}
                     canReport={false} // Reporting not needed in this dev view
                     canAdminRemove={false} // Removal is handled elsewhere
+                    isDeveloper={isDeveloper}
                 />
             )}
             <div className="flex flex-col h-full bg-white dark:bg-gray-900">

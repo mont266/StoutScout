@@ -21,7 +21,7 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const PrivacyPolicyPage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Privacy Policy" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: March 5, 2026</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: May 15, 2026</p>
             <p>Your privacy is important to us. This Privacy Policy explains how Stoutly ("we," "us," or "our") collects, uses, and shares information about you when you use our Service.</p>
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Information We Collect</h2>
@@ -30,6 +30,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 <li><strong>Account Information:</strong> When you create an account, we collect your email address, username, date of birth, and country of residence. Your password is encrypted and managed by our backend provider, Supabase; we never see it in plain text.</li>
                 <li><strong>Profile Information:</strong> We collect information you add to your profile, such as your selected or uploaded avatar/profile picture, your bio, and social media handles (e.g., for Instagram, X, or YouTube).</li>
                 <li><strong>Ratings and Reviews:</strong> We collect the ratings you submit, which include your scores for price and quality, and optionally, the exact price paid.</li>
+                <li><strong>Check-Ins and Consumption Stats:</strong> When you check in to a pub or submit a rating, we collect data about your visit, including the number of pints consumed, to track your statistics on your profile.</li>
                 <li><strong>Photographs:</strong> If you choose to add a photo to your rating, we collect and store the image file you upload. This image will be associated with your rating and profile.</li>
                 <li><strong>Comments:</strong> We collect any comments you post on ratings, which are linked to your account.</li>
                 <li><strong>Posts:</strong> We collect the titles and content of any posts you create on the community feed, along with any pubs you attach to them.</li>
@@ -40,6 +41,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
             <p className="font-bold mt-4">Information We Collect Automatically:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li><strong>Location Information:</strong> With your permission (granted via your browser or device settings), we access your device's geolocation to center the map, search for nearby pubs, and calculate distances. <strong>We do not store a historical log of your location.</strong> The location is used in real-time for core app functionality.</li>
+                <li><strong>Camera Access:</strong> We request access to your device's camera when you choose to take a photo directly within the app. We only capture and store the specific photos you decide to upload for your pub ratings or profile picture.</li>
                 <li><strong>Usage Information (Analytics):</strong> If you consent, we use Google Analytics to collect information about your interactions with the Service, such as the pages or features you access and other actions you take. This data helps us understand how the app is used and how to improve it. This may include your IP address, browser type, and operating system.</li>
             </ul>
 
@@ -54,6 +56,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 <li>Provide, maintain, and improve the Service.</li>
                 <li>Verify you are of legal drinking age in your country of residence.</li>
                 <li>Authenticate users and allow you to sign in to your account.</li>
+                <li>Maintain your general consumption statistics, such as lifetime pints consumed, to display your badges and standing on the leaderboard.</li>
                 <li>Display your ratings, comments, profile picture, and other profile information to the community (e.g., on leaderboards and pub detail pages).</li>
                 <li>Display the photographs you've submitted alongside your ratings to the community.</li>
                 <li>Generate custom pub crawl routes and itineraries based on your location and preferences using AI services.</li>

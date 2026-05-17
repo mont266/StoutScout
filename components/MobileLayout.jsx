@@ -15,7 +15,6 @@ import PubCrawlPage from './PubCrawlPage.jsx';
 import ShopPage from './ShopPage.jsx';
 
 // Popups & Modals
-import XPPopup from './XPPopup.jsx';
 import UpdateConfirmationPopup from './UpdateConfirmationPopup.jsx';
 import DeleteConfirmationPopup from './DeleteConfirmationPopup.jsx';
 import LevelUpPopup from './LevelUpPopup.jsx';
@@ -28,6 +27,7 @@ import FriendsListPage from './FriendsListPage.jsx';
 import SubmittingRatingModal from './SubmittingRatingModal.jsx';
 import AddPubConfirmationPopup from './AddPubConfirmationPopup.jsx';
 import MapSearchBar from './MapSearchBar.jsx';
+import XpGainedPopup from './XpGainedPopup.jsx';
 import NotificationToast from './NotificationToast.jsx';
 
 // Specific UI Elements
@@ -95,7 +95,7 @@ const MobileLayout = (props) => {
         getAverageRating, resultsAreCapped, isDbSLoaded, initialSearchComplete,
         profilePage, session, userProfile, onLogout,
         selectedPub, existingUserRating, handleRatePub,
-        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
+        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo, xpGainedInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, onViewProfile, legalPageView, handleViewLegal, handleDataRefresh,
         installPromptEvent, setInstallPromptEvent,
@@ -106,6 +106,7 @@ const MobileLayout = (props) => {
         handleFindPlace, onPubSelected,
         searchRadius, showSearchRadius, showSearchOrigin,
         levelRequirements,
+        isLocatingUser,
         locationPermissionStatus, onRequestPermission,
         friendships, userLikes, onToggleLike, onFriendRequest, onFriendAction,
         viewingFriendsOf, friendsList, isFetchingFriendsList, handleViewFriends, handleBackFromFriendsList,
@@ -298,6 +299,12 @@ const MobileLayout = (props) => {
                         {(locationError && locationPermissionStatus !== 'denied') && 
                             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 p-2 bg-red-500/90 text-white text-center text-sm rounded-md shadow-lg">{locationError}</div>
                         }
+                        {isLocatingUser && 
+                            <div className="absolute top-32 left-1/2 -translate-x-1/2 z-[100] py-2 px-4 bg-amber-500/90 backdrop-blur-sm text-black text-center text-sm font-bold rounded-full shadow-lg flex items-center space-x-2 animate-pulse">
+                                <i className="fas fa-location-arrow"></i>
+                                <span>Locating you...</span>
+                            </div>
+                        }
                         <button
                             onClick={handleAddPubClick}
                             className={`absolute z-10 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-300`}
@@ -412,7 +419,7 @@ const MobileLayout = (props) => {
             <SubmittingRatingModal isVisible={isSubmittingRating} />
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
-            {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
+            {xpGainedInfo && <XpGainedPopup key={xpGainedInfo.key} amount={xpGainedInfo.amount} actionName={xpGainedInfo.actionName} />}
             {updateConfirmationInfo && <UpdateConfirmationPopup key={updateConfirmationInfo.key} />}
             {deleteConfirmationInfo && <DeleteConfirmationPopup key={deleteConfirmationInfo.key} />}
             {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}

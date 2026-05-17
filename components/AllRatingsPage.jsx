@@ -9,7 +9,7 @@ import { trackEvent } from '../analytics.js';
 
 const PAGE_SIZE = 15;
 
-const AllRatingsPage = ({ totalRatings, onBack, onViewProfile }) => {
+const AllRatingsPage = ({ totalRatings, onBack, onViewProfile, isDeveloper }) => {
     const [ratings, setRatings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -182,6 +182,7 @@ const AllRatingsPage = ({ totalRatings, onBack, onViewProfile }) => {
                 onClose={() => setImageToView(null)}
                 canReport={false}
                 canAdminRemove={false}
+                isDeveloper={isDeveloper}
             />
         )}
         <div className="flex flex-col h-full bg-white dark:bg-gray-900">

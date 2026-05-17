@@ -211,11 +211,11 @@ const StatsPage = ({ onBack, onViewProfile, onViewPub, userProfile, onAdminDelet
     }
     
     if (currentView === 'all_ratings') {
-        return <AllRatingsPage totalRatings={stats?.total_ratings || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
+        return <AllRatingsPage totalRatings={stats?.total_ratings || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} isDeveloper={userProfile?.is_developer} />;
     }
 
     if (currentView === 'image_gallery') {
-        return <ImageGallery totalImages={stats?.total_uploaded_images || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} />;
+        return <ImageGallery totalImages={stats?.total_uploaded_images || 0} onBack={handleBackFromSubView} onViewProfile={onViewProfile} isDeveloper={userProfile?.is_developer} />;
     }
     
     if (currentView === 'all_comments') {

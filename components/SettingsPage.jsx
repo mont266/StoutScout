@@ -392,12 +392,8 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
           {/* About Stoutly Section */}
           <SettingsSection title="About Stoutly">
             <SettingsItem icon="fa-newspaper" label="What's New" onClick={onViewChangelog} notification={hasUnreadChangelog} />
-            {!isNative && (
-              <>
-                <SettingsItem icon="fa-question-circle" label="Contact Us" onClick={() => setIsContactModalOpen(true)} />
-                <SettingsItem icon="fa-comment-alt" label="Give Feedback / Report a Bug" onClick={() => setIsFeedbackModalOpen(true)} />
-              </>
-            )}
+            <SettingsItem icon="fa-question-circle" label="Contact Us" onClick={() => setIsContactModalOpen(true)} />
+            <SettingsItem icon="fa-comment-alt" label="Give Feedback / Report a Bug" onClick={() => setIsFeedbackModalOpen(true)} />
           </SettingsSection>
 
           {/* Legal Section */}

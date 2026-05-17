@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase } from '../supabase';
 import { Capacitor } from '@capacitor/core';
-import { NETLIFY_URL } from '../constants';
+import { NETLIFY_URL } from '../constants.js';
+import { trackEvent } from '../analytics.js';
 
 const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
     const [feedback, setFeedback] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         if (!isOpen) {
             setFeedback('');
             setSubmitSuccess(false);
+            setError(null);
         }
     }, [isOpen]);
 
@@ -23,45 +25,57 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
         if (!feedback.trim()) return;
         
         setIsSubmitting(true);
+        setError(null);
+        trackEvent('generate_lead', { lead_type: 'pub_crawl_feedback' });
 
         try {
-            // Encode data for Netlify form submission
-            const encode = (data) => {
-                return Object.keys(data)
-                    .map(key => encodeURIComponent(key) + "=" + encodeURIComponent(data[key]))
-                    .join("&");
-            };
+            const formData = new URLSearchParams();
+            formData.append("form-name", "pub-crawl-feedback");
+            formData.append("message", feedback);
+            formData.append("feedback_type", "pub_crawl_beta");
+            formData.append("user_id", userProfile?.id || 'anonymous');
+            formData.append("username", userProfile?.username || 'anonymous');
+            formData.append("user_agent", navigator.userAgent);
 
-            const isNative = Capacitor.isNativePlatform();
-            const submissionUrl = isNative 
-              ? `${NETLIFY_URL}/.netlify/functions/submit-form` 
-              : "/";
-
-            await fetch(submissionUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: encode({ 
-                    "form-name": "pub-crawl-feedback", 
-                    "message": feedback,
-                    "feedback_type": "pub_crawl_beta",
-                    "user_id": userProfile?.id || 'anonymous',
-                    "user_agent": navigator.userAgent
-                })
-            });
-            
-            setSubmitSuccess(true);
-            setTimeout(() => {
-                onClose();
-            }, 2000);
-
+            if (Capacitor.isNativePlatform()) {
+                const { CapacitorHttp } = await import('@capacitor/core');
+                const response = await CapacitorHttp.post({
+                    url: `${NETLIFY_URL}/`,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    data: formData.toString(),
+                });
+                
+                if (response.status >= 200 && response.status < 300) {
+                    setSubmitSuccess(true);
+                    trackEvent('pub_crawl_feedback_success');
+                    setTimeout(() => {
+                        onClose();
+                    }, 2000);
+                } else {
+                    throw new Error(`Submission failed: ${response.status}`);
+                }
+            } else {
+                const response = await fetch('/', {
+                    method: 'POST',
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: formData.toString()
+                });
+                
+                if (response.ok) {
+                    setSubmitSuccess(true);
+                    trackEvent('pub_crawl_feedback_success');
+                    setTimeout(() => {
+                        onClose();
+                    }, 2000);
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(`Submission failed: ${response.status} ${response.statusText}. ${errorText}`);
+                }
+            }
         } catch (err) {
             console.error("Error submitting feedback:", err);
-            // Even if it fails (e.g. network), we can show success to not frustrate the user
-            // or show a specific error if critical. For now, let's assume success for UX.
-            setSubmitSuccess(true);
-            setTimeout(() => {
-                onClose();
-            }, 2000);
+            trackEvent('pub_crawl_feedback_failed', { error_message: err.message });
+            setError("Sorry, there was an error submitting your feedback. Please try again later.");
         } finally {
             setIsSubmitting(false);
         }
@@ -99,6 +113,7 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
                         <form onSubmit={handleSubmit} name="pub-crawl-feedback" method="POST" data-netlify="true">
                             <input type="hidden" name="form-name" value="pub-crawl-feedback" />
                             <input type="hidden" name="user_id" value={userProfile?.id || 'anonymous'} />
+                            <input type="hidden" name="username" value={userProfile?.username || 'anonymous'} />
                             <input type="hidden" name="user_agent" value={navigator.userAgent} />
                             <input type="hidden" name="feedback_type" value="pub_crawl_beta" />
                             <textarea
@@ -110,6 +125,7 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
                                 required
                                 disabled={isSubmitting}
                             />
+                            {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
                             <div className="mt-6 flex justify-end space-x-3">
                                 <button
                                     type="button"
@@ -141,7 +157,10 @@ const PubCrawlFeedbackModal = ({ isOpen, onClose, userProfile }) => {
         </div>
     );
 
-    return createPortal(modalContent, document.body);
+    const modalRoot = document.getElementById('modal-root');
+    if (!modalRoot) return null;
+
+    return createPortal(modalContent, modalRoot);
 };
 
 export default PubCrawlFeedbackModal;

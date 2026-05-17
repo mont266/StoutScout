@@ -20,13 +20,16 @@ const LegalPageWrapper = ({ title, children, onBack }) => (
 const TermsOfUsePage = ({ onBack }) => {
     return (
         <LegalPageWrapper title="Terms of Use" onBack={onBack}>
-            <p className="text-gray-500 dark:text-gray-400">Last Updated: March 5, 2026</p>
+            <p className="text-gray-500 dark:text-gray-400">Last Updated: May 15, 2026</p>
             <p>Welcome to Stoutly! These Terms of Use ("Terms") govern your access to and use of the Stoutly web application and any related services (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms.</p>
             
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">1. Description of Service</h2>
-            <p>Stoutly is a platform that allows users to find, rate, and review pints of Guinness based on factors like price and quality. The Service uses location data to display nearby pubs, aggregates user ratings to provide community-driven insights, includes social features like adding friends, gamification elements such as earning trophies, and tools like the Pub Crawl Planner to generate custom routes.</p>
+            <p>Stoutly is a platform that allows users to find, log, rate, and review pints of Guinness based on factors like price and quality. The Service uses location data to display nearby pubs, allows users to check in and track their pint consumption statistics, aggregates user ratings to provide community-driven insights, includes social features like adding friends, gamification elements such as earning trophies, and tools like the Pub Crawl Planner to generate custom routes.</p>
             
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">2. Eligibility and User Accounts</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">2. Responsible Drinking</h2>
+            <p>The Service includes features that allow you to track the number of pints consumed. This feature is intended for personal record-keeping, enjoyment, and gamification purposes. We do not encourage or endorse excessive alcohol consumption or binge drinking. Please drink responsibly and within the legal limits of your jurisdiction.</p>
+
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">3. Eligibility and User Accounts</h2>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li><strong>Age Requirement:</strong> You must be of legal drinking age in your jurisdiction (e.g., 18 or 21 years or older) to create an account and use the Service. By creating an account, you represent and warrant that you meet this age requirement. We collect your date of birth and country during signup to verify this.</li>
                 <li><strong>Account Creation:</strong> To access certain features, you must create an account. You agree to provide accurate, current, and complete information during the registration process.</li>
@@ -34,7 +37,7 @@ const TermsOfUsePage = ({ onBack }) => {
                 <li><strong>One Account per User:</strong> You may not maintain more than one account.</li>
             </ul>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">3. User Conduct</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">4. User Conduct</h2>
             <p>You agree not to use the Service to:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li>Post ratings that are not made in good faith, are intentionally misleading, or are based on anything other than your own personal experience.</li>
@@ -46,7 +49,7 @@ const TermsOfUsePage = ({ onBack }) => {
                 <li>Violate any applicable laws or regulations.</li>
             </ul>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">4. User-Generated Content</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">5. User-Generated Content</h2>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li><strong>Your Content:</strong> You retain ownership of the content you submit to the Service, including your ratings, comments, reviews, bio, profile pictures, photographs, posts, and other materials (collectively, "User Content").</li>
                 <li><strong>License to Us:</strong> By submitting User Content, you grant Stoutly a worldwide, non-exclusive, royalty-free, perpetual license to use, analyze, process (including through automated or third-party systems), display, reproduce, modify (for formatting), and distribute your User Content in connection with operating and promoting the Service. This allows us to, for example, show your rating on the Service, include you on the leaderboard, and feature your content in promotional materials. We will always credit your username when doing so.</li>
@@ -54,10 +57,10 @@ const TermsOfUsePage = ({ onBack }) => {
                 <li><strong>Content Warranty:</strong> You represent and warrant that you own or have the necessary licenses, rights, consents, and permissions to publish the User Content you submit. You further agree that the User Content you submit will not contain third-party copyrighted material, or material that is subject to other third-party proprietary rights, unless you have permission from the rightful owner of the material.</li>
             </ul>
             
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">5. Donations</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">6. Donations</h2>
             <p>Stoutly is a free service supported by its community. If you choose to make a donation to support the app's development, your payment will be processed by our third-party payment processor, Stripe. Donations are voluntary and non-refundable. We do not store your credit card information.</p>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">6. Pub Crawl Planner & Safety Disclaimer</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">7. Pub Crawl Planner & Safety Disclaimer</h2>
             <p>The "Pub Crawl Planner" feature uses Artificial Intelligence (AI) to generate suggested routes and itineraries based on your location and preferences. By using this feature, you acknowledge and agree to the following:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li><strong>AI Generation:</strong> Routes are generated by an AI system. We do not guarantee that the suggested routes are the most efficient, safe, or accessible. We do not guarantee that the pubs listed are currently open, in business, or welcoming to large groups.</li>
@@ -66,10 +69,10 @@ const TermsOfUsePage = ({ onBack }) => {
                 <li><strong>No Liability:</strong> Stoutly assumes no liability for any personal injury, property damage, legal disputes, or other mishaps that may occur during a pub crawl suggested by the Service.</li>
             </ul>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">7. Stoutly Intellectual Property</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Stoutly Intellectual Property</h2>
             <p>Excluding your User Content, all aspects of the Service, including its "look and feel," branding, code, and content created by Stoutly, are the exclusive property of Stoutly and its licensors. You may not copy, modify, or distribute any part of the Service without our prior written consent.</p>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">8. Moderation and Termination</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">9. Moderation and Termination</h2>
             <p>We are committed to maintaining a high-quality and trustworthy platform. We reserve the right, but do not have the obligation, to:</p>
             <ul className="list-disc list-inside space-y-2 pl-4">
                 <li>Monitor, screen, or remove any User Content at our sole discretion, including comments, profile pictures, or photographs that we deem inappropriate or in violation of these Terms.</li>
@@ -78,16 +81,16 @@ const TermsOfUsePage = ({ onBack }) => {
             </ul>
             <p className="pt-2"><strong>Termination by You:</strong> You may terminate your account at any time through the "Danger Zone" section in the app's Settings. You can also request deletion by emailing us directly at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a>. Account termination is processed in accordance with our Privacy Policy.</p>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">9. Disclaimers</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">10. Disclaimers</h2>
             <p>The Service is provided "AS IS" and "AS AVAILABLE" without warranties of any kind. We do not warrant that the information provided (including pub locations or average ratings) is accurate, complete, or reliable. You rely on any information available through the Service at your own risk.</p>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">10. Limitation of Liability</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">11. Limitation of Liability</h2>
             <p>To the fullest extent permitted by law, Stoutly and its operators shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly, resulting from your use of the Service.</p>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">11. Changes to Terms</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">12. Changes to Terms</h2>
             <p>We may modify these Terms at any time. We will post the revised Terms and update the "Last Updated" date. Your continued use of the Service after any modification constitutes your acceptance of the new Terms.</p>
             
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">12. Contact Us</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white pt-4">13. Contact Us</h2>
             <p>If you have any questions about these Terms, please contact us at <a href="mailto:admin@stoutly.co.uk" className="text-amber-600 dark:text-amber-400 hover:underline">admin@stoutly.co.uk</a> or through the "Contact Us" form in the app's settings.</p>
         </LegalPageWrapper>
     );

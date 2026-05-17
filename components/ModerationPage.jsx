@@ -194,7 +194,20 @@ const ModerationPage = ({ onViewProfile, onBack, onDataRefresh, reports, onFetch
             
             if (updatePubError) throw updatePubError;
             if (!updatedPubData || updatedPubData.length === 0) {
-                throw new Error("Failed to update pub. You may not have permission.");
+                if (suggestion.pub_id && suggestion.pub_id.startsWith('osm-')) {
+                    // This is an OSM pub that hasn't been added to our DB yet.
+                    // We must upsert into our OSM override tables instead.
+                    if (suggestion.suggested_data.is_closed) {
+                         const { error: closedErr } = await supabase.from('closed_osm_pubs').upsert({ osm_id: suggestion.pub_id });
+                         if (closedErr) throw closedErr;
+                    }
+                    if (suggestion.suggested_data.name && (!suggestion.pub || suggestion.suggested_data.name !== suggestion.pub.name)) {
+                         const { error: overrideErr } = await supabase.from('osm_pub_overrides').upsert({ osm_id: suggestion.pub_id, name: suggestion.suggested_data.name });
+                         if (overrideErr) throw overrideErr;
+                    }
+                } else {
+                    throw new Error("Failed to update pub. You may not have permission, or it was deleted.");
+                }
             }
 
             // Update suggestion status

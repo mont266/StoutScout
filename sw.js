@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stoutly-cache-v4-debug';
+const CACHE_NAME = 'stoutly-cache-v5-debug';
 const urlsToCache = [
   '/',
   '/index.html',

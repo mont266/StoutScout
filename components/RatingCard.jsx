@@ -5,8 +5,10 @@ import StarRating from './StarRating.jsx';
 import { getRankData, formatTimeAgo, getCurrencyInfo, getStarRatingFromPrice } from '../utils.js';
 import CommentsSection from './CommentsSection.jsx';
 import { ExchangeRatesContext } from '../contexts/ExchangeRatesContext.jsx';
+import { supabase } from '../supabase.js';
+import PintCounter from './PintCounter.jsx';
 
-const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onOpenShareRatingModal, fallbackLocationData = null, highlightedCommentId, onReportContent }) => {
+const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginRequest, onViewImage, onViewPub, loggedInUserProfile, comments, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onOpenShareRatingModal, fallbackLocationData = null, highlightedCommentId, onReportContent, onDeleteRating }) => {
 
     const { user, image_url, created_at, updated_at, quality, price, like_count, id, exact_price, comment_count, message } = rating;
     
@@ -23,12 +25,33 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
     const [isCommentsVisible, setIsCommentsVisible] = useState(false);
     const { rates: exchangeRates } = useContext(ExchangeRatesContext);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [localAmount, setLocalAmount] = useState(rating.amount_drank);
+    const [isEditingAmount, setIsEditingAmount] = useState(false);
+    const [amountCounter, setAmountCounter] = useState(localAmount || 1);
+    
     const menuRef = useRef(null);
     const isOwner = loggedInUserProfile?.id === user.id;
     const canReport = loggedInUserProfile && !isOwner;
     const showMenu = isOwner || canReport;
 
     const isLiked = userLikes && userLikes.has(id);
+    
+    const isOlderThan6Hours = (Date.now() - new Date(created_at).getTime()) > 6 * 60 * 60 * 1000;
+
+    const handleSaveAmount = async () => {
+        if (!amountCounter || isNaN(amountCounter) || amountCounter <= 0) return;
+        setIsEditingAmount(false);
+        try {
+            const { error } = await supabase.from('ratings').update({ amount_drank: parseInt(amountCounter) }).eq('id', id);
+            if (error) {
+               console.error("Please run the database migration script first to add the amount_drank column.");
+               return; 
+            }
+            setLocalAmount(parseInt(amountCounter));
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     const effectiveLocationData = {
         country_code: pubCountryCode,
@@ -185,13 +208,25 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                             {isMenuOpen && (
                                 <div className="absolute top-full right-0 mt-1 w-36 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                                     {isOwner && (
-                                        <button 
-                                            onClick={handleEdit} 
-                                            className={`w-full text-left text-sm px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 ${canReport ? 'rounded-t-md' : 'rounded-md'}`}
-                                        >
-                                            <i className="fas fa-pencil-alt w-4"></i>
-                                            <span>Edit Rating</span>
-                                        </button>
+                                        <>
+                                            <button 
+                                                onClick={handleEdit} 
+                                                className={`w-full text-left text-sm px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 rounded-t-md`}
+                                            >
+                                                <i className="fas fa-pencil-alt w-4"></i>
+                                                <span>Edit Rating</span>
+                                            </button>
+                                            <button 
+                                                onClick={() => { 
+                                                    if (onDeleteRating) onDeleteRating(rating);
+                                                    setIsMenuOpen(false); 
+                                                }} 
+                                                className={`w-full text-left text-sm px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center space-x-2 rounded-b-md`}
+                                            >
+                                                <i className="fas fa-trash-alt w-4"></i>
+                                                <span>Delete Rating</span>
+                                            </button>
+                                        </>
                                     )}
                                     {canReport && (
                                         <button
@@ -259,6 +294,47 @@ const RatingCard = ({ rating, onToggleLike, userLikes, onViewProfile, onLoginReq
                         </div>
                     </div>
                 )}
+                
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700/50 flex flex-wrap gap-2 items-center">
+                    {localAmount > 0 ? (
+                        <div className="bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-2">
+                            <i className="fas fa-beer-mug-empty"></i>
+                            <span>{localAmount} Pint{localAmount !== 1 ? 's' : ''}</span>
+                        </div>
+                    ) : (
+                        isOwner && (
+                            isEditingAmount ? (
+                                <div className="flex flex-col items-center bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700 w-full mt-2">
+                                    <PintCounter amount={amountCounter || 1} onChange={setAmountCounter} maxAmount={16} />
+                                    <div className="flex space-x-3 mt-4">
+                                        <button 
+                                            onClick={handleSaveAmount}
+                                            className="bg-amber-500 text-black px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-amber-400 transition-colors"
+                                        >
+                                            Save Pints
+                                        </button>
+                                        <button 
+                                            onClick={() => setIsEditingAmount(false)}
+                                            className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button 
+                                    onClick={() => !isOlderThan6Hours && setIsEditingAmount(true)}
+                                    disabled={isOlderThan6Hours}
+                                    title={isOlderThan6Hours ? "Cannot add drinks after 6 hours" : "Add number of drinks"}
+                                    className={`bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-2 transition-colors border border-dashed border-gray-300 dark:border-gray-600 ${isOlderThan6Hours ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer'}`}
+                                >
+                                    <i className="fas fa-plus text-amber-500"></i>
+                                    <span>drinks</span>
+                                </button>
+                            )
+                        )
+                    )}
+                </div>
             </div>
 
              {/* Action Bar */}

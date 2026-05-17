@@ -106,7 +106,9 @@ const App = () => {
   const [locationPermissionStatus, setLocationPermissionStatus] = useState('checking');
   const [resultsAreCapped, setResultsAreCapped] = useState(false);
   const [initialLocationSet, setInitialLocationSet] = useState(false);
+  const [isLocatingUser, setIsLocatingUser] = useState(false);
   const [showSearchAreaButton, setShowSearchAreaButton] = useState(false);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
 
   // Refresh functionality
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -124,6 +126,7 @@ const App = () => {
   const [viewedProfile, setViewedProfile] = useState(null);
   const [viewedRatings, setViewedRatings] = useState([]);
   const [viewedPosts, setViewedPosts] = useState([]);
+  const [viewedCheckIns, setViewedCheckIns] = useState([]);
   const [viewedTrophies, setViewedTrophies] = useState([]);
   const [isFetchingViewedProfile, setIsFetchingViewedProfile] = useState(false);
   const [profileViewOrigin, setProfileViewOrigin] = useState(null);
@@ -133,6 +136,7 @@ const App = () => {
   const [updateConfirmationInfo, setUpdateConfirmationInfo] = useState(null);
   const [deleteConfirmationInfo, setDeleteConfirmationInfo] = useState(null);
   const [leveledUpInfo, setLeveledUpInfo] = useState(null);
+  const [xpGainedInfo, setXpGainedInfo] = useState(null);
   const [rankUpInfo, setRankUpInfo] = useState(null);
   const [addPubSuccessInfo, setAddPubSuccessInfo] = useState(null);
   const [isPubScoreModalOpen, setIsPubScoreModalOpen] = useState(false);
@@ -201,8 +205,10 @@ const App = () => {
   const [createPostModalOrigin, setCreatePostModalOrigin] = useState(null);
   const [postToEdit, setPostToEdit] = useState(null);
   const [postToDelete, setPostToDelete] = useState(null);
+  const [ratingToDeletePrompt, setRatingToDeletePrompt] = useState(null);
   const [userPostLikes, setUserPostLikes] = useState(new Set());
   const [userPosts, setUserPosts] = useState([]);
+  const [userCheckIns, setUserCheckIns] = useState([]);
   const [postSuccessCount, setPostSuccessCount] = useState(0);
   const [reportContentInfo, setReportContentInfo] = useState({ isOpen: false, contentId: null, contentType: null, contentCreatorUsername: null });
   const [blockList, setBlockList] = useState(new Set());
@@ -492,6 +498,7 @@ const App = () => {
       country_name: p.country_name,
       is_closed: !!p.is_closed,
       location: { lat: p.lat, lng: p.lng },
+      checkin_count: p.checkin_count,
       is_dynamic_price_area: p.is_dynamic_price_area,
       area_identifier: p.area_identifier,
       area_rating_count: p.area_rating_count,
@@ -667,7 +674,7 @@ const App = () => {
         console.error("Error fetching closed OSM pubs:", error);
     } else {
         // Store with 'osm-' prefix for direct comparison with nominatim results
-        setClosedOsmPubIds(new Set((data || []).map(p => `osm-${p.osm_id}`)));
+        setClosedOsmPubIds(new Set((data || []).map(p => p.osm_id.startsWith('osm-') ? p.osm_id : `osm-${p.osm_id}`)));
     }
     setIsClosedOsmPubsLoaded(true);
   }, []);
@@ -697,7 +704,8 @@ const App = () => {
         const overridesMap = new Map();
         for (const override of data || []) {
             // Store with 'osm-' prefix for direct comparison
-            overridesMap.set(`osm-${override.osm_id}`, { name: override.name });
+            const correctId = override.osm_id.startsWith('osm-') ? override.osm_id : `osm-${override.osm_id}`;
+            overridesMap.set(correctId, { name: override.name });
         }
         setOsmPubOverrides(overridesMap);
     }
@@ -797,6 +805,8 @@ const App = () => {
           fetchClosedStoutlyPubs(),
           session?.user?.id ? fetchSocialData(session.user.id) : Promise.resolve(),
       ]);
+      // Silently fetch user data as well
+      fetchUserData();
       // Refetch DB pubs for the current view
       if (mapRef.current) {
         const searchCenter = mapRef.current.getCenter();
@@ -964,6 +974,7 @@ const App = () => {
     setPostToEdit(null);
     setCreatePostModalOrigin(null);
     setPostSuccessCount(c => c + 1);
+    fetchUserData(); // Ensure ProfilePage gets the updated posts
     setAlertInfo({ isOpen: true, title: 'Success!', message: successMessage, theme: 'success' });
   }, [postToEdit]);
 
@@ -993,8 +1004,15 @@ const App = () => {
         const { error } = await supabase.from('posts').delete().eq('id', postToDelete.id);
         if (error) throw error;
         
+        // Optimistic UI update
+        setUserPosts(prev => prev.filter(p => p.id !== postToDelete.id));
+        setViewedPosts(prev => prev.filter(p => p.id !== postToDelete.id));
+
         setAlertInfo({ isOpen: true, title: 'Deleted', message: 'Your post has been deleted.', theme: 'success' });
-        setPostSuccessCount(c => c + 1); // Trigger re-fetch
+        setPostSuccessCount(c => c + 1); // Trigger re-fetch for feeds
+        
+        // Silently re-fetch user data in the background to ensure consistency for profile page
+        fetchUserData();
     } catch(err) {
         console.error("Error deleting post:", err);
         setAlertInfo({ isOpen: true, title: 'Error', message: `Could not delete post: ${err.message}`, theme: 'error' });
@@ -1023,6 +1041,7 @@ const App = () => {
     setViewedProfile(null);
     setViewedRatings([]);
     setViewedPosts([]);
+    setViewedCheckIns([]);
     setViewedTrophies([]);
     setProfileViewOrigin(null);
     setIsChangelogOpen(false);
@@ -1296,6 +1315,7 @@ const App = () => {
     setViewedProfile(null); 
     setViewedRatings([]);
     setViewedPosts([]);
+    setViewedCheckIns([]);
     setViewedTrophies([]);
     setProfileViewOrigin(origin); // store where the view was initiated from
 
@@ -1355,11 +1375,24 @@ const App = () => {
             setViewedPosts(posts || []);
         }
 
+        // Fetch checkins for the viewed user
+        const { data: checkins, error: checkinsError } = await supabase
+            .from('pub_checkins')
+            .select('*, pub:pubs(id, name, address, lat, lng), user:profiles!pub_checkins_user_id_fkey(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend)')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (checkinsError) {
+            console.error("Error fetching checkins for viewed profile:", checkinsError);
+        } else {
+            setViewedCheckIns(checkins || []);
+        }
+
         // Fetch ratings for the viewed user
         // We only fetch non-private ratings for other users.
         const { data: ratings, error: ratingsError } = await supabase
             .from('ratings')
-            .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials, local_avg_price)')
+            .select('*, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials, local_avg_price)')
             .eq('user_id', userId)
             .eq('is_private', false) // Important: respect privacy
             .order('created_at', { ascending: false });
@@ -1928,10 +1961,12 @@ const App = () => {
             
             setViewedProfile(null);
             setViewedPosts([]);
+            setViewedCheckIns([]);
             setFriendships([]);
             setUserLikes(new Set());
             setUserPostLikes(new Set());
             setUserPosts([]);
+            setUserCheckIns([]);
             setUserZeroVotes(new Map());
             setUserTrophies([]);
             setBlockList(new Set());
@@ -2043,7 +2078,7 @@ const App = () => {
   const fetchLevelRequirements = useCallback(async () => {
     const { data, error } = await supabase
         .from('level_requirements')
-        .select('level, total_ratings_required')
+        .select('level, total_ratings_required, xp_required')
         .order('level', { ascending: true });
     
     if (error) {
@@ -2113,16 +2148,21 @@ const App = () => {
 
     setUserProfile(profile);
 
-    // If profile exists, fetch ratings and posts in parallel.
-    const [ratingsResult, postsResult] = await Promise.all([
+    // If profile exists, fetch ratings, posts, and checkins in parallel.
+    const [ratingsResult, postsResult, checkInsResult] = await Promise.all([
       supabase
         .from('ratings')
-        .select('id, pub_id, price, quality, created_at, updated_at, exact_price, image_url, is_private, message, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials, local_avg_price)')
+        .select('*, pubs(id, name, address, lat, lng, country_code, country_name, guinness_zero_confirmations, guinness_zero_denials, local_avg_price)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false }),
       supabase
         .from('posts')
         .select('*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('pub_checkins')
+        .select('*, pub:pubs(id, name, address, lat, lng), user:profiles!pub_checkins_user_id_fkey(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
     ]);
@@ -2134,7 +2174,7 @@ const App = () => {
     } else {
         mappedUserRatings = (userRatingsData || []).map(r => ({
           id: r.id, pubId: r.pub_id,
-          rating: { price: r.price, quality: r.quality, exact_price: r.exact_price, message: r.message },
+          rating: { price: r.price, quality: r.quality, exact_price: r.exact_price, message: r.message, amount_drank: r.amount_drank, created_at: r.created_at },
           timestamp: new Date(r.created_at).getTime(),
           created_at: r.created_at,
           updated_at: r.updated_at,
@@ -2150,29 +2190,38 @@ const App = () => {
         // FIX: Ensure profile review count matches actual ratings
         // The database trigger on 'profiles' table might be slow or out of sync.
         // We trust the actual list of ratings fetched for the user as the source of truth.
+        let needsSync = false;
         if (profile && mappedUserRatings.length !== profile.reviews) {
             profile.reviews = mappedUserRatings.length;
+            needsSync = true;
+        }
 
-            // Also attempt to correct the level if we have the requirements loaded
-            if (levelRequirements && levelRequirements.length > 0) {
-                let correctLevel = 1;
-                for (const req of levelRequirements) {
-                    if (profile.reviews >= req.total_ratings_required) {
-                        correctLevel = Math.max(correctLevel, req.level);
-                    }
-                }
-                
-                if (profile.level !== correctLevel) {
-                    profile.level = correctLevel;
+        // Also attempt to correct the level if we have the requirements loaded
+        if (profile && levelRequirements && levelRequirements.length > 0) {
+            let correctLevel = 1;
+            const currentXP = Number(profile.xp) || 0;
+            for (const req of levelRequirements) {
+                const reqXP = req.xp_required != null ? req.xp_required : req.total_ratings_required;
+                // If xp_required exists use XP, otherwise fallback to reviews
+                const checkValue = req.xp_required != null ? currentXP : profile.reviews;
+                if (checkValue >= reqXP) {
+                    correctLevel = Math.max(correctLevel, req.level);
                 }
             }
+            
+            if (profile.level !== correctLevel) {
+                profile.level = correctLevel;
+                needsSync = true;
+            }
+        }
 
+        if (needsSync && profile) {
             // Update the state with the corrected profile object
             setUserProfile({ ...profile });
             
             // Sync the corrected count back to the database in the background
             supabase.from('profiles').update({ reviews: profile.reviews, level: profile.level }).eq('id', profile.id).then(({ error }) => {
-                if (error) console.error("Failed to sync profile reviews count:", error);
+                if (error) console.error("Failed to sync profile stats:", error);
             });
         }
     }
@@ -2186,8 +2235,17 @@ const App = () => {
       mappedUserPosts = userPostsData || [];
     }
     setUserPosts(mappedUserPosts);
+
+    const { data: userCheckInsData, error: checkInsError } = checkInsResult;
+    let mappedUserCheckIns = [];
+    if (checkInsError) {
+      console.error("Error fetching user check-ins:", checkInsError);
+    } else {
+      mappedUserCheckIns = userCheckInsData || [];
+    }
+    setUserCheckIns(mappedUserCheckIns);
     
-    return { profile, ratings: mappedUserRatings, posts: mappedUserPosts };
+    return { profile, ratings: mappedUserRatings, posts: mappedUserPosts, checkIns: mappedUserCheckIns };
   };
 
   useEffect(() => {
@@ -2198,6 +2256,7 @@ const App = () => {
       setUserProfile(null);
       setUserRatings([]);
       setUserPosts([]);
+      setUserCheckIns([]);
       setFriendships([]);
       setUserLikes(new Set());
       setUserPostLikes(new Set());
@@ -2433,17 +2492,24 @@ const App = () => {
   const handleRequestPermission = useCallback(async (trigger = 'manual') => {
     trackEvent('location_permission_requested', { trigger });
     const isNative = Capacitor.isNativePlatform();
+    setIsLocatingUser(true);
 
     const getPositionAndSetState = async () => {
-        const position = await Geolocation.getCurrentPosition({
-            enableHighAccuracy: true,
-            timeout: 20000,
-            maximumAge: 0,
-        });
+        let position;
+        try {
+            position = await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 });
+        } catch (e) {
+            position = await Geolocation.getCurrentPosition({
+                enableHighAccuracy: true,
+                timeout: 20000,
+                maximumAge: 0,
+            });
+        }
         const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
         setLocationPermissionStatus('granted');
         setLocationError(null);
         setRealUserLocation(newLocation);
+        setIsLocatingUser(false);
     };
 
     try {
@@ -2463,6 +2529,7 @@ const App = () => {
             : "Could not request location access. Please check your device settings.";
         setLocationPermissionStatus('denied');
         setLocationError(message);
+        setIsLocatingUser(false);
     }
   }, []);
 
@@ -2501,16 +2568,24 @@ const App = () => {
       setLocationPermissionStatus(permissionState);
 
       if (permissionState === 'granted' && !initialLocationSet) {
+        setIsLocatingUser(true);
         try {
-            const position = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+            let position;
+            try {
+                position = await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 });
+            } catch (fastErr) {
+                position = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+            }
             const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
             setRealUserLocation(newLocation);
             setSearchOrigin(newLocation);
             setInitialLocationSet(true);
+            setIsLocatingUser(false);
         } catch (error) {
             console.error("Error getting location despite granted permission:", error);
             setLocationError("Could not get your location. Please check signal or try again.");
             setInitialLocationSet(true); // Mark as set to avoid re-triggering
+            setIsLocatingUser(false);
         }
       } else if (permissionState === 'prompt' && !initialLocationSet) {
           await handleRequestPermission('auto_initial_load');
@@ -2548,8 +2623,58 @@ const App = () => {
   useEffect(() => { if (updateConfirmationInfo) { const timer = setTimeout(() => setUpdateConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [updateConfirmationInfo]);
   useEffect(() => { if (deleteConfirmationInfo) { const timer = setTimeout(() => setDeleteConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [deleteConfirmationInfo]);
   useEffect(() => { if (leveledUpInfo) { const timer = setTimeout(() => setLeveledUpInfo(null), 4000); return () => clearTimeout(timer); } }, [leveledUpInfo]);
+  useEffect(() => { if (xpGainedInfo) { const timer = setTimeout(() => setXpGainedInfo(null), 3000); return () => clearTimeout(timer); } }, [xpGainedInfo]);
   useEffect(() => { if (rankUpInfo) { const timer = setTimeout(() => setRankUpInfo(null), 5000); return () => clearTimeout(timer); } }, [rankUpInfo]);
   useEffect(() => { if (addPubSuccessInfo) { const timer = setTimeout(() => setAddPubSuccessInfo(null), 3000); return () => clearTimeout(timer); } }, [addPubSuccessInfo]);
+
+  const handleAddXP = async (amount, actionName) => {
+    if (!userProfile) return;
+    try {
+      setXpGainedInfo({ amount, actionName, key: crypto.randomUUID() });
+      const newXP = (Number(userProfile.xp) || 0) + amount;
+      let newLevel = userProfile.level;
+
+      if (levelRequirements && levelRequirements.length > 0) {
+          let correctLevel = 1;
+          for (const req of levelRequirements) {
+              const reqXP = req.xp_required != null ? req.xp_required : req.total_ratings_required;
+              if (newXP >= reqXP) correctLevel = Math.max(correctLevel, req.level);
+          }
+          if (correctLevel > userProfile.level) newLevel = correctLevel;
+      }
+
+      // We use the dynamic value on the frontend for the toast, but if the backend trigger fires natively, we should be careful. 
+      // For now, we will update the UI state locally and run the generic profiles update.
+      await supabase.from('profiles').update({ xp: newXP, level: newLevel }).eq('id', userProfile.id);
+      
+      setUserProfile(prev => ({ ...prev, xp: newXP, level: newLevel }));
+
+      // check level up
+      if (newLevel > userProfile.level) {
+          setLeveledUpInfo({ key: crypto.randomUUID(), newLevel });
+      }
+    } catch (e) { console.error("Error adding XP", e); }
+  };
+
+  const handleRemoveXP = async (amount) => {
+    if (!userProfile) return;
+    try {
+      const newXP = Math.max(0, (Number(userProfile.xp) || 0) - amount);
+      let newLevel = userProfile.level;
+
+      if (levelRequirements && levelRequirements.length > 0) {
+          let correctLevel = 1;
+          for (const req of levelRequirements) {
+              const reqXP = req.xp_required != null ? req.xp_required : req.total_ratings_required;
+              if (newXP >= reqXP) correctLevel = Math.max(correctLevel, req.level);
+          }
+          if (correctLevel < userProfile.level) newLevel = correctLevel;
+      }
+
+      await supabase.from('profiles').update({ xp: newXP, level: newLevel }).eq('id', userProfile.id);
+      setUserProfile(prev => ({ ...prev, xp: newXP, level: newLevel }));
+    } catch (e) { console.error("Error removing XP", e); }
+  };
 
   const getDistance = useCallback((location1, location2) => {
     if (!location1 || !location2) return Infinity;
@@ -2621,13 +2746,15 @@ const App = () => {
         });
 
         if (!isSpatialDuplicateWithDb) {
-            // If it's not a duplicate of a DB pub, we should add it.
+            // If it's not a duplicate of a DB pub, we should add it (unless it's marked as closed).
+            // A closed pub that has never been rated (not in our DB) shouldn't clutter the map.
+            const isClosed = closedOsmPubIds.has(mapboxPub.id) || closedStoutlyPubIds.has(mapboxPub.id);
             // We also check if we've already added this mapbox pub to avoid duplicates from Mapbox's side.
-            if (!processedPubs.has(mapboxPub.id)) {
+            if (!isClosed && !processedPubs.has(mapboxPub.id)) {
                 processedPubs.set(mapboxPub.id, {
                     ...mapboxPub,
                     name: finalMapboxName,
-                    is_closed: closedOsmPubIds.has(mapboxPub.id) || closedStoutlyPubIds.has(mapboxPub.id),
+                    is_closed: false,
                 });
             }
         }
@@ -2650,12 +2777,6 @@ const App = () => {
     if (settings.showUserRatedPubs && userRatings) {
         const existingPubIds = new Set(radiusFilteredPubs.map(p => p.id));
         userRatings.forEach(rating => {
-            // Apply radius filtering to user rated pubs as well, except in dev mode.
-            if (!showAllDbPubs && searchOrigin && rating.pubLocation) {
-                if (getDistance(rating.pubLocation, searchOrigin) > settings.radius) {
-                    return;
-                }
-            }
             if (rating.pubId && rating.pubLocation && !existingPubIds.has(rating.pubId)) {
                 radiusFilteredPubs.push({
                     id: rating.pubId,
@@ -2836,7 +2957,7 @@ const App = () => {
   
   // This new effect handles the initial map centering with correct padding
   useEffect(() => {
-      if (mapRef.current && !initialFlyToDone.current && realUserLocation && realUserLocation.lat !== DEFAULT_LOCATION.lat) {
+      if (isMapLoaded && mapRef.current && !initialFlyToDone.current && realUserLocation && realUserLocation.lat !== DEFAULT_LOCATION.lat) {
           mapRef.current.flyTo({
               center: [realUserLocation.lng, realUserLocation.lat],
               zoom: 14,
@@ -2847,7 +2968,7 @@ const App = () => {
           // This will trigger handleRefresh after the map moves to the user's location.
           setSearchOnNextMoveEnd(true);
       }
-  }, [realUserLocation, getFlyToPadding]);
+  }, [isMapLoaded, realUserLocation, getFlyToPadding]);
   
   const handleMapMove = useCallback((viewState) => {
     const newCenter = { lat: viewState.latitude, lng: viewState.longitude };
@@ -2866,6 +2987,7 @@ const App = () => {
 
   const handleMapLoad = useCallback((map) => {
     mapRef.current = map;
+    setIsMapLoaded(true);
   }, []);
 
   const getComparablePrice = useCallback((pub) => {
@@ -3016,14 +3138,35 @@ const App = () => {
         const ratingPayload = { 
             pub_id: pubId, user_id: session.user.id, price, quality, exact_price, is_private, image_url: imageUrl, message,
             local_avg_at_time: selectedPub.local_avg_price ? parseFloat(selectedPub.local_avg_price) : null,
-            imputed_price: imputed_price
+            imputed_price: imputed_price,
+            amount_drank: ratingData.amount_drank !== undefined ? ratingData.amount_drank : 1,
         };
-        const { error: dbError } = isUpdating
-          ? await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
-          : await supabase.from('ratings').insert(ratingPayload);
+        
+        // Attempt operation with amount_drank
+        let dbError = isUpdating
+          ? (await supabase.from('ratings').update(ratingPayload).eq('pub_id', pubId).eq('user_id', session.user.id)).error
+          : (await supabase.from('ratings').insert(ratingPayload)).error;
+        
+        // Fallback if the SQL migration hasn't been run yet
+        if (dbError && dbError.code === 'PGRST204') {
+            const { amount_drank, ...fallbackPayload } = ratingPayload;
+            const retryResp = isUpdating
+              ? await supabase.from('ratings').update(fallbackPayload).eq('pub_id', pubId).eq('user_id', session.user.id)
+              : await supabase.from('ratings').insert(fallbackPayload);
+            dbError = retryResp.error;
+        }
         
         if (dbError) throw dbError;
         
+        if (!isUpdating) {
+            let xpToAward = 50;
+            if (exact_price) xpToAward += 10;
+            if (message && message.trim().length > 0) xpToAward += 20;
+            if (imageUrl) xpToAward += 20;
+
+            await handleAddXP(xpToAward, 'Rating a Pub');
+        }
+
         if (guinnessZeroStatus && guinnessZeroStatus !== 'unknown') {
             await supabase.rpc('report_guinness_zero_status', {
                 p_pub_id: pubId,
@@ -3069,11 +3212,11 @@ const App = () => {
                     setRankUpInfo({ key: crypto.randomUUID(), newRank });
                     trackEvent('rank_up', { new_rank: newRank.name, level: newProfile.level });
                 } else {
-                    setLeveledUpInfo({ key: crypto.randomUUID(), newLevel: newProfile.level });
+                    // Do nothing here, handleAddXP handles setLeveledUpInfo
                     trackEvent('level_up', { level: newProfile.level });
                 }
             }
-            setReviewPopupInfo({ key: crypto.randomUUID() });
+            // Removing setReviewPopupInfo here as we show XP popup instead
         } else {
             setUpdateConfirmationInfo({ key: crypto.randomUUID() });
         }
@@ -3194,16 +3337,25 @@ const App = () => {
     }
   }, [session, userZeroVotes, setAlertInfo]);
 
-  const handleDeleteRating = useCallback(async (ratingToDelete) => {
+  const handleRequestDeleteRating = (rating) => {
+    setRatingToDeletePrompt(rating);
+  };
+
+  const handleDeleteRating = useCallback(async () => {
+    const ratingToDelete = ratingToDeletePrompt;
     if (!session || !userProfile || !ratingToDelete) return;
+
+    setRatingToDeletePrompt(null);
 
     const ratingInUserRatings = userRatings.find(r => r.id === ratingToDelete.id);
     if (!ratingInUserRatings) {
         console.error("Attempted to delete a rating that does not belong to the current user.");
         return;
     }
+    
+    const rPubId = ratingToDelete.pub_id || ratingToDelete.pubId || ratingToDelete.pub?.id;
 
-    trackEvent('delete_rating', { rating_id: ratingToDelete.id, pub_id: ratingToDelete.pubId });
+    trackEvent('delete_rating', { rating_id: ratingToDelete.id, pub_id: rPubId });
 
     // Store original state for potential rollback on error
     const originalUserRatings = userRatings;
@@ -3217,9 +3369,9 @@ const App = () => {
     // 2. Remove from global ratings map
     setAllRatings(prev => {
         const newMap = new Map(prev);
-        const pubRatings = newMap.get(ratingToDelete.pubId);
+        const pubRatings = newMap.get(rPubId);
         if (pubRatings) {
-            newMap.set(ratingToDelete.pubId, pubRatings.filter(r => r.id !== ratingToDelete.id));
+            newMap.set(rPubId, pubRatings.filter(r => r.id !== ratingToDelete.id));
         }
         return newMap;
     });
@@ -3247,6 +3399,8 @@ const App = () => {
         const { error: deleteError } = await supabase.from('ratings').delete().eq('id', ratingToDelete.id);
         if (deleteError) throw deleteError;
 
+        handleRemoveXP(100);
+
         // 3. Show success popup
         setDeleteConfirmationInfo({ key: crypto.randomUUID() });
 
@@ -3269,8 +3423,24 @@ const App = () => {
             theme: 'error',
         });
     }
-  }, [session, userProfile, userRatings, allRatings, fetchUserData]);
+  }, [session, userProfile, userRatings, allRatings, fetchUserData, ratingToDeletePrompt]);
   
+  const handleDeleteCheckin = useCallback(async (checkinId) => {
+      if (!session) return;
+      const { error } = await supabase.from('pub_checkins').delete().eq('id', checkinId).eq('user_id', session.user.id);
+      if (error) {
+          console.error("Error deleting checkin:", error);
+          setAlertInfo({ isOpen: true, title: "Error", message: "Failed to delete check-in." });
+      } else {
+          setUserCheckIns(prev => prev.filter(c => c.id !== checkinId));
+          setViewedCheckIns(prev => prev.filter(c => c.id !== checkinId));
+          setPostSuccessCount(c => c + 1); // trigger feeds
+          handleRemoveXP(25);
+          setAlertInfo({ isOpen: true, title: "Success", message: "Check-in deleted.", theme: "success" });
+          fetchUserData();
+      }
+  }, [session, handleRemoveXP, fetchUserData]);
+
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
     trackEvent('change_filter', { filter_type: newFilter });
@@ -3659,6 +3829,7 @@ const App = () => {
               userProfile={viewedProfile || userProfile}
               userRatings={viewedProfile ? viewedRatings : userRatings}
               userPosts={viewedProfile ? viewedPosts : userPosts}
+              userCheckIns={viewedProfile ? viewedCheckIns : userCheckIns}
               userTrophies={viewedProfile ? viewedTrophies : userTrophies}
               allTrophies={allTrophies}
               onBack={onBackHandler}
@@ -3675,7 +3846,8 @@ const App = () => {
               onFriendRequest={handleFriendRequest}
               onFriendAction={handleFriendAction}
               onViewFriends={handleViewFriends}
-              onDeleteRating={handleDeleteRating}
+              onDeleteRating={handleRequestDeleteRating}
+              onDeleteCheckin={handleDeleteCheckin}
               onOpenShareProfileModal={(user) => setShareProfileModalUser(user)}
               onNavigateToSettings={handleTabChange}
               pubScores={pubScores}
@@ -3695,10 +3867,10 @@ const App = () => {
           />
       );
   }, [
-      viewedProfile, userProfile, viewedRatings, userRatings, viewedPosts, userPosts, userTrophies, viewedTrophies, allTrophies,
+      viewedProfile, userProfile, viewedRatings, userRatings, viewedPosts, userPosts, viewedCheckIns, userCheckIns, userTrophies, viewedTrophies, allTrophies,
       handleBackFromProfileView, handleSelectPub, levelRequirements, 
       handleProfileUpdate, friendships, handleFriendRequest, handleViewProfile,
-      handleFriendAction, handleViewFriends, handleDeleteRating, handleTabChange,
+      handleFriendAction, handleViewFriends, handleRequestDeleteRating, handleTabChange,
       pubScores, isProfileStatsModalOpen, userPostLikes, handleTogglePostLike,
       handleEditPost, handleDeletePost, handleOpenReportContentModal, setSharePostModalPost,
       blockList, handleBlockUser, handleUnblockUser, blockedUsersProfiles
@@ -4332,7 +4504,7 @@ const App = () => {
       getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
       profilePage, session, userProfile, onLogout: () => supabase.auth.signOut(),
       selectedPub, existingUserRating, handleRatePub,
-      reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
+      reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo, xpGainedInfo, handleAddXP, handleRemoveXP,
       isAvatarModalOpen, setIsAvatarModalOpen,
       handleUpdateAvatar, viewedProfile, onViewProfile: handleViewProfile, onViewPub: handleSelectPub, legalPageView, handleViewLegal, handleDataRefresh,
       installPromptEvent, setInstallPromptEvent,
@@ -4346,6 +4518,7 @@ const App = () => {
       showSearchRadius: settings.showSearchRadius,
       showSearchOrigin: settings.showSearchOrigin,
       levelRequirements,
+      isLocatingUser,
       locationPermissionStatus, onRequestPermission: handleRequestPermission,
       CommunityPage,
       friendships, userLikes, onToggleLike: handleToggleLike, onFriendRequest: handleFriendRequest, onFriendAction: handleFriendAction,
@@ -4355,6 +4528,7 @@ const App = () => {
       onOpenScoreExplanation: () => setIsPubScoreModalOpen(true),
       isPubScoreModalOpen, onSetIsPubScoreModalOpen: setIsPubScoreModalOpen,
       onOpenSuggestEditModal: handleOpenSuggestEditModal,
+      onDeleteRating: handleRequestDeleteRating,
       unreadNotificationsCount,
       notifications, onMarkNotificationsAsRead: handleMarkNotificationsAsRead, onDeleteNotification: handleDeleteNotification,
       commentsByRating, isCommentsLoading, onFetchComments: fetchCommentsForRating, onAddComment: handleAddComment, onDeleteComment: handleDeleteComment, onReportContent: handleOpenReportContentModal,
@@ -4539,7 +4713,18 @@ const App = () => {
                 theme="red"
             />
         )}
-
+        
+        {ratingToDeletePrompt && (
+            <ConfirmationModal
+                isOpen={!!ratingToDeletePrompt}
+                onClose={() => setRatingToDeletePrompt(null)}
+                onConfirm={handleDeleteRating}
+                title="Delete Rating?"
+                message="Are you sure you want to permanently delete this rating and any associated photo? This action cannot be undone."
+                confirmText="Delete"
+                theme="red"
+            />
+        )}
 
         {isAddPubModalOpen && (
           <AddPubModal onClose={handleCancelPubPlacement} onSubmit={handleStartPubPlacement} />

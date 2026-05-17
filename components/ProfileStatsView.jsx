@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { getCurrencyInfo } from '../utils.js';
 import StarRating from './StarRating.jsx';
 import { RANK_DETAILS } from '../constants.js';
+import { supabase } from '../supabase.js';
 
 // A reusable card component for consistent styling
 const StatCard = ({ icon, title, children, className = '', onClick }) => (
@@ -33,8 +34,6 @@ const FALLBACK_DISPLAY_CURRENCIES = {
     EUR: { symbol: '€', rate: 1.18 },
     USD: { symbol: '$', rate: 1.27 },
     AUD: { symbol: 'A$', rate: 1.91 },
-    VND: { symbol: '₫', rate: 32000 },
-    IDR: { symbol: 'Rp', rate: 20000 },
 };
 
 
@@ -42,6 +41,26 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
     const [isSpentVisible, setIsSpentVisible] = useState(false);
     const [displayCurrency, setDisplayCurrency] = useState('GBP');
     const [exchangeRates, setExchangeRates] = useState(null);
+    const [userCheckIns, setUserCheckIns] = useState([]);
+
+    useEffect(() => {
+        const fetchCheckIns = async () => {
+            if (!userProfile?.id) return;
+            try {
+                const { data, error } = await supabase
+                    .from('pub_checkins')
+                    .select('id, amount_drank, price, created_at, pub_id, pub:pubs (country_code, country_name, local_avg_price)')
+                    .eq('user_id', userProfile.id);
+                
+                if (!error && data) {
+                    setUserCheckIns(data);
+                }
+            } catch (err) {
+                console.error("Error fetching checkins:", err);
+            }
+        };
+        fetchCheckIns();
+    }, [userProfile?.id]);
 
     const qualityCarouselRef = useRef(null);
     const valueCarouselRef = useRef(null);
@@ -171,49 +190,101 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
 
 
     const stats = useMemo(() => {
-        if (!userRatings || userRatings.length === 0) {
+        if ((!userRatings || userRatings.length === 0) && (!userCheckIns || userCheckIns.length === 0)) {
             return {
                 totalPints: 0,
                 averageQuality: 0,
                 averagePrice: 0,
                 totalSpentInGbp: 0,
                 averagePricePaidInGbp: 0,
+                checkInsCount: 0,
+                totalPintsConsumed: 0,
             };
         }
 
-        const totalPints = userRatings.length;
+        // Sum all amounts from ratings. If amount_drank is null, it defaults to 1 per visit.
+        const totalPintsFromRatings = userRatings ? userRatings.reduce((sum, r) => sum + (r.rating.amount_drank != null ? r.rating.amount_drank : 1), 0) : 0;
         
-        const averageQualityRaw = userRatings.reduce((sum, r) => sum + r.rating.quality, 0) / totalPints;
+        // Use totalPintsFromRatings instead of userRatings.length for averages IF we want averages weighted by pint count? 
+        // No, average quality of visits is usually per rating visit. Let's keep totalPints for visits.
+        const totalPints = userRatings ? userRatings.length : 0;
+        
+        const averageQualityRaw = totalPints > 0 ? userRatings.reduce((sum, r) => sum + r.rating.quality, 0) / totalPints : 0;
         const averageQuality = Math.round(averageQualityRaw * 10) / 10;
         
-        const averagePriceRaw = userRatings.reduce((sum, r) => sum + r.rating.price, 0) / totalPints;
+        const averagePriceRaw = totalPints > 0 ? userRatings.reduce((sum, r) => sum + r.rating.price, 0) / totalPints : 0;
         const averagePrice = Math.round(averagePriceRaw * 10) / 10;
 
         let pricedRatingsCount = 0;
-        const totalSpentInGbp = userRatings.reduce((sum, r) => {
+        let totalSpentInGbp = userRatings ? userRatings.reduce((sum, r) => {
+            const amountForSpent = r.rating.amount_drank != null ? r.rating.amount_drank : 1;
             if (r.rating.exact_price > 0) {
-                pricedRatingsCount++;
+                pricedRatingsCount += amountForSpent;
                 const currency = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
+                let cost = r.rating.exact_price * amountForSpent;
                 if (exchangeRates) {
                     const rateFromGbp = exchangeRates[currency.code];
                     if (rateFromGbp) {
-                        sum += r.rating.exact_price / rateFromGbp;
+                        sum += cost / rateFromGbp;
                     } else {
-                        sum += r.rating.exact_price;
+                        sum += cost;
                     }
                 } else {
                     const rateToGbp = FALLBACK_RATES_TO_GBP[currency.code] || 1;
-                    sum += r.rating.exact_price * rateToGbp;
+                    sum += cost * rateToGbp;
                 }
             }
             return sum;
-        }, 0);
+        }, 0) : 0;
+
+        let checkInsCount = 0;
+        let totalPintsConsumed = totalPintsFromRatings; // Start with total from ratings
+
+        if (userCheckIns && userCheckIns.length > 0) {
+            checkInsCount = userCheckIns.length;
+            totalSpentInGbp = userCheckIns.reduce((sum, c) => {
+                const amountForCheckIn = c.amount_drank != null ? c.amount_drank : 1;
+                totalPintsConsumed += amountForCheckIn;
+                
+                let priceToUse = c.price;
+                if (!priceToUse && c.pub?.local_avg_price) {
+                    priceToUse = c.pub.local_avg_price;
+                }
+                
+                if (priceToUse > 0) {
+                    let cost = priceToUse * amountForCheckIn;
+                    pricedRatingsCount += amountForCheckIn;
+                    const currPub = c.pub || {};
+                    const currency = getCurrencyInfo({ country_code: currPub.country_code, country_name: currPub.country_name });
+                    if (exchangeRates) {
+                        const rateFromGbp = exchangeRates[currency.code];
+                        if (rateFromGbp) {
+                            sum += cost / rateFromGbp;
+                        } else {
+                            sum += cost;
+                        }
+                    } else {
+                        const rateToGbp = FALLBACK_RATES_TO_GBP[currency.code] || 1;
+                        sum += cost * rateToGbp;
+                    }
+                }
+                return sum;
+            }, totalSpentInGbp);
+        }
 
         const averagePricePaidInGbp = pricedRatingsCount > 0 ? totalSpentInGbp / pricedRatingsCount : 0;
 
-        return { totalPints, averageQuality, averagePrice, totalSpentInGbp, averagePricePaidInGbp };
+        return { 
+            totalPints, 
+            averageQuality, 
+            averagePrice, 
+            totalSpentInGbp, 
+            averagePricePaidInGbp,
+            checkInsCount,
+            totalPintsConsumed
+        };
 
-    }, [userRatings, exchangeRates]);
+    }, [userRatings, exchangeRates, userCheckIns]);
 
     const displayCurrencies = useMemo(() => {
         if (exchangeRates) {
@@ -222,8 +293,6 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
                 EUR: { symbol: '€', rate: exchangeRates['EUR'] || FALLBACK_DISPLAY_CURRENCIES.EUR.rate },
                 USD: { symbol: '$', rate: exchangeRates['USD'] || FALLBACK_DISPLAY_CURRENCIES.USD.rate },
                 AUD: { symbol: 'A$', rate: exchangeRates['AUD'] || FALLBACK_DISPLAY_CURRENCIES.AUD.rate },
-                VND: { symbol: '₫', rate: exchangeRates['VND'] || FALLBACK_DISPLAY_CURRENCIES.VND.rate },
-                IDR: { symbol: 'Rp', rate: exchangeRates['IDR'] || FALLBACK_DISPLAY_CURRENCIES.IDR.rate },
             };
         }
         return FALLBACK_DISPLAY_CURRENCIES;
@@ -248,17 +317,20 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
             return null;
         }
 
-        const ratingsForNextRank = nextRankLevelInfo.total_ratings_required;
-        const currentRatings = userRatings ? userRatings.length : (userProfile.reviews || 0);
-        const ratingsNeeded = Math.max(0, ratingsForNextRank - currentRatings);
+        const xpForNextRank = nextRankLevelInfo.xp_required != null ? nextRankLevelInfo.xp_required : nextRankLevelInfo.total_ratings_required;
+        const currentXP = nextRankLevelInfo.xp_required != null ? (Number(userProfile.xp) || 0) : (userRatings ? userRatings.length : (userProfile.reviews || 0));
+        const xpNeeded = Math.max(0, xpForNextRank - currentXP);
+
+        const isXP = nextRankLevelInfo.xp_required != null;
 
         return {
             isMaxRank: false,
-            needed: ratingsNeeded,
+            needed: xpNeeded,
+            isXP: isXP,
         };
     }, [rankData, userProfile, levelRequirements]);
     
-    if (stats.totalPints === 0) {
+    if (stats.totalPints === 0 && stats.checkInsCount === 0) {
         return (
             <div className="p-4 text-center text-gray-500 dark:text-gray-400">
                 <p>No stats to show yet. Start rating some pints!</p>
@@ -275,37 +347,57 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md">
                 <div className="flex justify-around items-stretch divide-x divide-gray-200 dark:divide-gray-700">
                     {/* Total Pints Section */}
-                    <div className="w-1/2 flex flex-col items-center justify-center px-2">
-                        <div className="flex items-center space-x-2 mb-1">
-                            <i className="fas fa-beer text-amber-500 dark:text-amber-400 text-sm"></i>
-                            <h3 className="font-bold text-sm text-gray-800 dark:text-white">Total Pints</h3>
+                    <div className="w-1/3 flex flex-col items-center justify-center px-1">
+                        <div className="flex items-center space-x-1 sm:space-x-2 mb-1">
+                            <i className="fas fa-star text-amber-500 dark:text-amber-400 text-xs sm:text-sm"></i>
+                            <h3 className="font-bold text-xs sm:text-sm text-gray-800 dark:text-white line-clamp-1">Ratings</h3>
                         </div>
-                        <p className="text-4xl font-bold">{stats.totalPints}</p>
+                        <p className="text-2xl sm:text-4xl font-bold">{stats.totalPints}</p>
+                    </div>
+
+                    {/* Check-ins Section */}
+                    <div className="w-1/3 flex flex-col items-center justify-center px-1">
+                        <div className="flex items-center space-x-1 sm:space-x-2 mb-1">
+                            <i className="fas fa-beer text-amber-500 dark:text-amber-400 text-xs sm:text-sm"></i>
+                            <h3 className="font-bold text-xs sm:text-sm text-gray-800 dark:text-white line-clamp-1">Check-ins</h3>
+                        </div>
+                        <p className="text-2xl sm:text-4xl font-bold">{stats.checkInsCount}</p>
                     </div>
                     
                     {/* Your Rank Section */}
                     {rankData && (
-                        <div className="w-1/2 flex flex-col items-center justify-center px-2 text-center">
-                            <div className="flex items-center space-x-2 mb-1">
-                                <i className="fas fa-medal text-amber-500 dark:text-amber-400 text-sm"></i>
-                                <h3 className="font-bold text-sm text-gray-800 dark:text-white">Your Rank</h3>
+                        <div className="w-1/3 flex flex-col items-center justify-center px-1 text-center">
+                            <div className="flex items-center space-x-1 sm:space-x-2 mb-1">
+                                <i className="fas fa-medal text-amber-500 dark:text-amber-400 text-xs sm:text-sm"></i>
+                                <h3 className="font-bold text-xs sm:text-sm text-gray-800 dark:text-white line-clamp-1">Your Rank</h3>
                             </div>
-                            <i className={`fas ${rankData.icon} text-2xl text-amber-500 dark:text-amber-400 mb-1`}></i>
-                            <p className="text-base font-semibold truncate" title={rankData.name}>{rankData.name}</p>
+                            <i className={`fas ${rankData.icon} text-xl sm:text-2xl text-amber-500 dark:text-amber-400 mb-1`}></i>
+                            <p className="text-xs sm:text-base font-semibold truncate" title={rankData.name}>{rankData.name}</p>
                             {nextRankInfo ? (
                                 nextRankInfo.isMaxRank ? (
-                                    <p className="text-xs font-bold text-green-500 dark:text-green-400 mt-1">Max Rank Reached!</p>
+                                    <p className="text-[10px] font-bold text-green-500 dark:text-green-400 mt-1 line-clamp-1">Max Rank!</p>
                                 ) : nextRankInfo.needed > 0 ? (
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        <span className="font-bold">{nextRankInfo.needed}</span> rating{nextRankInfo.needed !== 1 ? 's' : ''} to next rank
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight text-center hidden sm:block">
+                                        <span className="font-bold">{nextRankInfo.needed}</span> {nextRankInfo.isXP ? 'XP' : ''} needed
                                     </p>
                                 ) : (
-                                    <p className="text-xs font-bold text-green-500 dark:text-green-400 mt-1">Next rating is a rank up!</p>
+                                    <p className="text-[10px] font-bold text-green-500 dark:text-green-400 mt-1 line-clamp-1">Rank up!</p>
                                 )
                             ) : null}
                         </div>
                     )}
                 </div>
+                
+                {(stats.totalPintsConsumed > 0) && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-center items-center">
+                        <div className="bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-full flex items-center space-x-3 shadow-sm transition-transform hover:scale-105">
+                            <i className="fas fa-beer text-amber-500 dark:text-amber-400 text-lg"></i>
+                            <span className="font-bold text-sm sm:text-base text-amber-700 dark:text-amber-300 tracking-tight">
+                                {stats.totalPintsConsumed} Total Pints Consumed
+                            </span>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <StatCard icon="fa-coins" title="Total Spent">

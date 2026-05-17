@@ -7,13 +7,17 @@ import MapSearchBar from './MapSearchBar.jsx';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import { getDistance } from 'geolib';
+import { getCurrencyInfo } from '../utils.js';
 
 const stopIcon = (index) => (
     <div className="w-8 h-8 rounded-full bg-amber-500 text-black font-bold flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md">{index}</div>
 );
 
-const PubCrawlDetailView = ({ crawl, onBack, onGiveFeedback, onSelectPub, activeCrawl, onStartCrawl, onEndCrawl, onToggleCrawlStop, settings, pubScores, onRenameCrawl, onReorderStops, onAddStop, onDeleteStop, setAlertInfo, userProfile }) => {
+const PubCrawlDetailView = ({ crawl, forceReadOnly, onBack, onGiveFeedback, onSelectPub, activeCrawl, onStartCrawl, onEndCrawl, onToggleCrawlStop, settings, pubScores, onRenameCrawl, onReorderStops, onAddStop, onDeleteStop, setAlertInfo, userProfile, onTogglePublish, onSaveCommunityCrawl, onUnsaveCommunityCrawl, isSaved, isSaving, onCloneToEdit }) => {
     const isDesktop = useIsDesktop();
+    const isReadOnly = forceReadOnly || crawl.user_id !== userProfile?.id || !!crawl.original_crawl_id;
+    const isOwnCrawl = crawl.user_id === userProfile?.id;
+    const isSavedCommunityCrawl = crawl.user_id === userProfile?.id && !!crawl.original_crawl_id;
     const [selectedStopId, setSelectedStopId] = useState(null);
     const [isEditingName, setIsEditingName] = useState(false);
     const [crawlToReset, setCrawlToReset] = useState(null);
@@ -245,6 +249,30 @@ const PubCrawlDetailView = ({ crawl, onBack, onGiveFeedback, onSelectPub, active
         ? 'mapbox://styles/mapbox/dark-v11'
         : 'mapbox://styles/mapbox/streets-v12';
 
+    const estimatedCostInfo = useMemo(() => {
+        if (!stops || stops.length === 0) return { cost: 0, symbol: '£' };
+        
+        let cost = 0;
+        let symbol = '£';
+        
+        if (stops[0].pub) {
+            const currencyInfo = getCurrencyInfo(stops[0].pub);
+            symbol = currencyInfo.symbol;
+            
+            stops.forEach(stop => {
+                if (stop.pub) {
+                    if (stop.pub.local_avg_price) {
+                        cost += parseFloat(stop.pub.local_avg_price);
+                    } else {
+                        cost += parseFloat(currencyInfo.examplePrice || 5);
+                    }
+                }
+            });
+        }
+        
+        return { cost, symbol };
+    }, [stops]);
+
     const renderListContent = () => (
         <>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 gap-4">
@@ -267,35 +295,68 @@ const PubCrawlDetailView = ({ crawl, onBack, onGiveFeedback, onSelectPub, active
                     ) : (
                         <div className="flex items-center gap-2 group">
                             <h2 className="text-xl font-bold text-gray-800 dark:text-white truncate">{crawl.name}</h2>
-                            <button 
-                                onClick={() => setIsEditingName(true)}
-                                className="text-gray-400 hover:text-amber-500 p-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                                aria-label="Edit name"
-                            >
-                                <i className="fas fa-pencil-alt"></i>
-                            </button>
+                            {!isReadOnly && (
+                                <button 
+                                    onClick={() => setIsEditingName(true)}
+                                    className="text-gray-400 hover:text-amber-500 p-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                                    aria-label="Edit name"
+                                >
+                                    <i className="fas fa-pencil-alt"></i>
+                                </button>
+                            )}
                         </div>
                     )}
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {stops.length} stops
+                    <div className="text-sm text-gray-500 dark:text-gray-400 flex flex-wrap items-center mt-1 gap-y-1">
+                        <span>{stops.length} stops</span>
                         {routeInfo.distance > 0 && (
-                            <span className="ml-2 pl-2 border-l border-gray-300 dark:border-gray-600">
-                                <i className="fas fa-walking mr-1"></i>
+                            <span className="flex items-center">
+                                <span className="mx-2 text-gray-300 dark:text-gray-600">|</span>
+                                <i className="fas fa-walking mr-1.5 hidden sm:inline"></i>
                                 {settings.unit === 'mi'
                                     ? `${(routeInfo.distance * 0.000621371).toFixed(1)} mi`
                                     : `${(routeInfo.distance / 1000).toFixed(1)} km`}
-                                <span className="ml-2">· approx. {Math.round(routeInfo.duration / 60)} min walk</span>
+                                <span className="ml-1 sm:ml-2">· ~{Math.round(routeInfo.duration / 60)} min</span>
                             </span>
                         )}
-                    </p>
+                        <span className="flex items-center text-green-600 dark:text-green-400 font-medium whitespace-nowrap">
+                            <span className="mx-2 text-gray-300 dark:text-gray-600 line-clamp-1">|</span>
+                            <span>{estimatedCostInfo.symbol}{estimatedCostInfo.cost.toFixed(2)} est. (1 pint/pub)</span>
+                        </span>
+                    </div>
                 </div>
-                {isActiveCrawl ? (
+                {isReadOnly && !isOwnCrawl ? (
+                    isSaved ? (
+                        <button 
+                            onClick={() => onUnsaveCommunityCrawl(crawl.id)}
+                            disabled={isSaving}
+                            className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center space-x-2 flex-shrink-0 hover:bg-red-100 hover:text-red-500 hover:border-red-500 dark:hover:bg-red-900/30 border border-transparent disabled:opacity-50 transition-colors"
+                        >
+                            <i className={`fas ${isSaving ? 'fa-spinner fa-spin' : 'fa-times'}`}></i>
+                            <span>Remove Crawl</span>
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={() => onSaveCommunityCrawl(crawl.id)}
+                            disabled={isSaving}
+                            className="bg-amber-500 text-black font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center space-x-2 flex-shrink-0 hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                        >
+                            <i className={`fas ${isSaving ? 'fa-spinner fa-spin' : 'fa-bookmark'}`}></i>
+                            <span>Save to My Crawls</span>
+                        </button>
+                    )
+                ) : isActiveCrawl ? (
                      <button onClick={onEndCrawl} className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center space-x-2 flex-shrink-0">
                         <i className="fas fa-stop"></i>
                         <span>End Crawl</span>
                     </button>
                 ) : hasProgress ? (
                     <div className="flex flex-col gap-2 flex-shrink-0">
+                        {isSavedCommunityCrawl && onCloneToEdit && (
+                            <button onClick={() => onCloneToEdit(crawl)} disabled={isSaving} className="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center space-x-2 relative group overflow-hidden">
+                                <i className="fas fa-copy"></i>
+                                <span>Clone to Edit</span>
+                            </button>
+                        )}
                         <button onClick={() => setCrawlToReset(crawl)} className="w-full bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center space-x-2">
                             <i className="fas fa-undo"></i>
                             <span>Reset</span>
@@ -306,19 +367,27 @@ const PubCrawlDetailView = ({ crawl, onBack, onGiveFeedback, onSelectPub, active
                         </button>
                     </div>
                 ) : (
-                    <button onClick={() => onStartCrawl(crawl)} className="bg-green-500 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center space-x-2 flex-shrink-0">
-                        <i className="fas fa-play"></i>
-                        <span>Start Crawl</span>
-                    </button>
+                    <div className="flex flex-col gap-2 flex-shrink-0">
+                        {isSavedCommunityCrawl && onCloneToEdit && (
+                            <button onClick={() => onCloneToEdit(crawl)} disabled={isSaving} className="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center space-x-2 relative group overflow-hidden hover:bg-blue-600 transition-colors">
+                                <i className="fas fa-copy"></i>
+                                <span>Clone to Edit</span>
+                            </button>
+                        )}
+                        <button onClick={() => onStartCrawl(crawl)} className="bg-green-500 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center space-x-2 flex-shrink-0 hover:bg-green-600 transition-colors">
+                            <i className="fas fa-play"></i>
+                            <span>Start Crawl</span>
+                        </button>
+                    </div>
                 )}
             </div>
-            {!isActiveCrawl && (
+            {!isActiveCrawl && !isReadOnly && (
                 <div className="text-center text-xs p-2 mb-2 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300">
                     <i className="fas fa-info-circle mr-1"></i>
                     You can drag and drop to re-order the stops before starting your crawl.
                 </div>
             )}
-            {!isActiveCrawl && (
+            {!isActiveCrawl && !isReadOnly && (
                 <div className="mb-4">
                     {isAddStopOpen ? (
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
@@ -353,15 +422,15 @@ const PubCrawlDetailView = ({ crawl, onBack, onGiveFeedback, onSelectPub, active
                     return (
                         <li
                             key={stop.id}
-                            draggable={!isActiveCrawl && isDesktop}
-                            onDragStart={(e) => isDesktop && handleDragStart(e, index)}
-                            onDragEnter={(e) => isDesktop && handleDragEnter(e, index)}
+                            draggable={!isActiveCrawl && !isReadOnly && isDesktop}
+                            onDragStart={(e) => isDesktop && !isReadOnly && handleDragStart(e, index)}
+                            onDragEnter={(e) => isDesktop && !isReadOnly && handleDragEnter(e, index)}
                             onDragOver={(e) => e.preventDefault()}
-                            onDragEnd={isDesktop ? handleDragEnd : undefined}
+                            onDragEnd={isDesktop && !isReadOnly ? handleDragEnd : undefined}
                             onClick={() => handlePubClick(stop.pub)}
-                            className={`p-3 rounded-lg flex items-center space-x-4 transition-all ${!isActiveCrawl && isDesktop ? 'cursor-grab' : 'cursor-pointer'} ${selectedStopId === stop.pub.id ? 'ring-2 ring-amber-500' : ''} ${dragging && dragItem.current === index ? 'bg-gray-200 dark:bg-gray-600 shadow-lg scale-105' : 'bg-white dark:bg-gray-800'}`}
+                            className={`p-3 rounded-lg flex items-center space-x-4 transition-all ${!isActiveCrawl && !isReadOnly && isDesktop ? 'cursor-grab' : 'cursor-pointer'} ${selectedStopId === stop.pub.id ? 'ring-2 ring-amber-500' : ''} ${dragging && dragItem.current === index ? 'bg-gray-200 dark:bg-gray-600 shadow-lg scale-105' : 'bg-white dark:bg-gray-800'}`}
                         >
-                            {!isActiveCrawl && (
+                            {!isActiveCrawl && !isReadOnly && (
                                 isDesktop ? (
                                     <div className="text-gray-400 dark:text-gray-500 handle" aria-label="Drag to reorder">
                                         <i className="fas fa-grip-vertical fa-lg"></i>
@@ -401,7 +470,7 @@ const PubCrawlDetailView = ({ crawl, onBack, onGiveFeedback, onSelectPub, active
                                     {pubScore !== undefined && (
                                         <p className="font-bold text-gray-700 dark:text-gray-200">{pubScore} <span className="text-xs">Score</span></p>
                                     )}
-                                    {!isActiveCrawl && (
+                                    {!isActiveCrawl && !isReadOnly && (
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); handleDeleteStopClick(stop); }}
                                             className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -452,15 +521,32 @@ const PubCrawlDetailView = ({ crawl, onBack, onGiveFeedback, onSelectPub, active
                         <i className="fas fa-arrow-left"></i>
                         <span className="font-semibold">Back to Crawls</span>
                     </button>
-                    {onGiveFeedback && (
-                        <button 
-                            onClick={onGiveFeedback}
-                            className="text-xs bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 px-3 py-1.5 rounded-full font-medium transition-colors flex items-center gap-1"
-                        >
-                            <i className="fas fa-comment-alt"></i>
-                            <span className="hidden sm:inline">Feedback</span>
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {crawl.user_id === userProfile?.id && onTogglePublish && !crawl.original_crawl_id && (
+                            <button
+                                onClick={() => onTogglePublish(crawl.id, !crawl.is_public)}
+                                className={`text-xs px-3 py-1.5 rounded-full font-bold transition-colors flex items-center gap-1 ${
+                                    crawl.is_public
+                                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-800 dark:text-amber-300'
+                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600'
+                                }`}
+                            >
+                                <i className={`fas fa-globe ${crawl.is_public ? 'text-amber-500' : 'text-gray-400'}`}></i>
+                                <span className={!isDesktop ? 'hidden sm:inline' : ''}>
+                                    {crawl.is_public ? 'Shared to Community' : 'Share to Community'}
+                                </span>
+                            </button>
+                        )}
+                        {onGiveFeedback && (
+                            <button 
+                                onClick={onGiveFeedback}
+                                className="text-xs bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 px-3 py-1.5 rounded-full font-medium transition-colors flex items-center gap-1"
+                            >
+                                <i className="fas fa-comment-alt"></i>
+                                <span className="hidden sm:inline">Feedback</span>
+                            </button>
+                        )}
+                    </div>
                 </header>
                 
                 <div className={`flex-grow min-h-0 ${isDesktop ? 'flex' : 'flex-col'}`}>

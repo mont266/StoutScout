@@ -8,8 +8,8 @@ const ProfileAvatar = ({ userProfile, levelRequirements, size = 48, onClick, use
             return { percentage: 0, progressText: '' };
         }
         
-        const { level } = userProfile;
-        const reviews = userRatings ? userRatings.length : (Number(userProfile.reviews) || 0);
+        const { level, xp } = userProfile;
+        const currentXP = Number(xp) || 0;
         const currentLevelInfo = levelRequirements.find(lr => lr.level === level);
         const nextLevelInfo = levelRequirements.find(lr => lr.level === level + 1);
         
@@ -21,13 +21,18 @@ const ProfileAvatar = ({ userProfile, levelRequirements, size = 48, onClick, use
             return { percentage: 100, progressText: 'Max Level!' };
         }
         
-        const ratingsForThisLevel = nextLevelInfo.total_ratings_required - currentLevelInfo.total_ratings_required;
-        const progressIntoThisLevel = Math.max(0, reviews - currentLevelInfo.total_ratings_required);
-        const percentage = ratingsForThisLevel > 0 ? (progressIntoThisLevel / ratingsForThisLevel) * 100 : 0;
+        // Use xp_required if available, fallback to total_ratings_required for legacy
+        const currentReq = currentLevelInfo.xp_required != null ? currentLevelInfo.xp_required : currentLevelInfo.total_ratings_required;
+        const nextReq = nextLevelInfo.xp_required != null ? nextLevelInfo.xp_required : nextLevelInfo.total_ratings_required;
+        const currentValue = currentLevelInfo.xp_required != null ? currentXP : (userRatings ? userRatings.length : (Number(userProfile.reviews) || 0));
+
+        const xpForThisLevel = nextReq - currentReq;
+        const progressIntoThisLevel = Math.max(0, currentValue - currentReq);
+        const percentage = xpForThisLevel > 0 ? (progressIntoThisLevel / xpForThisLevel) * 100 : 0;
         
         return {
             percentage: Math.min(100, Math.max(0, percentage)),
-            progressText: `${progressIntoThisLevel} / ${ratingsForThisLevel} to Lvl ${level + 1}`
+            progressText: `${progressIntoThisLevel} / ${xpForThisLevel} XP to Lvl ${level + 1}`
         };
     };
 

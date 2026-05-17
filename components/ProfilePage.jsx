@@ -459,7 +459,7 @@ const StatCard = ({ icon, title, children, className = '', onClick }) => (
     </div>
 );
 
-const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen, userPostLikes, onTogglePostLike, onViewProfile, onReportContent, onEditPost, onDeletePost, onOpenSharePostModal, blockList, onBlockUser, onUnblockUser, blockedUsersProfiles }) => {
+const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onDeleteCheckin, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen, userPostLikes, onTogglePostLike, onViewProfile, onReportContent, onEditPost, onDeletePost, onOpenSharePostModal, blockList, onBlockUser, onUnblockUser, blockedUsersProfiles }) => {
     const isDesktop = useIsDesktop();
     const [isBanning, setIsBanning] = useState(false);
     const [isUnbanning, setIsUnbanning] = useState(false);
@@ -479,7 +479,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
     const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
     const mainScrollRef = useRef(null);
     const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
-    const [activeTab, setActiveTab] = useState('ratings');
+    const [activeTab, setActiveTab] = useState('all');
     const [visibleRatingsCount, setVisibleRatingsCount] = useState(5);
 
     const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
@@ -718,28 +718,16 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
     };
 
     const requestDeleteRating = (rating) => {
-        setConfirmation({
-            isOpen: true,
-            title: 'Delete Rating?',
-            message: 'This rating and any associated photo will be permanently deleted.',
-            onConfirm: async () => {
-                if (!rating || !onDeleteRating) return;
-                setDeletingRatingId(rating.id);
-                await onDeleteRating(rating);
-                setDeletingRatingId(null);
-                setConfirmation({ isOpen: false });
-            },
-            confirmText: 'Delete',
-            theme: 'red'
-        });
+        if (!rating || !onDeleteRating) return;
+        onDeleteRating(rating);
     };
 
-    const getProfileBorderColor = () => {
-        if (userProfile.is_developer) return 'border-amber-500';
-        if (is_beta_tester) return 'border-blue-500';
-        if (is_team_member) return 'border-purple-500';
-        if (is_early_bird) return 'border-green-500';
-        return 'border-amber-400';
+    const getProfileGlowClass = () => {
+        if (userProfile.is_developer) return 'shadow-[0_0_20px_rgba(245,158,11,0.6)]'; // amber-500
+        if (is_beta_tester) return 'shadow-[0_0_20px_rgba(59,130,246,0.6)]'; // blue-500
+        if (is_team_member) return 'shadow-[0_0_20px_rgba(168,85,247,0.6)]'; // purple-500
+        if (is_early_bird) return 'shadow-[0_0_20px_rgba(34,197,94,0.6)]'; // green-500
+        return ''; // Default no glow, the SVG ring is already amber
     };
     
     const TabButton = ({ tabId, label, isActive, onClick }) => (
@@ -771,50 +759,9 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
 
         return (
             <div className="space-y-3">
-                {ratingsToShow.map((r) => {
-                    const currencyInfo = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
-                    return (
-                        <li key={r.id} className="list-none bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-                            <div className="p-3">
-                                <div className="flex justify-between items-center mb-2">
-                                    <button onClick={() => onViewPub({ id: r.pubId, name: r.pubName, address: r.pubAddress, location: r.pubLocation, country_code: r.pubCountryCode, country_name: r.pubCountryName })} className="font-bold text-gray-800 dark:text-white hover:underline truncate" disabled={!onViewPub}>
-                                        {r.pubName}
-                                    </button>
-                                     {isViewingOwnProfile && (
-                                        <button onClick={() => requestDeleteRating(r)} disabled={deletingRatingId === r.id} className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 w-8 h-8 flex items-center justify-center rounded-full transition-colors disabled:opacity-50">
-                                            <i className="fas fa-trash-alt"></i>
-                                        </button>
-                                     )}
-                                </div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{r.pubAddress}</p>
-                                {r.rating.message && (
-                                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md border-l-4 border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
-                                        "{r.rating.message}"
-                                    </p>
-                                )}
-                                <div className="flex items-center space-x-4 mt-2">
-                                    <div className="flex items-center space-x-1 text-sm"><i className="fas fa-tag text-green-500/80"></i><StarRating rating={r.rating.price} color="text-green-400" /></div>
-                                    <div className="flex items-center space-x-1 text-sm"><i className="fas fa-beer text-amber-500/80"></i><StarRating rating={r.rating.quality} color="text-amber-400" /></div>
-                                </div>
-                                 {r.rating.exact_price && (
-                                    <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">
-                                        Paid: <span className="font-bold text-gray-700 dark:text-white">{currencyInfo.symbol}{r.rating.exact_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                    </p>
-                                 )}
-                                {r.image_url && (
-                                    <div className="mt-2">
-                                        <button onClick={() => setImageToView({ ...r, user: userProfile, uploaderName: username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition">
-                                            <img src={r.image_url} alt="Pint of Guinness" className="w-24 h-24 object-cover" />
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-1 text-right">
-                                <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(r.timestamp)}</span>
-                            </div>
-                        </li>
-                    );
-                })}
+                {ratingsToShow.map((r) => (
+                    <RatingItem key={r.id} r={r} />
+                ))}
                 {hasMoreRatings && (
                     <div className="mt-4">
                         <button 
@@ -857,6 +804,180 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                         onOpenSharePostModal={onOpenSharePostModal}
                     />
                 ))}
+            </div>
+        );
+    };
+
+    const CheckInItem = ({ item }) => {
+        const pub = item.pub || item.pubs || {};
+        return (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden list-none">
+                <div className="p-3">
+                    <div className="flex justify-between items-start mb-2">
+                        <div>
+                            <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
+                                <i className="fas fa-map-marker-alt text-amber-500"></i>
+                                <span>Checked in</span>
+                            </div>
+                            <button onClick={() => onViewPub({ id: pub.id || item.pub_id, name: pub.name, address: pub.address, location: { lat: pub.lat, lng: pub.lng } })} className="font-bold text-gray-800 dark:text-white hover:underline truncate inline-block text-left" disabled={!onViewPub}>
+                                {pub.name || 'Unknown Pub'}
+                            </button>
+                        </div>
+                        {isViewingOwnProfile && onDeleteCheckin && (
+                            <button onClick={() => onDeleteCheckin(item.id)} className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 w-8 h-8 flex items-center justify-center rounded-full transition-colors flex-shrink-0">
+                                <i className="fas fa-trash-alt"></i>
+                            </button>
+                        )}
+                    </div>
+                    {item.amount_drank > 0 && (
+                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            Drank: {item.amount_drank} pint{item.amount_drank > 1 ? 's' : ''}
+                        </p>
+                    )}
+                    {item.comment && (
+                        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md border-l-4 border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
+                            "{item.comment}"
+                        </p>
+                    )}
+                    {item.image_url && (
+                        <div className="mt-2">
+                            <button onClick={() => setImageToView({ ...item, user: userProfile, uploaderName: username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition block">
+                                <img src={item.image_url} alt="Check-in photo" className="w-24 h-24 object-cover" />
+                            </button>
+                        </div>
+                    )}
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-1 text-right border-t border-gray-100 dark:border-gray-700/50">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(new Date(item.created_at).getTime())}</span>
+                </div>
+            </div>
+        );
+    };
+
+    const CheckInsList = () => {
+        if (!userCheckIns || userCheckIns.length === 0) {
+            return (
+                <div className="text-center text-gray-500 dark:text-gray-400 p-4">
+                    <p>No check-ins yet.</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="space-y-3">
+                {userCheckIns.map(checkIn => (
+                    <CheckInItem key={checkIn.id} item={checkIn} />
+                ))}
+            </div>
+        );
+    };
+
+    const RatingItem = ({ r, hideDelete }) => {
+        const currencyInfo = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
+        return (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden list-none">
+                <div className="p-3">
+                    <div className="flex justify-between items-center mb-2">
+                        <button onClick={() => onViewPub({ id: r.pubId, name: r.pubName, address: r.pubAddress, location: r.pubLocation, country_code: r.pubCountryCode, country_name: r.pubCountryName })} className="font-bold text-gray-800 dark:text-white hover:underline truncate" disabled={!onViewPub}>
+                            {r.pubName}
+                        </button>
+                            {isViewingOwnProfile && !hideDelete && (
+                            <button onClick={() => requestDeleteRating(r)} disabled={deletingRatingId === r.id} className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 w-8 h-8 flex items-center justify-center rounded-full transition-colors disabled:opacity-50">
+                                <i className="fas fa-trash-alt"></i>
+                            </button>
+                            )}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">{r.pubAddress}</p>
+                    <div className="flex items-center space-x-1 text-sm text-gray-500 mb-2">
+                        <i className="fas fa-star text-amber-500"></i>
+                        <span>Rated a pint</span>
+                    </div>
+                    {r.rating.message && (
+                        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md border-l-4 border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
+                            "{r.rating.message}"
+                        </p>
+                    )}
+                    <div className="flex items-center space-x-4 mt-2">
+                        <div className="flex items-center space-x-1 text-sm"><i className="fas fa-tag text-green-500/80"></i><StarRating rating={r.rating.price} color="text-green-400" /></div>
+                        <div className="flex items-center space-x-1 text-sm"><i className="fas fa-beer text-amber-500/80"></i><StarRating rating={r.rating.quality} color="text-amber-400" /></div>
+                    </div>
+                        {r.rating.exact_price && (
+                        <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">
+                            Paid: <span className="font-bold text-gray-700 dark:text-white">{currencyInfo.symbol}{r.rating.exact_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </p>
+                        )}
+                    {r.image_url && (
+                        <div className="mt-2">
+                            <button onClick={() => setImageToView({ ...r, user: userProfile, uploaderName: username })} className="rounded-lg overflow-hidden border-2 border-transparent hover:border-amber-400 focus:border-amber-400 focus:outline-none transition block">
+                                <img src={r.image_url} alt="Pint of Guinness" className="w-24 h-24 object-cover" />
+                            </button>
+                        </div>
+                    )}
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-1 text-right border-t border-gray-100 dark:border-gray-700/50">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(r.timestamp)}</span>
+                </div>
+            </div>
+        );
+    };
+
+    const AllActivityList = () => {
+        const allItems = useMemo(() => {
+            const mappedRatings = (userRatings || []).map(r => ({ ...r, _type: 'rating', _ts: r.timestamp || new Date(r.created_at).getTime() }));
+            const mappedPosts = (userPosts || []).map(p => ({ ...p, _type: 'post', _ts: new Date(p.created_at).getTime() }));
+            const mappedCheckIns = (userCheckIns || []).map(c => ({ ...c, _type: 'checkin', _ts: new Date(c.created_at).getTime() }));
+            return [...mappedRatings, ...mappedPosts, ...mappedCheckIns].sort((a, b) => b._ts - a._ts);
+        }, [userRatings, userPosts, userCheckIns]);
+
+        const itemsToShow = allItems.slice(0, visibleRatingsCount);
+        const hasMoreItems = allItems.length > visibleRatingsCount;
+
+        if (itemsToShow.length === 0) {
+            return (
+                <div className="text-center text-gray-500 dark:text-gray-400 p-4">
+                    <p>No activity yet.</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="space-y-3">
+                {itemsToShow.map(item => {
+                    if (item._type === 'rating') {
+                        return <RatingItem key={`rating-${item.id}`} r={item} />;
+                    } else if (item._type === 'post') {
+                        return (
+                            <PostCard
+                                key={`post-${item.id}`}
+                                post={item}
+                                userPostLikes={userPostLikes}
+                                onToggleLike={onTogglePostLike}
+                                onViewProfile={onViewProfile}
+                                onLoginRequest={() => {}} // User is already logged in to see their own profile
+                                onViewPub={onViewPub}
+                                pubScores={pubScores}
+                                onEditPost={onEditPost}
+                                onDeletePost={onDeletePost}
+                                loggedInUserProfile={loggedInUserProfile}
+                                onReportContent={onReportContent}
+                                onOpenSharePostModal={onOpenSharePostModal}
+                            />
+                        );
+                    } else if (item._type === 'checkin') {
+                        return <CheckInItem key={`checkin-${item.id}`} item={item} />;
+                    }
+                    return null;
+                })}
+                {hasMoreItems && (
+                    <div className="mt-4">
+                        <button 
+                            onClick={() => setVisibleRatingsCount(prev => prev + 5)}
+                            className="w-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                        >
+                            Load More
+                        </button>
+                    </div>
+                )}
             </div>
         );
     };
@@ -916,14 +1037,14 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
     return (
         <>
             {/* These modals are used across the component */}
-            {imageToView && <ImageModal rating={imageToView} onClose={() => setImageToView(null)} onReport={() => handleInitiateReport(imageToView)} canReport={loggedInUserProfile && loggedInUserProfile.id !== imageToView.user.id} />}
+            {imageToView && <ImageModal rating={imageToView} onClose={() => setImageToView(null)} onReport={() => handleInitiateReport(imageToView)} canReport={loggedInUserProfile && loggedInUserProfile.id !== imageToView.user.id} isDeveloper={loggedInUserProfile?.is_developer} />}
             {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
             {isBanModalOpen && <BanUserModal username={username} onClose={() => setIsBanModalOpen(false)} onConfirm={handleBanUser} />}
             {confirmation.isOpen && <ConfirmationModal {...confirmation} isLoading={isUnbanning || isUpdatingRoles || !!deletingRatingId} onClose={() => setConfirmation({ isOpen: false })} />}
             {alertInfo.isOpen && <AlertModal {...alertInfo} onClose={() => setAlertInfo({ isOpen: false })} />}
             {isEditActionsModalOpen && <EditProfileActionsModal userProfile={userProfile} isOpen={isEditActionsModalOpen} onClose={() => setIsEditActionsModalOpen(false)} onEditAvatar={() => handleOpenModal(onAvatarChangeClick)} onEditUsername={() => handleOpenModal(onEditUsernameClick)} onEditBio={() => handleOpenModal(onEditBioClick)} onEditSocials={() => handleOpenModal(onEditSocialsClick)} onOpenUpdateDetailsModal={() => handleOpenModal(onOpenUpdateDetailsModal)} />}
             {isTrophyModalOpen && <TrophyModal isOpen={isTrophyModalOpen} onClose={() => setIsTrophyModalOpen(false)} trophiesWithStatus={trophiesWithStatus} userStats={userStatsForTrophies} onNavigateToSettings={isViewingOwnProfile ? onNavigateToSettings : null} />}
-            <RankExplanationModal isOpen={isRankModalOpen} onClose={() => setIsRankModalOpen(false)} currentLevel={level} userRatings={userRatings} levelRequirements={levelRequirements} />
+            <RankExplanationModal isOpen={isRankModalOpen} onClose={() => setIsRankModalOpen(false)} currentLevel={level} userRatings={userRatings} levelRequirements={levelRequirements} userProfile={userProfile} />
             {!isDesktop && <StatsModal isOpen={isStatsModalOpen} onClose={() => onSetIsStatsModalOpen(false)} userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />}
             {isDesktop && <DesktopStatsModal isOpen={isStatsModalOpen} onClose={() => onSetIsStatsModalOpen(false)} userRatings={userRatings} onViewPub={onViewPub} rankData={rankData} userProfile={userProfile} levelRequirements={levelRequirements} pubScores={pubScores} />}
             
@@ -955,7 +1076,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                                 
                                 <div className="flex flex-col items-center">
                                     <div className="relative">
-                                        <div className={`p-1.5 rounded-full border-4 ${getProfileBorderColor()}`}>
+                                        <div className={`p-1.5 rounded-full ${getProfileGlowClass()}`}>
                                             <ProfileAvatar userProfile={userProfile} levelRequirements={levelRequirements} size={isDesktop ? 128 : 96} onClick={isViewingOwnProfile ? onAvatarChangeClick : null} userRatings={userRatings} />
                                         </div>
                                         {isOnline && <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-gray-800" title="Online"></div>}
@@ -1063,18 +1184,25 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userTrophies, allTro
                     
                     {/* Right Column (Activity Feed) */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Tab Navigation for Posts/Ratings */}
+                        {/* Tab Navigation for Posts/Ratings/Check-ins */}
                         <div className="sticky top-0 z-10 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm -mx-4 px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
-                            <div className="border-b border-gray-200 dark:border-gray-700">
-                                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                                    <TabButton tabId="ratings" label={`Ratings (${userRatings?.length || 0})`} isActive={activeTab === 'ratings'} onClick={() => setActiveTab('ratings')} />
-                                    <TabButton tabId="posts" label={`Posts (${userPosts?.length || 0})`} isActive={activeTab === 'posts'} onClick={() => setActiveTab('posts')} />
-                                </nav>
+                            <div className="overflow-x-auto overflow-y-hidden no-scrollbar">
+                                <div className="border-b border-gray-200 dark:border-gray-700 min-w-max">
+                                    <nav className="-mb-px flex space-x-6 px-1" aria-label="Tabs">
+                                        <TabButton tabId="all" label="All Activity" isActive={activeTab === 'all'} onClick={() => setActiveTab('all')} />
+                                        <TabButton tabId="ratings" label={`Ratings (${userRatings?.length || 0})`} isActive={activeTab === 'ratings'} onClick={() => setActiveTab('ratings')} />
+                                        <TabButton tabId="posts" label={`Posts (${userPosts?.length || 0})`} isActive={activeTab === 'posts'} onClick={() => setActiveTab('posts')} />
+                                        <TabButton tabId="check-ins" label={`Check-ins (${userCheckIns?.length || 0})`} isActive={activeTab === 'check-ins'} onClick={() => setActiveTab('check-ins')} />
+                                    </nav>
+                                </div>
                             </div>
                         </div>
                         
                         <div>
-                            {activeTab === 'ratings' ? <RatingsList /> : <PostsList />}
+                            {activeTab === 'ratings' && <RatingsList />}
+                            {activeTab === 'posts' && <PostsList />}
+                            {activeTab === 'check-ins' && <CheckInsList />}
+                            {activeTab === 'all' && <AllActivityList />}
                         </div>
                     </div>
                 </div>

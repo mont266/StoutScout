@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { CardElement, useStripe, useElements, PaymentRequestButtonElement } from '@stripe/react-stripe-js';
 import { supabase } from '../supabase.js';
-import { getCurrencyInfo } from '../utils.js';
+import { getCurrencyInfo, getMobileOS } from '../utils.js';
 import { trackEvent } from '../analytics.js';
 
 const CARD_ELEMENT_OPTIONS = {
@@ -34,9 +34,123 @@ const DonationForm = ({ userProfile, onSuccess, userTrophies, allTrophies, onLog
     const [showPaymentDetails, setShowPaymentDetails] = useState(false);
     const hasTrackedCustomInput = useRef(false);
 
+    const [paymentRequest, setPaymentRequest] = useState(null);
+    const amountRef = useRef(amount);
+    const currencyCodeRef = useRef('');
+    const previouslyHadTrophyRef = useRef(false);
+
+    const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
+
+    useEffect(() => {
+        amountRef.current = amount;
+    }, [amount]);
+
+    useEffect(() => {
+        previouslyHadTrophyRef.current = userProfile && userTrophies && userTrophies.some(t => t.trophy_id === PATRON_TROPHY_ID);
+    }, [userProfile, userTrophies]);
+
     // Fix: Pass an empty object if userProfile is null to prevent errors.
     const currencyInfo = getCurrencyInfo(userProfile || {}) || { symbol: '£', code: 'GBP' };
     const presetAmounts = currencyInfo.code === 'EUR' ? [100, 300, 500] : [100, 300, 500];
+
+    useEffect(() => {
+        currencyCodeRef.current = currencyInfo.code;
+    }, [currencyInfo.code]);
+
+    useEffect(() => {
+        if (stripe) {
+            const pr = stripe.paymentRequest({
+                country: userProfile?.country_code || 'GB',
+                currency: currencyCodeRef.current?.toLowerCase() || 'gbp',
+                total: {
+                    label: 'Donation to Stoutly',
+                    amount: amountRef.current,
+                },
+                requestPayerName: true,
+                requestPayerEmail: true,
+            });
+
+            pr.canMakePayment().then(result => {
+                 console.log("Stripe canMakePayment result:", result);
+                 if (result) {
+                     setPaymentRequest(pr);
+                 }
+            }).catch(e => console.error("Stripe canMakePayment error:", e));
+
+            pr.on('paymentmethod', async (ev) => {
+                 const currentAmount = amountRef.current;
+                 const currentCurrency = currencyCodeRef.current;
+                
+                 try {
+                     let session = null;
+                     if (userProfile) {
+                         const { data } = await supabase.auth.getSession();
+                         session = data.session;
+                     }
+                     const functionOptions = userProfile && session ? { headers: { Authorization: `Bearer ${session.access_token}` } } : {};
+                     
+                     const { data, error: intentError } = await supabase.functions.invoke('create-payment-intent', {
+                         ...functionOptions,
+                         body: { amount: currentAmount, currency: currentCurrency.toLowerCase() },
+                     });
+
+                     if (intentError) throw new Error(intentError.message);
+
+                     const clientSecret = data.clientSecret;
+
+                     const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+                         clientSecret,
+                         { payment_method: ev.paymentMethod.id },
+                         { handleActions: false }
+                     );
+
+                     if (confirmError) {
+                         ev.complete('fail');
+                         setError(confirmError.message);
+                     } else {
+                         ev.complete('success');
+
+                         if (paymentIntent.status === 'requires_action') {
+                             const { error: actionError } = await stripe.confirmCardPayment(clientSecret);
+                             if (actionError) {
+                                 setError(actionError.message);
+                                 trackEvent('checkout_failed', { error_message: actionError.message });
+                                 return;
+                             }
+                         }
+
+                         if (userProfile && session) {
+                             const { error: verifyError } = await supabase.functions.invoke('verify-donation-and-award-trophy', {
+                                 headers: { Authorization: `Bearer ${session.access_token}` },
+                                 body: { paymentIntentId: paymentIntent.id }
+                             });
+                             if (verifyError) throw new Error(verifyError.message);
+                         }
+
+                         setSucceeded(true);
+                         trackEvent('purchase', { transaction_id: paymentIntent.id, value: currentAmount / 100, currency: currentCurrency, is_anonymous: !userProfile });
+                         if (onSuccess) onSuccess(previouslyHadTrophyRef.current);
+                     }
+                } catch (err) {
+                     ev.complete('fail');
+                     setError(err.message);
+                     trackEvent('checkout_failed', { error_message: err.message });
+                }
+            });
+        }
+    }, [stripe, userProfile]); 
+
+    useEffect(() => {
+        if (paymentRequest) {
+            paymentRequest.update({
+                 currency: currencyInfo.code.toLowerCase(),
+                 total: {
+                     label: 'Donation to Stoutly',
+                     amount: amount,
+                 }
+            });
+        }
+    }, [amount, currencyInfo.code, paymentRequest]);
 
     const handleAmountChange = (newAmount) => {
         if (!showPaymentDetails) {
@@ -218,6 +332,16 @@ const DonationForm = ({ userProfile, onSuccess, userTrophies, allTrophies, onLog
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Payment Details
                         </label>
+                        {paymentRequest && (
+                            <div className="mb-4">
+                                <PaymentRequestButtonElement options={{paymentRequest}} />
+                                <div className="relative flex py-4 items-center">
+                                    <div className="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
+                                    <span className="flex-shrink-0 mx-4 text-gray-500 dark:text-gray-400 text-sm">or pay with card</span>
+                                    <div className="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
+                                </div>
+                            </div>
+                        )}
                         <div className="p-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md">
                             <CardElement options={CARD_ELEMENT_OPTIONS} />
                         </div>

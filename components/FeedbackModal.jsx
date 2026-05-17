@@ -15,33 +15,45 @@ const FeedbackModal = ({ userProfile, onClose }) => {
         setFormState({ loading: true, success: false, error: null });
         trackEvent('generate_lead', { lead_type: 'feedback_form', feedback_type: type });
 
-        const formData = new FormData();
-        formData.append('form-name', 'feedback');
+        const params = new URLSearchParams();
+        params.append('form-name', 'feedback');
         if (userProfile) {
-            formData.append('user_id', userProfile.id);
-            formData.append('username', userProfile.username);
+            params.append('user_id', userProfile.id);
+            params.append('username', userProfile.username);
         }
-        formData.append('type', type);
-        formData.append('subject', subject);
-        formData.append('description', description);
+        params.append('type', type);
+        params.append('subject', subject);
+        params.append('description', description);
         
         try {
-            const postUrl = Capacitor.isNativePlatform() 
-              ? `${NETLIFY_URL}/.netlify/functions/submit-form`
-              : '/';
-
-            const response = await fetch(postUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams(formData).toString(),
-            });
-
-            if (response.ok) {
-                setFormState({ loading: false, success: true, error: null });
-                trackEvent('feedback_form_success', { feedback_type: type });
+            if (Capacitor.isNativePlatform()) {
+                const { CapacitorHttp } = await import('@capacitor/core');
+                const response = await CapacitorHttp.post({
+                    url: `${NETLIFY_URL}/`,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    data: params.toString(),
+                });
+                
+                if (response.status >= 200 && response.status < 300) {
+                    setFormState({ loading: false, success: true, error: null });
+                    trackEvent('feedback_form_success', { feedback_type: type });
+                } else {
+                    throw new Error(`Form submission failed: ${response.status}`);
+                }
             } else {
-                const errorText = await response.text();
-                throw new Error(`Form submission failed: ${response.status} ${response.statusText}. ${errorText}`);
+                const response = await fetch('/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params.toString(),
+                });
+    
+                if (response.ok) {
+                    setFormState({ loading: false, success: true, error: null });
+                    trackEvent('feedback_form_success', { feedback_type: type });
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(`Form submission failed: ${response.status} ${response.statusText}. ${errorText}`);
+                }
             }
         } catch (error) {
             setFormState({ loading: false, success: false, error: error.message });

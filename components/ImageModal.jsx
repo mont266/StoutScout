@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { trackEvent } from '../analytics.js';
 
-const ImageModal = ({ rating, onClose, onReport, canReport, canAdminRemove, onAdminRemove }) => {
+const ImageModal = ({ rating, onClose, onReport, canReport, canAdminRemove, onAdminRemove, isDeveloper }) => {
     
     useEffect(() => {
         // Track when image is viewed in full screen
@@ -27,6 +27,26 @@ const ImageModal = ({ rating, onClose, onReport, canReport, canAdminRemove, onAd
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, [onClose, rating]);
+
+    const handleDownload = async (e) => {
+        e.stopPropagation();
+        try {
+            const response = await fetch(rating.image_url);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const extension = rating.image_url.split('.').pop().split('?')[0] || 'jpg';
+            a.download = `stoutly-image-${rating.id}.${extension}`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        } catch (error) {
+            console.error('Failed to download image:', error);
+            alert('Failed to download image.');
+        }
+    };
 
     const modalContent = (
         <div 
@@ -57,15 +77,24 @@ const ImageModal = ({ rating, onClose, onReport, canReport, canAdminRemove, onAd
 
                 {/* Action Buttons */}
                 <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
+                    {isDeveloper && (
+                         <button
+                            onClick={handleDownload}
+                            className="bg-blue-600 text-white rounded-full p-3 flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors"
+                            aria-label="Admin: Download Photo"
+                            title="Admin: Download Photo"
+                        >
+                                <i className="fas fa-download"></i>
+                        </button>
+                    )}
                     {canAdminRemove && (
                          <button
                             onClick={(e) => { e.stopPropagation(); onAdminRemove(rating); }}
-                            className="bg-red-600 text-white rounded-full px-4 py-2 flex items-center justify-center space-x-2 shadow-lg hover:bg-red-700 transition-colors text-sm font-semibold"
+                            className="bg-red-600 text-white rounded-full p-3 flex items-center justify-center shadow-lg hover:bg-red-700 transition-colors"
                             aria-label="Admin: Remove Photo"
                             title="Admin: Remove Photo"
                         >
                                 <i className="fas fa-trash-alt"></i>
-                                <span>Remove</span>
                         </button>
                     )}
                     {canReport && (

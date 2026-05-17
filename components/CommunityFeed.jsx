@@ -3,6 +3,7 @@ import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
 import RatingCard from './RatingCard.jsx';
 import PostCard from './PostCard.jsx';
+import CheckInCard from './CheckInCard.jsx';
 import ScrollToTopButton from './ScrollToTopButton.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import CreatePostInput from './CreatePostInput.jsx';
@@ -22,23 +23,23 @@ const filterOptions = [
 ];
 
 const contentFilterOptions = [
-    { id: 'all', label: 'All', icon: 'fa-stream' },
     { id: 'ratings', label: 'Ratings', icon: 'fa-star' },
     { id: 'posts', label: 'Posts', icon: 'fa-comments' },
+    { id: 'checkins', label: 'Check Ins', icon: 'fa-map-marker-alt' },
 ];
 
 const PULL_THRESHOLD = 80;
 
 const EMPTY_SET = new Set();
 
-const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onOpenShareRatingModal, dbPubs, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent, blockList = EMPTY_SET, socialsUpdateCount, filter, onFilterChange, contentFilter, onContentFilterChange, postSubFilter, onPostSubFilterChange, onViewImage, onViewPub }) => {
+const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, loggedInUserProfile, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onOpenShareRatingModal, dbPubs, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent, blockList = EMPTY_SET, socialsUpdateCount, filter, onFilterChange, contentFilters, onContentFilterChange, postSubFilter, onPostSubFilterChange, onViewImage, onViewPub, onDeleteRating }) => {
     const [feedItems, setFeedItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [hasMore, setHasMore] = useState(true);
     const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
     const filterMenuRef = useRef(null);
-    const offsetsRef = useRef({ rating: 0, post: 0 });
+    const offsetsRef = useRef({ rating: 0, post: 0, checkin: 0 });
     
     const [pullPosition, setPullPosition] = useState(0);
     const [isPulling, setIsPulling] = useState(false);
@@ -62,18 +63,21 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         setError(null);
         
         if (isRefresh) {
-            offsetsRef.current = { rating: 0, post: 0 };
-            trackEvent('view_community_feed', { filter, content_filter: contentFilter, post_sub_filter: postSubFilter });
+            offsetsRef.current = { rating: 0, post: 0, checkin: 0 };
+            trackEvent('view_community_feed', { filter, content_filters: contentFilters, post_sub_filter: postSubFilter });
         }
         
-        const { rating: ratingOffset, post: postOffset } = offsetsRef.current;
+        const { rating: ratingOffset, post: postOffset, checkin: checkinOffset } = offsetsRef.current;
     
         try {
-            let ratingsQuery = contentFilter !== 'posts'
+            let ratingsQuery = contentFilters.ratings
                 ? supabase.from('ratings').select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend), pub:pub_id!inner(id, name, address, lat, lng, country_code, country_name, local_avg_price)`).eq('is_private', false).eq('user.is_banned', false)
                 : null;
-            let postsQuery = contentFilter !== 'ratings'
+            let postsQuery = contentFilters.posts
                 ? supabase.from('posts').select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend), attached_pubs:post_pubs(pub_id, pub:pubs(id, name, address, lat, lng))`).eq('user.is_banned', false)
+                : null;
+            let checkinsQuery = contentFilters.checkins
+                ? supabase.from('pub_checkins').select(`*, user:user_id!inner(id, username, avatar_id, level, is_banned, is_developer, is_stoutly_legend), pub:pub_id!inner(id, name, address, lat, lng, country_code, country_name)`).eq('user.is_banned', false)
                 : null;
 
             // Handle time period filter
@@ -89,6 +93,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                 if (startDate) {
                     if (ratingsQuery) ratingsQuery = ratingsQuery.gte('created_at', startDate.toISOString());
                     if (postsQuery) postsQuery = postsQuery.gte('created_at', startDate.toISOString());
+                    if (checkinsQuery) checkinsQuery = checkinsQuery.gte('created_at', startDate.toISOString());
                 }
             }
             
@@ -101,6 +106,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                     postsQuery = postsQuery.eq('is_announcement', true);
                 }
             }
+            if (checkinsQuery) checkinsQuery = checkinsQuery.order('created_at', sortOptions); // checkins only sort by date
             
             const promises = [];
 
@@ -117,15 +123,23 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                 promises.push(Promise.resolve({ data: [], error: null }));
             }
             
-            const [ratingsResult, postsResult] = await Promise.all(promises);
+            if (checkinsQuery) {
+                promises.push(checkinsQuery.range(checkinOffset, checkinOffset + PAGE_SIZE - 1));
+            } else {
+                promises.push(Promise.resolve({ data: [], error: null }));
+            }
+            
+            const [ratingsResult, postsResult, checkinsResult] = await Promise.all(promises);
     
             if (ratingsResult.error) throw ratingsResult.error;
             if (postsResult.error) throw postsResult.error;
+            if (checkinsResult.error) throw checkinsResult.error;
     
-            const newRatings = (ratingsResult.data || []).map(r => ({ ...r, item_type: 'rating' }));
-            const newPosts = (postsResult.data || []).map(p => ({ ...p, item_type: 'post' }));
+            const newRatings = (ratingsResult.data || []).map(r => ({ ...r, item_type: 'rating', feedType: 'rating' }));
+            const newPosts = (postsResult.data || []).map(p => ({ ...p, item_type: 'post', feedType: 'post' }));
+            const newCheckins = (checkinsResult.data || []).map(c => ({ ...c, item_type: 'checkin', feedType: 'checkin' }));
 
-            const combined = [...newRatings, ...newPosts];
+            const combined = [...newRatings, ...newPosts, ...newCheckins];
 
             combined.sort((a, b) => {
                 if (filter.sortBy === 'like_count') {
@@ -139,10 +153,12 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
 
             const rCount = topItems.filter(item => item.item_type === 'rating').length;
             const pCount = topItems.filter(item => item.item_type === 'post').length;
+            const cCount = topItems.filter(item => item.item_type === 'checkin').length;
 
             offsetsRef.current = {
                 rating: ratingOffset + rCount,
-                post: postOffset + pCount
+                post: postOffset + pCount,
+                checkin: checkinOffset + cCount
             };
 
             // Client-side filtering as a safeguard against RLS issues
@@ -161,7 +177,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                 });
             });
     
-            setHasMore(newRatings.length === PAGE_SIZE || newPosts.length === PAGE_SIZE);
+            setHasMore(newRatings.length === PAGE_SIZE || newPosts.length === PAGE_SIZE || newCheckins.length === PAGE_SIZE);
      
         } catch (err) {
             console.error("Error fetching community feed:", err);
@@ -169,7 +185,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         } finally {
             setLoading(false);
         }
-    }, [filter, contentFilter, postSubFilter, blockList]);
+    }, [filter, contentFilters, postSubFilter, blockList]);
 
     const handleFeedToggleLike = (ratingToToggle) => {
         if (!loggedInUserProfile) {
@@ -265,6 +281,22 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
         setHasMore(true);
         fetchFeedItems(true);
     }, [fetchFeedItems, loading]);
+
+    const handleFeedCheckinAmountUpdate = async (checkinId, amount) => {
+        const { error } = await supabase.from('pub_checkins').update({ amount_drank: amount }).eq('id', checkinId).eq('user_id', loggedInUserProfile?.id);
+        if (error) {
+            console.error("Error updating checkin amount:", error);
+        } else {
+            setFeedItems(currentItems => 
+                currentItems.map(item => {
+                    if (item.item_type === 'checkin' && item.id === checkinId) {
+                        return { ...item, amount_drank: amount };
+                    }
+                    return item;
+                })
+            );
+        }
+    };
 
     useEffect(() => {
         setHasMore(true);
@@ -429,6 +461,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                                 onReportContent={onReportContent}
                                 onOpenShareRatingModal={onOpenShareRatingModal}
                                 fallbackLocationData={fallbackPubData}
+                                onDeleteRating={onDeleteRating}
                             />
                         );
                     }
@@ -455,6 +488,25 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                                 onDeletePost={onDeletePost}
                             />
                         )
+                    }
+                    if (item.item_type === 'checkin') {
+                        return (
+                            <CheckInCard 
+                                key={`checkin-${item.id}`}
+                                checkin={item}
+                                onViewProfile={onViewProfile}
+                                onViewImage={onViewImage}
+                                onViewPub={onViewPub}
+                                currentUser={loggedInUserProfile}
+                                onDeleteCheckin={async (checkinId) => {
+                                    const { error } = await supabase.from('pub_checkins').delete().eq('id', checkinId).eq('user_id', loggedInUserProfile?.id);
+                                    if (!error) {
+                                        setFeedItems(prev => prev.filter(c => c.id !== checkinId));
+                                    }
+                                }}
+                                onUpdateAmount={handleFeedCheckinAmountUpdate}
+                            />
+                        );
                     }
                     return null;
                 })}
@@ -514,15 +566,15 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                     </div>
 
                     <div className="px-3 pb-3 space-y-2">
-                        <div className="flex items-center p-1 bg-gray-200 dark:bg-gray-700/50 rounded-full space-x-1 content-filter-bar">
+                        <div className="flex items-center space-x-2">
                             {contentFilterOptions.map(opt => (
                                 <button 
                                     key={opt.id}
                                     onClick={() => onContentFilterChange(opt.id)}
-                                    className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center justify-center space-x-2 ${
-                                        contentFilter === opt.id
-                                        ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
-                                        : 'text-gray-600 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-gray-600/50'
+                                    className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center justify-center space-x-2 border shadow-sm ${
+                                        contentFilters[opt.id]
+                                        ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-400 text-amber-700 dark:text-amber-400'
+                                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
                                     }`}
                                 >
                                     <i className={`fas ${opt.icon} w-4 text-center`}></i>
@@ -530,7 +582,7 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                                 </button>
                             ))}
                         </div>
-                        {contentFilter === 'posts' && (
+                        {contentFilters.posts && (
                             <div className="flex items-center p-1 bg-gray-200/50 dark:bg-gray-900/50 rounded-full space-x-1 animate-fade-in-down">
                                 <button 
                                     onClick={() => onPostSubFilterChange('all')}

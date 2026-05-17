@@ -15,6 +15,7 @@ export const loadSettings = () => {
     isShopEnabled: false,
     showSearchRadius: true,
     showSearchOrigin: false,
+    showUserRatedPubs: false,
   };
 
   try {
@@ -40,5 +41,34 @@ export const saveSettings = (settings) => {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   } catch (e) {
     console.error("Failed to save settings to localStorage", e);
+  }
+};
+
+const RATING_PROMPT_STORAGE_KEY = 'stoutly-rating-prompt-state';
+
+export const loadRatingPromptState = () => {
+  const defaults = {
+    appOpenCount: 0,
+    userRatingCount: 0,
+    ratePromptState: 'not_shown', // 'not_shown', 'remind_later', 'dismissed'
+    remindLaterTimestamp: null,
+  };
+
+  try {
+    const storedState = localStorage.getItem(RATING_PROMPT_STORAGE_KEY);
+    if (storedState) {
+      return { ...defaults, ...JSON.parse(storedState) };
+    }
+  } catch (e) {
+    console.error("Failed to load rating prompt state", e);
+  }
+  return defaults;
+};
+
+export const saveRatingPromptState = (state) => {
+  try {
+    localStorage.setItem(RATING_PROMPT_STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error("Failed to save rating prompt state to localStorage", e);
   }
 };

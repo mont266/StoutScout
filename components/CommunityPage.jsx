@@ -13,10 +13,10 @@ import { supabase } from '../supabase.js';
 
 const EMPTY_SET = new Set();
 
-const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onDeleteNotification, onOpenShareRatingModal, dbPubs, setAlertInfo, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, isNavShrunk, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent, blockList = EMPTY_SET, socialsUpdateCount }) => {
+const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendRequest, onFriendAction, userLikes, onToggleLike, onLoginRequest, onDataRefresh, activeSubTab, onSubTabChange, onViewPub, unreadNotificationsCount, notifications, onMarkNotificationsAsRead, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onDeleteNotification, onOpenShareRatingModal, dbPubs, setAlertInfo, onOpenCreatePostModal, userPostLikes, onTogglePostLike, postSuccessCount, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, pubScores, isNavShrunk, onEditPost, onDeletePost, onOpenSharePostModal, onReportContent, blockList = EMPTY_SET, socialsUpdateCount, onDeleteRating }) => {
     const [imageToView, setImageToView] = useState(null);
     const [feedFilter, setFeedFilter] = useState({ sortBy: 'created_at', timePeriod: 'all' });
-    const [contentFilter, setContentFilter] = useState('all');
+    const [contentFilters, setContentFilters] = useState({ ratings: true, posts: true, checkins: true });
     const [postSubFilter, setPostSubFilter] = useState('all'); // 'all' or 'announcements'
     const isDesktop = useIsDesktop();
     const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
@@ -45,18 +45,22 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
         setReportModalInfo({ isOpen: false, rating: null });
     };
 
-    const handleContentFilterChange = (newFilter) => {
-        setContentFilter(newFilter);
-        if (newFilter !== 'posts') {
-            setPostSubFilter('all'); // Reset sub-filter
-        }
+    const handleContentFilterChange = (key) => {
+        setContentFilters(prev => {
+            const next = { ...prev, [key]: !prev[key] };
+            // If turning off posts, reset postSubFilter
+            if (key === 'posts' && !next.posts) {
+                setPostSubFilter('all');
+            }
+            return next;
+        });
     };
 
     const handleTabChange = (tab) => {
         // Reset filters when switching tabs to ensure a fresh start
         if (tab !== activeSubTab) {
             setFeedFilter({ sortBy: 'created_at', timePeriod: 'all' });
-            setContentFilter('all');
+            setContentFilters({ ratings: true, posts: true, checkins: true });
             setPostSubFilter('all'); // Also reset post sub-filter
         }
         onSubTabChange(tab);
@@ -100,6 +104,7 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                     onClose={() => setImageToView(null)}
                     canReport={userProfile && userProfile.id !== imageToView.user.id}
                     onReport={() => handleInitiateReport(imageToView)}
+                    isDeveloper={userProfile?.is_developer}
                 />
             )}
             {reportModalInfo.isOpen && <ReportImageModal onClose={() => setReportModalInfo({ isOpen: false, rating: null })} onSubmit={(reason) => handleReportImage(reportModalInfo.rating, reason)} />}
@@ -149,8 +154,9 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                         onViewPub={onViewPub}
                         filter={feedFilter}
                         onFilterChange={setFeedFilter}
-                        contentFilter={contentFilter}
+                        contentFilters={contentFilters}
                         onContentFilterChange={handleContentFilterChange}
+                        onDeleteRating={onDeleteRating}
                         postSubFilter={postSubFilter}
                         onPostSubFilterChange={setPostSubFilter}
                         loggedInUserProfile={userProfile}
@@ -191,7 +197,7 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                         onViewPub={onViewPub}
                         filter={feedFilter}
                         onFilterChange={setFeedFilter}
-                        contentFilter={contentFilter}
+                        contentFilters={contentFilters}
                         onContentFilterChange={handleContentFilterChange}
                         postSubFilter={postSubFilter}
                         onPostSubFilterChange={setPostSubFilter}

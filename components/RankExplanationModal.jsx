@@ -1,7 +1,7 @@
 import React from 'react';
 import { RANK_DETAILS } from '../constants.js';
 
-const RankExplanationModal = ({ isOpen, onClose, currentLevel, userRatings, levelRequirements }) => {
+const RankExplanationModal = ({ isOpen, onClose, currentLevel, userRatings, levelRequirements, userProfile }) => {
     if (!isOpen) return null;
 
     // Determine the user's current rank
@@ -88,22 +88,26 @@ const RankExplanationModal = ({ isOpen, onClose, currentLevel, userRatings, leve
                                                         const nextLevelReq = levelRequirements.find(lr => lr.level === nextRank.minLevel);
                                                         const currentLevelReq = levelRequirements.find(lr => lr.level === rank.minLevel);
                                                         if (nextLevelReq && currentLevelReq) {
-                                                            const startRatings = currentLevelReq.total_ratings_required;
-                                                            const endRatings = nextLevelReq.total_ratings_required;
-                                                            const progress = Math.max(0, currentRatingsCount - startRatings);
-                                                            const totalNeedForTier = endRatings - startRatings;
+                                                            const isXP = currentLevelReq.xp_required != null;
+                                                            const startValue = isXP ? currentLevelReq.xp_required : currentLevelReq.total_ratings_required;
+                                                            const endValue = isXP ? nextLevelReq.xp_required : nextLevelReq.total_ratings_required;
+                                                            
+                                                            const currentValue = isXP ? (Number(userProfile?.xp) || 0) : currentRatingsCount;
+                                                            
+                                                            const progress = Math.max(0, currentValue - startValue);
+                                                            const totalNeedForTier = endValue - startValue;
                                                             const percent = Math.min(100, Math.max(0, (progress / totalNeedForTier) * 100));
-                                                            const ratingsNeeded = Math.max(0, endRatings - currentRatingsCount);
+                                                            const amountNeeded = Math.max(0, endValue - currentValue);
                                                             
                                                             return (
                                                                 <div className="flex flex-col space-y-3">
                                                                     <div className="flex justify-between items-end">
                                                                         <div className="flex flex-col">
                                                                             <span className="text-[10px] uppercase font-bold text-amber-700/70 dark:text-amber-500/70 tracking-widest leading-none mb-1">Current</span>
-                                                                            <span className="text-lg font-black text-amber-900 dark:text-amber-400 leading-none">{currentRatingsCount} <span className="text-sm tracking-normal">Pints</span></span>
+                                                                            <span className="text-lg font-black text-amber-900 dark:text-amber-400 leading-none">{currentValue} <span className="text-sm tracking-normal">{isXP ? 'XP' : 'Pints'}</span></span>
                                                                         </div>
                                                                         <div className="flex flex-col text-right">
-                                                                            <span className="text-[10px] uppercase font-bold text-amber-700/70 dark:text-amber-500/70 tracking-widest leading-none mb-1">{ratingsNeeded} More To</span>
+                                                                            <span className="text-[10px] uppercase font-bold text-amber-700/70 dark:text-amber-500/70 tracking-widest leading-none mb-1">{amountNeeded} More To</span>
                                                                             <span className="text-[13px] sm:text-sm font-black text-amber-900 dark:text-amber-400 leading-none line-clamp-1">{nextRank.name}</span>
                                                                         </div>
                                                                     </div>

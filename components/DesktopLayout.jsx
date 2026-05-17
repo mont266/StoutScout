@@ -8,7 +8,6 @@ import PubDetails from './PubDetails.jsx';
 import SettingsPage from './SettingsPage.jsx';
 import AuthPage from './AuthPage.jsx';
 import UpdatePasswordPage from './UpdatePasswordPage.jsx';
-import XPPopup from './XPPopup.jsx';
 import UpdateConfirmationPopup from './UpdateConfirmationPopup.jsx';
 import DeleteConfirmationPopup from './DeleteConfirmationPopup.jsx';
 import LevelUpPopup from './LevelUpPopup.jsx';
@@ -25,6 +24,7 @@ import MapSearchBar from './MapSearchBar.jsx';
 import NotificationToast from './NotificationToast.jsx';
 import ActiveCrawlTracker from './ActiveCrawlTracker.jsx';
 import ShopPage from './ShopPage.jsx';
+import XpGainedPopup from './XpGainedPopup.jsx';
 
 const DesktopLayout = (props) => {
     const {
@@ -39,7 +39,7 @@ const DesktopLayout = (props) => {
         getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
         profilePage, session, userProfile, onLogout,
         selectedPub, existingUserRating, handleRatePub,
-        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo,
+        reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo, xpGainedInfo,
         isAvatarModalOpen, setIsAvatarModalOpen,
         handleUpdateAvatar, viewedProfile, onViewProfile, legalPageView, handleViewLegal, handleDataRefresh,
         installPromptEvent, setInstallPromptEvent,
@@ -53,6 +53,7 @@ const DesktopLayout = (props) => {
         showSearchRadius,
         showSearchOrigin,
         levelRequirements,
+        isLocatingUser,
         locationPermissionStatus, onRequestPermission,
         CommunityPage,
         friendships, userLikes, onToggleLike, onFriendRequest, onFriendAction,
@@ -364,6 +365,12 @@ const DesktopLayout = (props) => {
                             {(locationError && locationPermissionStatus !== 'denied') && 
                                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] p-2 bg-red-500/90 dark:bg-red-800/90 text-white text-center text-sm rounded-md shadow-lg" role="alert">{locationError}</div>
                             }
+                            {isLocatingUser && 
+                                <div className="absolute top-28 left-1/2 -translate-x-1/2 z-[1000] py-2 px-4 bg-amber-500/90 backdrop-blur-sm text-black text-center text-sm font-bold rounded-full shadow-lg flex items-center space-x-2 animate-pulse">
+                                    <i className="fas fa-location-arrow"></i>
+                                    <span>Locating you...</span>
+                                </div>
+                            }
                             <button
                                 onClick={handleFindCurrentPub}
                                 title="Recenter map on your location"
@@ -406,6 +413,7 @@ const DesktopLayout = (props) => {
                     {/* Full Screen Pub Crawl Planner */}
                     <div className={`absolute inset-0 ${activeTab === 'pub_crawl' ? '' : 'hidden'}`}>
                         <PubCrawlPage 
+                            {...props}
                             userProfile={userProfile}
                             session={session}
                             setAlertInfo={props.setAlertInfo} 
@@ -436,7 +444,7 @@ const DesktopLayout = (props) => {
             <SubmittingRatingModal isVisible={isSubmittingRating} />
             {isAuthOpen && <AuthPage onClose={() => setIsAuthOpen(false)} />}
             {isPasswordRecovery && <UpdatePasswordPage onSuccess={() => setIsPasswordRecovery(false)} />}
-            {reviewPopupInfo && <XPPopup key={reviewPopupInfo.key} />}
+            {xpGainedInfo && <XpGainedPopup key={xpGainedInfo.key} amount={xpGainedInfo.amount} actionName={xpGainedInfo.actionName} />}
             {updateConfirmationInfo && <UpdateConfirmationPopup key={updateConfirmationInfo.key} />}
             {deleteConfirmationInfo && <DeleteConfirmationPopup key={deleteConfirmationInfo.key} />}
             {leveledUpInfo && <LevelUpPopup key={leveledUpInfo.key} newLevel={leveledUpInfo.newLevel} />}
