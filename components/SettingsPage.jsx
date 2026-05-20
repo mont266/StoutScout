@@ -9,6 +9,7 @@ import FeedbackModal from './FeedbackModal.jsx';
 import DonationForm from './DonationForm.jsx';
 import { Capacitor } from '@capacitor/core';
 import ConfirmationModal from './ConfirmationModal.jsx';
+import PublicMapStatsModal from './PublicMapStatsModal.jsx';
 
 // Reusable components for the new settings layout
 const SettingsSection = ({ title, children, id, titleColor = 'text-gray-800 dark:text-white' }) => (
@@ -56,6 +57,7 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [confirmation, setConfirmation] = useState({ isOpen: false });
   const [isUpdatingMapPrivacy, setIsUpdatingMapPrivacy] = useState(false);
+  const [isPublicMapStatsModalOpen, setIsPublicMapStatsModalOpen] = useState(false);
   const isDesktop = useIsDesktop();
   
   const isNativeIos = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
@@ -331,6 +333,13 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                             >
                                 <i className="fas fa-external-link-alt"></i>
                             </button>
+                            <button 
+                                onClick={() => setIsPublicMapStatsModalOpen(true)}
+                                className="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 p-1"
+                                title="View Map Stats"
+                            >
+                                <i className="fas fa-chart-line"></i>
+                            </button>
                         </div>
                     </div>
                 )}
@@ -507,6 +516,11 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
 
         </div>
       </div>
+      <PublicMapStatsModal
+          isOpen={isPublicMapStatsModalOpen}
+          onClose={() => setIsPublicMapStatsModalOpen(false)}
+          userProfile={userProfile}
+      />
     </>
   );
 };

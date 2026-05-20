@@ -459,6 +459,12 @@ const StatCard = ({ icon, title, children, className = '', onClick }) => (
     </div>
 );
 
+const contentFilterOptions = [
+    { id: 'ratings', label: 'Ratings', icon: 'fa-star' },
+    { id: 'posts', label: 'Posts', icon: 'fa-comments' },
+    { id: 'checkins', label: 'Check-ins', icon: 'fa-map-marker-alt' },
+];
+
 const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onDeleteCheckin, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen, userPostLikes, onTogglePostLike, onViewProfile, onReportContent, onEditPost, onDeletePost, onOpenSharePostModal, blockList, onBlockUser, onUnblockUser, blockedUsersProfiles }) => {
     const isDesktop = useIsDesktop();
     const [isBanning, setIsBanning] = useState(false);
@@ -479,7 +485,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
     const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
     const mainScrollRef = useRef(null);
     const [isDevInfoVisible, setIsDevInfoVisible] = useState(false);
-    const [activeTab, setActiveTab] = useState('all');
+    const [contentFilters, setContentFilters] = useState({ ratings: true, posts: true, checkins: true });
     const [visibleRatingsCount, setVisibleRatingsCount] = useState(5);
 
     const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
@@ -730,84 +736,6 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
         return ''; // Default no glow, the SVG ring is already amber
     };
     
-    const TabButton = ({ tabId, label, isActive, onClick }) => (
-        <button
-            onClick={onClick}
-            className={`flex-grow py-3 text-sm font-bold transition-colors border-b-4 ${
-                isActive
-                ? 'border-amber-500 text-amber-500 dark:text-amber-400'
-                : 'border-transparent text-gray-500 hover:border-gray-300 dark:hover:border-gray-600'
-            }`}
-            role="tab"
-            aria-selected={isActive}
-        >
-            {label}
-        </button>
-    );
-    
-    const RatingsList = () => {
-        const ratingsToShow = userRatings.slice(0, visibleRatingsCount);
-        const hasMoreRatings = userRatings.length > visibleRatingsCount;
-
-        if (ratingsToShow.length === 0) {
-            return (
-                <div className="text-center text-gray-500 dark:text-gray-400 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                    <p>No ratings submitted yet.</p>
-                </div>
-            );
-        }
-
-        return (
-            <div className="space-y-3">
-                {ratingsToShow.map((r) => (
-                    <RatingItem key={r.id} r={r} />
-                ))}
-                {hasMoreRatings && (
-                    <div className="mt-4">
-                        <button 
-                            onClick={() => setVisibleRatingsCount(prev => prev + 5)}
-                            className="w-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        >
-                            Load More
-                        </button>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    const PostsList = () => {
-        if (!userPosts || userPosts.length === 0) {
-            return (
-                <div className="text-center text-gray-500 dark:text-gray-400 p-4">
-                    <p>No posts yet.</p>
-                </div>
-            );
-        }
-
-        return (
-            <div className="space-y-3">
-                {userPosts.map(post => (
-                    <PostCard
-                        key={post.id}
-                        post={post}
-                        userPostLikes={userPostLikes}
-                        onToggleLike={onTogglePostLike}
-                        onViewProfile={onViewProfile}
-                        onLoginRequest={() => {}} // User is already logged in to see their own profile
-                        onViewPub={onViewPub}
-                        pubScores={pubScores}
-                        onEditPost={onEditPost}
-                        onDeletePost={onDeletePost}
-                        loggedInUserProfile={loggedInUserProfile}
-                        onReportContent={onReportContent}
-                        onOpenSharePostModal={onOpenSharePostModal}
-                    />
-                ))}
-            </div>
-        );
-    };
-
     const CheckInItem = ({ item }) => {
         const pub = item.pub || item.pubs || {};
         return (
@@ -850,24 +778,6 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
                 <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-1 text-right border-t border-gray-100 dark:border-gray-700/50">
                     <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(new Date(item.created_at).getTime())}</span>
                 </div>
-            </div>
-        );
-    };
-
-    const CheckInsList = () => {
-        if (!userCheckIns || userCheckIns.length === 0) {
-            return (
-                <div className="text-center text-gray-500 dark:text-gray-400 p-4">
-                    <p>No check-ins yet.</p>
-                </div>
-            );
-        }
-
-        return (
-            <div className="space-y-3">
-                {userCheckIns.map(checkIn => (
-                    <CheckInItem key={checkIn.id} item={checkIn} />
-                ))}
             </div>
         );
     };
@@ -923,11 +833,18 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
 
     const AllActivityList = () => {
         const allItems = useMemo(() => {
-            const mappedRatings = (userRatings || []).map(r => ({ ...r, _type: 'rating', _ts: r.timestamp || new Date(r.created_at).getTime() }));
-            const mappedPosts = (userPosts || []).map(p => ({ ...p, _type: 'post', _ts: new Date(p.created_at).getTime() }));
-            const mappedCheckIns = (userCheckIns || []).map(c => ({ ...c, _type: 'checkin', _ts: new Date(c.created_at).getTime() }));
-            return [...mappedRatings, ...mappedPosts, ...mappedCheckIns].sort((a, b) => b._ts - a._ts);
-        }, [userRatings, userPosts, userCheckIns]);
+            const items = [];
+            if (contentFilters.ratings) {
+                items.push(...(userRatings || []).map(r => ({ ...r, _type: 'rating', _ts: r.timestamp || new Date(r.created_at).getTime() })));
+            }
+            if (contentFilters.posts) {
+                items.push(...(userPosts || []).map(p => ({ ...p, _type: 'post', _ts: new Date(p.created_at).getTime() })));
+            }
+            if (contentFilters.checkins) {
+                items.push(...(userCheckIns || []).map(c => ({ ...c, _type: 'checkin', _ts: new Date(c.created_at).getTime() })));
+            }
+            return items.sort((a, b) => b._ts - a._ts);
+        }, [userRatings, userPosts, userCheckIns, contentFilters]);
 
         const itemsToShow = allItems.slice(0, visibleRatingsCount);
         const hasMoreItems = allItems.length > visibleRatingsCount;
@@ -1184,25 +1101,31 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
                     
                     {/* Right Column (Activity Feed) */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Tab Navigation for Posts/Ratings/Check-ins */}
-                        <div className="sticky top-0 z-10 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm -mx-4 px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
-                            <div className="overflow-x-auto overflow-y-hidden no-scrollbar">
-                                <div className="border-b border-gray-200 dark:border-gray-700 min-w-max">
-                                    <nav className="-mb-px flex space-x-6 px-1" aria-label="Tabs">
-                                        <TabButton tabId="all" label="All Activity" isActive={activeTab === 'all'} onClick={() => setActiveTab('all')} />
-                                        <TabButton tabId="ratings" label={`Ratings (${userRatings?.length || 0})`} isActive={activeTab === 'ratings'} onClick={() => setActiveTab('ratings')} />
-                                        <TabButton tabId="posts" label={`Posts (${userPosts?.length || 0})`} isActive={activeTab === 'posts'} onClick={() => setActiveTab('posts')} />
-                                        <TabButton tabId="check-ins" label={`Check-ins (${userCheckIns?.length || 0})`} isActive={activeTab === 'check-ins'} onClick={() => setActiveTab('check-ins')} />
-                                    </nav>
-                                </div>
+                        {/* Activity Filter Pills */}
+                        <div className="sticky top-0 z-10 bg-gray-100/80 dark:bg-gray-900/80 backdrop-blur-sm -mx-4 px-4 py-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-1">
+                                {contentFilterOptions.map(opt => {
+                                    const count = opt.id === 'ratings' ? (userRatings?.length || 0) : opt.id === 'posts' ? (userPosts?.length || 0) : (userCheckIns?.length || 0);
+                                    return (
+                                        <button 
+                                            key={opt.id}
+                                            onClick={() => setContentFilters(prev => ({ ...prev, [opt.id]: !prev[opt.id] }))}
+                                            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center justify-center space-x-2 border shadow-sm whitespace-nowrap ${
+                                                contentFilters[opt.id]
+                                                ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-400 text-amber-700 dark:text-amber-400'
+                                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            <i className={`fas ${opt.icon} w-4 text-center`}></i>
+                                            <span>{opt.label} ({count})</span>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                         
                         <div>
-                            {activeTab === 'ratings' && <RatingsList />}
-                            {activeTab === 'posts' && <PostsList />}
-                            {activeTab === 'check-ins' && <CheckInsList />}
-                            {activeTab === 'all' && <AllActivityList />}
+                            <AllActivityList />
                         </div>
                     </div>
                 </div>

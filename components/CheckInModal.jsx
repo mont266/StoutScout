@@ -5,11 +5,14 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import ImageCropper from './ImageCropper.jsx';
 import PintCounter from './PintCounter.jsx';
+import { getCurrencyInfo } from '../utils.js';
 
 const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating }) => {
     // If we have an exact price and it's a number, default to that, else if we have a tiered price string we don't have an exact amount to prefill easily (unless we just leave it blank)
     const initialPrice = existingUserRating?.rating?.exact_price ?? existingUserRating?.rating?.price ?? '';
     const initialQuality = existingUserRating?.rating?.quality ?? 0;
+    
+    const currencyInfo = getCurrencyInfo(pub || {});
 
     const [price, setPrice] = useState(initialPrice);
     const [qualityRating, setQualityRating] = useState(initialQuality);
@@ -278,8 +281,8 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
                             {initialPrice && isPriceSame === null ? (
                                 <div>
                                     <label className="flex text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 items-center">
-                                        <i className="fas fa-pound-sign text-emerald-500 mr-2"></i>
-                                        Is the price still £{Number(initialPrice).toFixed(2)}? <span className="text-gray-400 font-normal ml-1"> (Optional)</span>
+                                        <span className="text-emerald-500 font-bold mr-2">{currencyInfo.symbol}</span>
+                                        Is the price still {currencyInfo.symbol}{Number(initialPrice).toFixed(2)}? <span className="text-gray-400 font-normal ml-1"> (Optional)</span>
                                     </label>
                                     <div className="grid grid-cols-2 gap-3">
                                         <button
@@ -304,12 +307,12 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
                             ) : (
                                 <div>
                                     <label className="flex text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 items-center">
-                                        <i className="fas fa-pound-sign text-emerald-500 mr-2"></i>
+                                        <span className="text-emerald-500 font-bold mr-2">{currencyInfo.symbol}</span>
                                         Price of a Pint <span className="text-gray-400 font-normal ml-1"> (Optional)</span>
                                     </label>
                                     <div className="relative shadow-sm rounded-lg">
-                                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
-                                            <i className="fas fa-pound-sign"></i>
+                                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500 font-bold">
+                                            {currencyInfo.symbol}
                                         </span>
                                         <input
                                             type="text"

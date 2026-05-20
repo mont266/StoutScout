@@ -815,7 +815,7 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
                             onClick={() => setMyCrawlsFilter('community')}
                             className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${myCrawlsFilter === 'community' ? 'bg-blue-100 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:border-blue-700/50 dark:text-blue-400' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700'}`}
                         >
-                            Saved from Community
+                            Community
                         </button>
                     </div>
                 )}
@@ -827,7 +827,7 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
                         <p className="mt-2 text-sm max-w-sm mx-auto">
                             {savedCrawls.length === 0 
                                 ? "You haven't planned any pub crawls yet. Let's create one!" 
-                                : `No crawls match the "${myCrawlsFilter === 'mine' ? 'My Crawls' : 'Saved from Community'}" filter.`}
+                                : `No crawls match the "${myCrawlsFilter === 'mine' ? 'My Crawls' : 'Community'}" filter.`}
                         </p>
                     </div>
                 ) : (

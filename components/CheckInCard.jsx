@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import Avatar from './Avatar.jsx';
-import { formatTimeAgo } from '../utils.js';
+import { formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import PintCounter from './PintCounter.jsx';
 
 const CheckInCard = ({ checkin, onViewProfile, onViewImage, onViewPub, currentUser, onDeleteCheckin, onUpdateAmount }) => {
@@ -10,6 +10,8 @@ const CheckInCard = ({ checkin, onViewProfile, onViewImage, onViewPub, currentUs
     const [amount, setAmount] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+    const currencyInfo = getCurrencyInfo(checkin.pub || {});
 
     const handleSaveAmount = async () => {
         if (!amount || isNaN(amount) || amount <= 0) return;
@@ -195,7 +197,7 @@ const CheckInCard = ({ checkin, onViewProfile, onViewImage, onViewPub, currentUs
                 {checkin.price && (
                     <div className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-2">
                         <i className="fas fa-tag text-green-500"></i>
-                        <span>{checkin.price > 0 ? `£${checkin.price.toFixed(2)}` : 'Free'}</span>
+                        <span>{checkin.price > 0 ? `${currencyInfo.symbol}${checkin.price.toFixed(2)}` : 'Free'}</span>
                     </div>
                 )}
             </div>

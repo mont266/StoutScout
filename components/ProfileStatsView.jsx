@@ -202,10 +202,10 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
             };
         }
 
-        // Sum all amounts from ratings. If amount_drank is null, it defaults to 1 per visit.
-        const totalPintsFromRatings = userRatings ? userRatings.reduce((sum, r) => sum + (r.rating.amount_drank != null ? r.rating.amount_drank : 1), 0) : 0;
+        // Sum all amounts from ratings. If amount_drank is 0 or null, it defaults to 1 per visit.
+        const totalPintsFromRatings = userRatings ? userRatings.reduce((sum, r) => sum + (r.rating.amount_drank ? r.rating.amount_drank : 1), 0) : 0;
         
-        // Use totalPintsFromRatings instead of userRatings.length for averages IF we want averages weighted by pint count? 
+        // Use userRatings.length for averages IF we want averages weighted by pint count? 
         // No, average quality of visits is usually per rating visit. Let's keep totalPints for visits.
         const totalPints = userRatings ? userRatings.length : 0;
         
@@ -217,7 +217,7 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
 
         let pricedRatingsCount = 0;
         let totalSpentInGbp = userRatings ? userRatings.reduce((sum, r) => {
-            const amountForSpent = r.rating.amount_drank != null ? r.rating.amount_drank : 1;
+            const amountForSpent = r.rating.amount_drank ? r.rating.amount_drank : 1;
             if (r.rating.exact_price > 0) {
                 pricedRatingsCount += amountForSpent;
                 const currency = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
@@ -243,13 +243,10 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
         if (userCheckIns && userCheckIns.length > 0) {
             checkInsCount = userCheckIns.length;
             totalSpentInGbp = userCheckIns.reduce((sum, c) => {
-                const amountForCheckIn = c.amount_drank != null ? c.amount_drank : 1;
+                const amountForCheckIn = c.amount_drank ? c.amount_drank : 1;
                 totalPintsConsumed += amountForCheckIn;
                 
                 let priceToUse = c.price;
-                if (!priceToUse && c.pub?.local_avg_price) {
-                    priceToUse = c.pub.local_avg_price;
-                }
                 
                 if (priceToUse > 0) {
                     let cost = priceToUse * amountForCheckIn;
