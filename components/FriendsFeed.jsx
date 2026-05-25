@@ -674,6 +674,9 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, u
                                     }
                                 }}
                                 onUpdateAmount={handleFeedCheckinAmountUpdate}
+                                onUpdateCheckin={(updatedCheckin) => {
+                                    setFeedItems(prev => prev.map(c => c.id === updatedCheckin.id ? updatedCheckin : c));
+                                }}
                             />
                         );
                     }

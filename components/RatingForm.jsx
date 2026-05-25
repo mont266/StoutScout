@@ -245,7 +245,8 @@ const RatingForm = ({ onSubmit, existingRating, currencyInfo = {}, existingImage
                     }
                 }}
                 placeholder={`e.g., ${examplePrice}`}
-                className="w-full pl-7 pr-3 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-shadow shadow-sm"
+                className="w-full pr-3 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-shadow shadow-sm"
+                style={{ paddingLeft: `calc(1.5rem + ${(currencySymbol || '').length}ch)` }}
               />
             </div>
           </div>

@@ -505,6 +505,9 @@ const CommunityFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest,
                                     }
                                 }}
                                 onUpdateAmount={handleFeedCheckinAmountUpdate}
+                                onUpdateCheckin={(updatedCheckin) => {
+                                    setFeedItems(prev => prev.map(c => c.id === updatedCheckin.id ? updatedCheckin : c));
+                                }}
                             />
                         );
                     }

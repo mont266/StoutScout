@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../supabase.js';
 
 const useExchangeRates = () => {
     const [rates, setRates] = useState(null);
@@ -23,23 +24,20 @@ const useExchangeRates = () => {
                 console.error("Failed to read cached exchange rates", e);
             }
 
-            // 2. Fetch from API if no valid cache
+            // 2. Fetch from proxy if no valid cache
             try {
-                const apiKey = import.meta.env.VITE_EXCHANGE_RATE_API_KEY;
-                if (!apiKey) {
-                    throw new Error("ExchangeRate-API key is not configured.");
+                const { data: responseData, error: proxyError } = await supabase.functions.invoke('get-exchange-rates');
+                
+                if (proxyError) {
+                   throw new Error(proxyError.message || 'Error fetching exchange rates');
                 }
-                const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/GBP`);
-                if (!response.ok) {
-                    throw new Error(`API request failed with status ${response.status}`);
-                }
-                const data = await response.json();
-                if (data.result === 'success' && data.conversion_rates) {
-                    const fetchedRates = data.conversion_rates;
+
+                if (responseData && responseData.result === 'success' && responseData.conversion_rates) {
+                    const fetchedRates = responseData.conversion_rates;
                     setRates(fetchedRates);
                     localStorage.setItem('stoutly-exchange-rates', JSON.stringify({ timestamp: Date.now(), rates: fetchedRates }));
                 } else {
-                    throw new Error(data['error-type'] || 'Invalid API response structure');
+                    throw new Error(responseData?.['error-type'] || 'Invalid API response structure');
                 }
             } catch (fetchError) {
                 console.error("Failed to fetch live exchange rates:", fetchError.message);

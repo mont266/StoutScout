@@ -1,15 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Avatar from './Avatar.jsx';
 import { formatTimeAgo, getCurrencyInfo } from '../utils.js';
 import PintCounter from './PintCounter.jsx';
+import CheckInModal from './CheckInModal.jsx';
 
-const CheckInCard = ({ checkin, onViewProfile, onViewImage, onViewPub, currentUser, onDeleteCheckin, onUpdateAmount }) => {
+const CheckInCard = ({ checkin, onViewProfile, onViewImage, onViewPub, currentUser, onDeleteCheckin, onUpdateAmount, onUpdateCheckin }) => {
     const isOwner = currentUser && currentUser.id === checkin.user.id;
     const [isEditingAmount, setIsEditingAmount] = useState(false);
     const [amount, setAmount] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [showMenu, setShowMenu] = useState(false);
+    const menuRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setShowMenu(false);
+            }
+        };
+
+        if (showMenu) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showMenu]);
 
     const currencyInfo = getCurrencyInfo(checkin.pub || {});
 
@@ -115,14 +134,41 @@ const CheckInCard = ({ checkin, onViewProfile, onViewImage, onViewPub, currentUs
                     </div>
                 </div>
                 {isOwner && (
-                    <button 
-                        onClick={() => setShowDeleteModal(true)}
-                        className="text-gray-400 hover:text-red-500 transition-colors bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-full w-8 h-8 flex items-center justify-center p-0 flex-shrink-0"
-                        title="Delete Check-in"
-                        aria-label="Delete Check-in"
-                    >
-                        <i className="fas fa-trash-alt"></i>
-                    </button>
+                    <div className="relative" ref={menuRef}>
+                        <button 
+                            onClick={() => setShowMenu(!showMenu)}
+                            className="text-gray-400 hover:text-amber-500 transition-colors bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-full w-8 h-8 flex items-center justify-center p-0 flex-shrink-0"
+                            title="Menu"
+                            aria-label="Menu"
+                        >
+                            <i className="fas fa-ellipsis-h"></i>
+                        </button>
+
+                        {showMenu && (
+                            <div className="absolute right-0 mt-2 w-36 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10 py-1 overflow-hidden">
+                                <button
+                                    onClick={() => {
+                                        setIsEditing(true);
+                                        setShowMenu(false);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                                >
+                                    <i className="fas fa-edit w-5"></i>
+                                    Edit
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowDeleteModal(true);
+                                        setShowMenu(false);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center"
+                                >
+                                    <i className="fas fa-trash-alt w-5"></i>
+                                    Delete
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
 
@@ -201,6 +247,20 @@ const CheckInCard = ({ checkin, onViewProfile, onViewImage, onViewPub, currentUs
                     </div>
                 )}
             </div>
+            {isEditing && (
+                <CheckInModal
+                    pub={checkin.pub}
+                    userProfile={currentUser}
+                    existingCheckin={checkin}
+                    onClose={() => setIsEditing(false)}
+                    onSuccess={(updatedCheckin) => {
+                        setIsEditing(false);
+                        if (onUpdateCheckin) {
+                            onUpdateCheckin(updatedCheckin);
+                        }
+                    }}
+                />
+            )}
         </div>
     );
 };

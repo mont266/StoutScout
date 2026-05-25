@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../supabase.js';
 import StarRating from './StarRating';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
@@ -7,29 +8,31 @@ import ImageCropper from './ImageCropper.jsx';
 import PintCounter from './PintCounter.jsx';
 import { getCurrencyInfo } from '../utils.js';
 
-const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating }) => {
+const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating, existingCheckin }) => {
     // If we have an exact price and it's a number, default to that, else if we have a tiered price string we don't have an exact amount to prefill easily (unless we just leave it blank)
     const initialPrice = existingUserRating?.rating?.exact_price ?? existingUserRating?.rating?.price ?? '';
     const initialQuality = existingUserRating?.rating?.quality ?? 0;
     
     const currencyInfo = getCurrencyInfo(pub || {});
 
-    const [price, setPrice] = useState(initialPrice);
-    const [qualityRating, setQualityRating] = useState(initialQuality);
-    const [hasGuinnessZero, setHasGuinnessZero] = useState(null);
-    const [comment, setComment] = useState('');
-    const [amountDrank, setAmountDrank] = useState(1);
-    const [isNotFinished, setIsNotFinished] = useState(false);
+    const [price, setPrice] = useState(existingCheckin?.price ?? initialPrice);
+    const [qualityRating, setQualityRating] = useState(existingCheckin?.quality_rating ?? initialQuality);
+    const [hasGuinnessZero, setHasGuinnessZero] = useState(existingCheckin?.has_guinness_zero ?? null);
+    const [comment, setComment] = useState(existingCheckin?.comment ?? '');
+    const [amountDrank, setAmountDrank] = useState(existingCheckin?.amount_drank ?? 1);
+    const [isNotFinished, setIsNotFinished] = useState(existingCheckin ? (existingCheckin.amount_drank == null) : false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const [isQualitySame, setIsQualitySame] = useState(null);
-    const [isPriceSame, setIsPriceSame] = useState(null);
+    const [isQualitySame, setIsQualitySame] = useState(existingCheckin ? false : null);
+    const [isPriceSame, setIsPriceSame] = useState(existingCheckin ? false : null);
 
     const [imageFile, setImageFile] = useState(null);
-    const [imagePreview, setImagePreview] = useState(null);
+    const [imagePreview, setImagePreview] = useState(existingCheckin?.image_url ?? null);
     const [imageToCrop, setImageToCrop] = useState(null);
     const [isCropperOpen, setIsCropperOpen] = useState(false);
+
+    const isOlderThan6Hours = existingCheckin?.created_at ? (Date.now() - new Date(existingCheckin.created_at).getTime()) > 6 * 60 * 60 * 1000 : false;
 
     const galleryInputRef = useRef(null);
 
@@ -97,29 +100,34 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
 
         try {
             // Check for previous checkins within 12 hours
-            const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
-            const { data: recentCheckins, error: fetchError } = await supabase
-                .from('pub_checkins')
-                .select('id')
-                .eq('pub_id', pub.id)
-                .eq('user_id', userProfile.id)
-                .gte('created_at', twelveHoursAgo)
-                .limit(1);
+            if (!existingCheckin) {
+                const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+                const { data: recentCheckins, error: fetchError } = await supabase
+                    .from('pub_checkins')
+                    .select('id')
+                    .eq('pub_id', pub.id)
+                    .eq('user_id', userProfile.id)
+                    .gte('created_at', twelveHoursAgo)
+                    .limit(1);
+                    
+                if (fetchError) throw fetchError;
                 
-            if (fetchError) throw fetchError;
-            
-            if (recentCheckins && recentCheckins.length > 0) {
-                setError('You can only check into the same pub once every 12 hours.');
-                return;
+                if (recentCheckins && recentCheckins.length > 0) {
+                    setError('You can only check into the same pub once every 12 hours.');
+                    return;
+                }
             }
 
-            let imageUrl = null;
+            let imageUrl = existingCheckin?.image_url || null;
             if (imageFile) {
                 const fileExt = imageFile.name.split('.').pop();
                 const fileName = `${userProfile.id}/${Date.now()}.${fileExt}`;
                 const { error: uploadError } = await supabase.storage.from('pint-images').upload(fileName, imageFile, { upsert: true });
                 if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}.`);
                 imageUrl = supabase.storage.from('pint-images').getPublicUrl(fileName).data.publicUrl;
+            } else if (existingCheckin && !imagePreview) {
+                // If it existed but preview is gone, user deleted it
+                imageUrl = null;
             }
 
             const checkinData = {
@@ -129,15 +137,29 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
                 price: price ? parseFloat(price) : null,
                 has_guinness_zero: hasGuinnessZero,
                 comment: comment.trim() || null,
-                amount_drank: isNotFinished ? null : amountDrank,
+                amount_drank: (isOlderThan6Hours && existingCheckin) ? existingCheckin.amount_drank : (isNotFinished ? null : amountDrank),
                 image_url: imageUrl,
             };
 
-            const { data, error: insertError } = await supabase
-                .from('pub_checkins')
-                .insert([checkinData])
-                .select()
-                .single();
+            let data, insertError;
+            if (existingCheckin) {
+                const result = await supabase
+                    .from('pub_checkins')
+                    .update(checkinData)
+                    .eq('id', existingCheckin.id)
+                    .select()
+                    .single();
+                data = result.data;
+                insertError = result.error;
+            } else {
+                const result = await supabase
+                    .from('pub_checkins')
+                    .insert([checkinData])
+                    .select()
+                    .single();
+                data = result.data;
+                insertError = result.error;
+            }
 
             if (insertError) throw insertError;
 
@@ -181,7 +203,7 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
         "5 - Exceptional"
     ];
 
-    return (
+    return createPortal(
         <>
             <div 
                 className="fixed inset-0 bg-white sm:bg-black/60 dark:bg-gray-900 sm:dark:bg-black/60 z-[1200] flex sm:items-center justify-center p-0 sm:p-4 animate-modal-fade-in"
@@ -211,7 +233,7 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
                     <div className="flex-grow flex flex-col items-center sm:items-start text-center sm:text-left">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center space-x-2">
                             <i className="fas fa-location-dot text-amber-500"></i>
-                            <span>Check In</span>
+                            <span>{existingCheckin ? 'Edit Check-in' : 'Check In'}</span>
                         </h2>
                         <p className="text-sm font-medium text-gray-500 mt-1">{pub.name}</p>
                     </div>
@@ -317,7 +339,8 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
                                         <input
                                             type="text"
                                             inputMode="decimal"
-                                            className="w-full pl-8 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                            className="w-full pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                            style={{ paddingLeft: `calc(1.5rem + ${(currencyInfo.symbol || '').length}ch)` }}
                                             value={price}
                                             onChange={(e) => {
                                                 const val = e.target.value;
@@ -423,10 +446,11 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
                             </label>
                             
                             <div className="flex justify-center mb-4">
-                                <label className="flex items-center space-x-2 cursor-pointer bg-white dark:bg-gray-800 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-amber-400 transition-colors">
+                                <label className={`flex items-center space-x-2 ${isOlderThan6Hours ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-amber-400'} bg-white dark:bg-gray-800 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors`}>
                                     <input
                                         type="checkbox"
                                         checked={isNotFinished}
+                                        disabled={isOlderThan6Hours}
                                         onChange={(e) => setIsNotFinished(e.target.checked)}
                                         className="w-4 h-4 text-amber-500 rounded focus:ring-amber-500"
                                     />
@@ -435,18 +459,24 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
                             </div>
 
                             {!isNotFinished && (
-                                <div className="flex flex-col items-center justify-center py-2 animate-fade-in">
+                                <div className={`flex flex-col items-center justify-center py-2 animate-fade-in ${isOlderThan6Hours ? 'pointer-events-none opacity-50' : ''}`}>
                                     <PintCounter 
                                         amount={amountDrank} 
                                         onChange={setAmountDrank} 
                                         maxAmount={16} 
                                     />
-                                    <p className="text-xs text-center text-gray-500 mt-4 max-w-xs">
-                                        If you're not finished, you can add the number of pints you drank up to 6 hours after checking in.
-                                    </p>
+                                    {isOlderThan6Hours ? (
+                                        <p className="text-xs text-center font-bold text-red-500 mt-4 max-w-xs">
+                                            The amount drank section is locked because this check-in was submitted over 6 hours ago.
+                                        </p>
+                                    ) : (
+                                        <p className="text-xs text-center text-gray-500 mt-4 max-w-xs">
+                                            If you're not finished, you can add the number of pints you drank up to 6 hours after checking in.
+                                        </p>
+                                    )}
                                 </div>
                             )}
-                            {isNotFinished && (
+                            {isNotFinished && !isOlderThan6Hours && (
                                 <p className="text-sm text-center text-amber-600 dark:text-amber-500 mt-2 px-4 animate-fade-in">
                                     You can update the number of pints you drank from the home feed or your profile up to 6 hours after checking in.
                                 </p>
@@ -465,12 +495,12 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
                         {isLoading ? (
                             <>
                                 <i className="fas fa-spinner fa-spin"></i>
-                                <span>Checking in...</span>
+                                <span>{existingCheckin ? 'Saving changes...' : 'Checking in...'}</span>
                             </>
                         ) : (
                             <>
                                 <i className="fas fa-check-circle"></i>
-                                <span>Complete Check-in</span>
+                                <span>{existingCheckin ? 'Save Changes' : 'Complete Check-in'}</span>
                             </>
                         )}
                     </button>
@@ -487,7 +517,8 @@ const CheckInModal = ({ pub, userProfile, onClose, onSuccess, existingUserRating
                     }}
                 />
             )}
-        </>
+        </>,
+        document.body
     );
 };
 

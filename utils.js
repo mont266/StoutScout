@@ -176,6 +176,11 @@ const CURRENCY_MAP = {
     'kr': { symbol: '₩', code: 'KRW' }, 'th': { symbol: '฿', code: 'THB' },
     'pe': { symbol: 'S/', code: 'PEN' }, 'vn': { symbol: '₫', code: 'VND' },
     'id': { symbol: 'Rp', code: 'IDR' },
+    'lc': { symbol: 'EC$', code: 'XCD' }, 'vc': { symbol: 'EC$', code: 'XCD' },
+    'ag': { symbol: 'EC$', code: 'XCD' }, 'dm': { symbol: 'EC$', code: 'XCD' },
+    'gd': { symbol: 'EC$', code: 'XCD' }, 'kn': { symbol: 'EC$', code: 'XCD' },
+    'bb': { symbol: 'Bds$', code: 'BBD' }, 'jm': { symbol: 'J$', code: 'JMD' },
+    'tt': { symbol: 'TT$', code: 'TTD' }, 'bs': { symbol: 'B$', code: 'BSD' },
 };
 
 // This map helps resolve full country names to their 2-letter codes.
@@ -190,6 +195,11 @@ const COUNTRY_NAME_TO_CODE = {
     'south africa': 'za', 'turkey': 'tr', 'austria': 'at',
     'czech republic': 'cz', 'peru': 'pe', 'south korea': 'kr',
     'morocco': 'ma', 'vietnam': 'vn', 'indonesia': 'id',
+    'st lucia': 'lc', 'saint lucia': 'lc', 'barbados': 'bb',
+    'jamaica': 'jm', 'grenada': 'gd', 'antigua and barbuda': 'ag',
+    'dominica': 'dm', 'st kitts and nevis': 'kn', 'saint kitts and nevis': 'kn',
+    'st vincent and the grenadines': 'vc', 'saint vincent and the grenadines': 'vc',
+    'trinidad and tobago': 'tt', 'bahamas': 'bs',
 };
 
 // Tier thresholds for price ratings. A price < tiers[0] gets 5 stars.
@@ -209,6 +219,11 @@ const CURRENCY_DEFAULTS = {
     'MAD':    { examplePrice: '30', tiers: [25, 30, 40, 50] },
     'VND':    { examplePrice: '80000', tiers: [50000, 80000, 100000, 120000] },
     'IDR':    { examplePrice: '50000', tiers: [35000, 50000, 75000, 100000] },
+    'XCD':    { examplePrice: '8.00', tiers: [6.00, 8.00, 10.00, 12.00] },
+    'BBD':    { examplePrice: '8.00', tiers: [6.00, 8.00, 10.00, 12.00] },
+    'JMD':    { examplePrice: '800', tiers: [600, 800, 1000, 1200] },
+    'TTD':    { examplePrice: '20', tiers: [15, 20, 25, 30] },
+    'BSD':    { examplePrice: '8.00', tiers: [6.00, 8.00, 10.00, 12.00] },
 };
 
 /**
@@ -217,13 +232,21 @@ const CURRENCY_DEFAULTS = {
  * @returns {{symbol: string, code: string, examplePrice: string, tiers: number[]}} The currency info.
  */
 export const getCurrencyInfo = (pubLocationData = {}) => {
-    let { country_code, country_name, local_avg_price } = pubLocationData;
+    let { country_code, country_name, address, local_avg_price } = pubLocationData;
     
     const defaults = {
         symbol: '£',
         code: 'GBP',
         ...CURRENCY_DEFAULTS['DEFAULT']
     };
+
+    if (!country_code && !country_name && address) {
+        // Try to extract country from the end of the address
+        const parts = address.split(',');
+        if (parts.length > 0) {
+            country_name = parts[parts.length - 1].trim();
+        }
+    }
 
     if (!country_code && country_name) {
         country_code = COUNTRY_NAME_TO_CODE[country_name.toLowerCase().trim()];

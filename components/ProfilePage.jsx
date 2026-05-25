@@ -19,6 +19,7 @@ import ProfileStatsView from './ProfileStatsView.jsx';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import PostCard from './PostCard.jsx';
+import CheckInModal from './CheckInModal.jsx';
 import RankExplanationModal from './RankExplanationModal.jsx';
 
 // Action sheet modal for profile editing options
@@ -738,6 +739,22 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
     
     const CheckInItem = ({ item }) => {
         const pub = item.pub || item.pubs || {};
+        const [isMenuOpen, setIsMenuOpen] = useState(false);
+        const [isEditing, setIsEditing] = useState(false);
+        const menuRef = useRef(null);
+
+        useEffect(() => {
+            const handleClickOutside = (event) => {
+                if (menuRef.current && !menuRef.current.contains(event.target)) {
+                    setIsMenuOpen(false);
+                }
+            };
+            if (isMenuOpen) {
+                document.addEventListener('mousedown', handleClickOutside);
+            }
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }, [isMenuOpen]);
+
         return (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden list-none">
                 <div className="p-3">
@@ -752,9 +769,17 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
                             </button>
                         </div>
                         {isViewingOwnProfile && onDeleteCheckin && (
-                            <button onClick={() => onDeleteCheckin(item.id)} className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 w-8 h-8 flex items-center justify-center rounded-full transition-colors flex-shrink-0">
-                                <i className="fas fa-trash-alt"></i>
-                            </button>
+                            <div ref={menuRef} className="relative flex-shrink-0">
+                                <button onClick={(e) => { e.stopPropagation(); setIsMenuOpen(prev => !prev); }} className="text-gray-400 dark:text-gray-500 hover:text-amber-500 w-8 h-8 flex items-center justify-center rounded-full transition-colors bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600">
+                                    <i className="fas fa-ellipsis-h" aria-hidden="true"></i>
+                                </button>
+                                {isMenuOpen && (
+                                    <div className="absolute right-0 mt-1 w-28 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-10 overflow-hidden">
+                                        <button onClick={() => { setIsMenuOpen(false); setIsEditing(true); }} className="w-full text-left text-sm px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200">Edit</button>
+                                        <button onClick={() => { setIsMenuOpen(false); onDeleteCheckin(item.id); }} className="w-full text-left text-sm px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600 border-t border-gray-100 dark:border-gray-600">Delete</button>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                     {item.amount_drank > 0 && (
@@ -778,12 +803,39 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
                 <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-1 text-right border-t border-gray-100 dark:border-gray-700/50">
                     <span className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(new Date(item.created_at).getTime())}</span>
                 </div>
+                {isEditing && (
+                    <CheckInModal
+                        pub={pub.id ? pub : { id: item.pub_id, name: pub.name, address: pub.address }}
+                        userProfile={loggedInUserProfile}
+                        existingCheckin={item}
+                        onClose={() => setIsEditing(false)}
+                        onSuccess={() => {
+                            setIsEditing(false);
+                            if (onProfileUpdate) onProfileUpdate(userProfile.id);
+                        }}
+                    />
+                )}
             </div>
         );
     };
 
     const RatingItem = ({ r, hideDelete }) => {
         const currencyInfo = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
+        const [isMenuOpen, setIsMenuOpen] = useState(false);
+        const menuRef = useRef(null);
+
+        useEffect(() => {
+            const handleClickOutside = (event) => {
+                if (menuRef.current && !menuRef.current.contains(event.target)) {
+                    setIsMenuOpen(false);
+                }
+            };
+            if (isMenuOpen) {
+                document.addEventListener('mousedown', handleClickOutside);
+            }
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }, [isMenuOpen]);
+
         return (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden list-none">
                 <div className="p-3">
@@ -792,9 +844,17 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
                             {r.pubName}
                         </button>
                             {isViewingOwnProfile && !hideDelete && (
-                            <button onClick={() => requestDeleteRating(r)} disabled={deletingRatingId === r.id} className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 w-8 h-8 flex items-center justify-center rounded-full transition-colors disabled:opacity-50">
-                                <i className="fas fa-trash-alt"></i>
-                            </button>
+                            <div ref={menuRef} className="relative flex-shrink-0">
+                                <button onClick={(e) => { e.stopPropagation(); setIsMenuOpen(prev => !prev); }} className="text-gray-400 dark:text-gray-500 hover:text-amber-500 w-8 h-8 flex items-center justify-center rounded-full transition-colors bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600">
+                                    <i className="fas fa-ellipsis-h" aria-hidden="true"></i>
+                                </button>
+                                {isMenuOpen && (
+                                    <div className="absolute right-0 mt-1 w-28 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-10 overflow-hidden">
+                                        <button onClick={() => { setIsMenuOpen(false); onViewPub({ id: r.pubId, name: r.pubName, address: r.pubAddress, location: r.pubLocation, country_code: r.pubCountryCode, country_name: r.pubCountryName }, { expandRatingForm: true, highlightRatingId: r.id }); }} className="w-full text-left text-sm px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200">Edit</button>
+                                        <button onClick={() => { setIsMenuOpen(false); requestDeleteRating(r); }} disabled={deletingRatingId === r.id} className="w-full text-left text-sm px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600 border-t border-gray-100 dark:border-gray-600 disabled:opacity-50">Delete</button>
+                                    </div>
+                                )}
+                            </div>
                             )}
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">{r.pubAddress}</p>

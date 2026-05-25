@@ -5,7 +5,7 @@ import ImageModal from './ImageModal.jsx';
 import ReportImageModal from './ReportImageModal.jsx';
 import { supabase } from '../supabase.js';
 import { trackEvent } from '../analytics.js';
-import { formatTimeAgo, getCurrencyInfo, getDisplayPrice } from '../utils.js';
+import { formatTimeAgo, getCurrencyInfo, getDisplayPrice, getStarRatingFromPrice } from '../utils.js';
 import Avatar from './Avatar.jsx';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import AlertModal from './AlertModal.jsx';
@@ -253,6 +253,25 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
     return feedItems;
   }, [localPub.ratings, pubPosts, pubCheckins, feedFilter, showMineOnly, session]);
 
+  const combinedRatingsAndCheckins = useMemo(() => {
+    let all = [];
+    if (localPub && localPub.ratings) {
+        all = [...localPub.ratings];
+    }
+    if (pubCheckins && pubCheckins.length > 0) {
+        const cInfo = getCurrencyInfo(localPub);
+        const checkinRatings = pubCheckins.map(c => ({
+            ...c,
+            quality: c.quality_rating,
+            price: getStarRatingFromPrice(c.price, cInfo.tiers),
+            exact_price: c.price,
+            created_at: c.created_at
+        }));
+        all = [...all, ...checkinRatings];
+    }
+    return all;
+  }, [localPub.ratings, pubCheckins, localPub]);
+
   const isCertified = localPub.certification_status === 'certified' || localPub.certification_status === 'at_risk';
   const isDeveloper = loggedInUserProfile?.is_developer;
 
@@ -354,7 +373,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
         if (highlightedCommentId) {
             // Find which rating the highlighted comment belongs to
             const targetRating = (localPub.ratings || []).find(rating => {
-                const ratingComments = commentsByRating.get(rating.id);
+                const ratingComments = commentsByRating?.get(rating.id);
                 return ratingComments && ratingComments.some(c => c.id === highlightedCommentId || c.parent_comment_id === highlightedCommentId);
             });
             
@@ -380,15 +399,15 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
     }
   };
 
-  const avgQuality = getAverageRating(localPub.ratings, 'quality');
+  const avgQuality = getAverageRating(combinedRatingsAndCheckins, 'quality');
   const avgPrice = localPub.dynamic_price_score !== undefined && localPub.dynamic_price_score !== null 
     ? localPub.dynamic_price_score 
-    : getAverageRating(localPub.ratings, 'price');
+    : getAverageRating(combinedRatingsAndCheckins, 'price');
   
   const currencyInfo = getCurrencyInfo(localPub);
   
   const priceInfo = useMemo(() => {
-    const recentMedianPrice = getDisplayPrice(localPub.ratings);
+    const recentMedianPrice = getDisplayPrice(combinedRatingsAndCheckins);
     if (recentMedianPrice === null) return { text: `${avgPrice.toFixed(1)} / 5`, stars: avgPrice, originalPrice: null, convertedPrice: null, originalCode: null, convertedCode: null };
 
     const userHomeCurrency = getCurrencyInfo(loggedInUserProfile || { country_code: 'gb' });
@@ -415,7 +434,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
         originalCode: currencyInfo.code,
         convertedCode: convertedCode,
     };
-  }, [localPub.ratings, avgPrice, currencyInfo, loggedInUserProfile, exchangeRates]);
+  }, [combinedRatingsAndCheckins, avgPrice, currencyInfo, loggedInUserProfile, exchangeRates]);
 
   const handleLocalToggleLike = useCallback((ratingToToggle) => {
     if (!loggedInUserProfile) {
@@ -809,7 +828,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                     <i className="fas fa-edit fa-lg"></i>
                 </button>
                  <button
-                    onClick={() => onOpenShareModal(localPub)}
+                    onClick={() => onOpenShareModal({...localPub, ratings: combinedRatingsAndCheckins})}
                     className="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors h-10 w-10 flex flex-shrink-0 items-center justify-center rounded-full"
                     aria-label="Share pub"
                 >
@@ -1025,7 +1044,7 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                                                 onViewImage={setImageToView}
                                                 onViewPub={onViewPub}
                                                 loggedInUserProfile={loggedInUserProfile}
-                                                comments={commentsByRating.get(item.id)}
+                                                comments={commentsByRating?.get(item.id)}
                                                 isCommentsLoading={isCommentsLoading}
                                                 onFetchComments={onFetchComments}
                                                 onAddComment={onAddComment}
@@ -1091,6 +1110,10 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                                                     setPubCheckins(prev => prev.map(c => c.id === checkinId ? { ...c, amount_drank: amount } : c));
                                                     setAlertInfo({ isOpen: true, title: "Success", message: "Number of pints added!", theme: "success" });
                                                 }
+                                            }}
+                                            onUpdateCheckin={(updatedCheckin) => {
+                                                setPubCheckins(prev => prev.map(c => c.id === updatedCheckin.id ? updatedCheckin : c));
+                                                setAlertInfo({ isOpen: true, title: "Success", message: "Check-in updated!", theme: "success" });
                                             }}
                                         />
                                     );

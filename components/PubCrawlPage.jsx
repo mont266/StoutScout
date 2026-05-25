@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabase.js';
-import { GoogleGenAI, Type } from '@google/genai';
 import { trackEvent } from '../analytics.js';
 import { Capacitor } from '@capacitor/core';
 import PubCrawlSetupModal from './PubCrawlSetupModal.jsx';
@@ -11,8 +10,7 @@ import PubCrawlFeedbackModal from './PubCrawlFeedbackModal.jsx';
 import Avatar from './Avatar.jsx';
 import { getCurrencyInfo } from '../utils.js';
 
-// Initialize Gemini AI client
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+// Initialize Gemini via Supabase API Proxy
 
 const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl, onStartCrawl, onEndCrawl, onToggleCrawlStop, onReorderStops, onAddStop, onDeleteStop, settings, pubScores, userLocation, locationPermissionStatus, onRequestPermission, userTrophies, allTrophies, fetchUserTrophies, setUnlockedTrophiesToShow, setConfettiState, handleAddXP }) => {
     const [savedCrawls, setSavedCrawls] = useState([]);
@@ -635,26 +633,17 @@ const PubCrawlPage = ({ userProfile, setAlertInfo, handleSelectPub, activeCrawl,
                 Output: Respond with only a JSON object containing a single key, "crawl_route", which is an array of the chosen pub IDs in the correct order.
             `;
             
-            const responseSchema = {
-              type: Type.OBJECT,
-              properties: {
-                crawl_route: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                  description: 'An array of pub IDs in the optimal order for the crawl.'
-                }
-              }
-            };
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: { responseMimeType: 'application/json', responseSchema },
+            const { data: responseData, error: proxyError } = await supabase.functions.invoke('generate-crawl', {
+                body: { prompt }
             });
+
+            if (proxyError) {
+                throw new Error(proxyError.message || "Failed to generate crawl route.");
+            }
 
             if (isCancelledRef.current) return;
 
-            const result = JSON.parse(response.text);
+            const result = JSON.parse(responseData.text);
             const rawPubIds = result.crawl_route;
 
             if (!rawPubIds || rawPubIds.length === 0) {

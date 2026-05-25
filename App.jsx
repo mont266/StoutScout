@@ -2619,18 +2619,20 @@ const App = () => {
   }, [realUserLocation, locationPermissionStatus, handleRequestPermission, getFlyToPadding]);
 
   // Popup visibility timers
-  useEffect(() => { if (reviewPopupInfo) { const timer = setTimeout(() => setReviewPopupInfo(null), 3000); return () => clearTimeout(timer); } }, [reviewPopupInfo]);
-  useEffect(() => { if (updateConfirmationInfo) { const timer = setTimeout(() => setUpdateConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [updateConfirmationInfo]);
-  useEffect(() => { if (deleteConfirmationInfo) { const timer = setTimeout(() => setDeleteConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [deleteConfirmationInfo]);
-  useEffect(() => { if (leveledUpInfo) { const timer = setTimeout(() => setLeveledUpInfo(null), 4000); return () => clearTimeout(timer); } }, [leveledUpInfo]);
-  useEffect(() => { if (xpGainedInfo) { const timer = setTimeout(() => setXpGainedInfo(null), 3000); return () => clearTimeout(timer); } }, [xpGainedInfo]);
-  useEffect(() => { if (rankUpInfo) { const timer = setTimeout(() => setRankUpInfo(null), 5000); return () => clearTimeout(timer); } }, [rankUpInfo]);
-  useEffect(() => { if (addPubSuccessInfo) { const timer = setTimeout(() => setAddPubSuccessInfo(null), 3000); return () => clearTimeout(timer); } }, [addPubSuccessInfo]);
+  useEffect(() => { if (reviewPopupInfo && !isSubmittingRating) { const timer = setTimeout(() => setReviewPopupInfo(null), 3000); return () => clearTimeout(timer); } }, [reviewPopupInfo, isSubmittingRating]);
+  useEffect(() => { if (updateConfirmationInfo && !isSubmittingRating) { const timer = setTimeout(() => setUpdateConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [updateConfirmationInfo, isSubmittingRating]);
+  useEffect(() => { if (deleteConfirmationInfo && !isSubmittingRating) { const timer = setTimeout(() => setDeleteConfirmationInfo(null), 3000); return () => clearTimeout(timer); } }, [deleteConfirmationInfo, isSubmittingRating]);
+  useEffect(() => { if (leveledUpInfo && !isSubmittingRating) { const timer = setTimeout(() => setLeveledUpInfo(null), 4000); return () => clearTimeout(timer); } }, [leveledUpInfo, isSubmittingRating]);
+  useEffect(() => { if (xpGainedInfo && !isSubmittingRating) { const timer = setTimeout(() => setXpGainedInfo(null), 3000); return () => clearTimeout(timer); } }, [xpGainedInfo, isSubmittingRating]);
+  useEffect(() => { if (rankUpInfo && !isSubmittingRating) { const timer = setTimeout(() => setRankUpInfo(null), 5000); return () => clearTimeout(timer); } }, [rankUpInfo, isSubmittingRating]);
+  useEffect(() => { if (addPubSuccessInfo && !isSubmittingRating) { const timer = setTimeout(() => setAddPubSuccessInfo(null), 3000); return () => clearTimeout(timer); } }, [addPubSuccessInfo, isSubmittingRating]);
 
   const handleAddXP = async (amount, actionName) => {
-    if (!userProfile) return;
+    if (!userProfile) return null;
     try {
-      setXpGainedInfo({ amount, actionName, key: crypto.randomUUID() });
+      const popupInfo = { amount, actionName, key: crypto.randomUUID() };
+      setXpGainedInfo(popupInfo);
+      
       const newXP = (Number(userProfile.xp) || 0) + amount;
       let newLevel = userProfile.level;
 
@@ -2653,7 +2655,9 @@ const App = () => {
       if (newLevel > userProfile.level) {
           setLeveledUpInfo({ key: crypto.randomUUID(), newLevel });
       }
-    } catch (e) { console.error("Error adding XP", e); }
+    } catch (e) {
+      console.error("Error adding XP", e);
+    }
   };
 
   const handleRemoveXP = async (amount) => {
@@ -2891,8 +2895,10 @@ const App = () => {
 
   const getAverageRating = useCallback((ratings, key) => {
     if (!ratings || ratings.length === 0) return 0;
-    const total = ratings.reduce((acc, r) => acc + r[key], 0);
-    return total / ratings.length;
+    const validRatings = ratings.filter(r => r[key] != null && r[key] > 0);
+    if (validRatings.length === 0) return 0;
+    const total = validRatings.reduce((acc, r) => acc + r[key], 0);
+    return total / validRatings.length;
   }, []);
 
   // This effect keeps the callback in the ref up-to-date with the latest state values.
@@ -3192,7 +3198,6 @@ const App = () => {
             
             if (unlockedDetails.length > 0) {
                 setUnlockedTrophiesToShow(unlockedDetails);
-                // Trigger confetti once for the batch of new trophies
                 setConfettiState({
                     active: true,
                     recycle: true,
@@ -3212,11 +3217,9 @@ const App = () => {
                     setRankUpInfo({ key: crypto.randomUUID(), newRank });
                     trackEvent('rank_up', { new_rank: newRank.name, level: newProfile.level });
                 } else {
-                    // Do nothing here, handleAddXP handles setLeveledUpInfo
                     trackEvent('level_up', { level: newProfile.level });
                 }
             }
-            // Removing setReviewPopupInfo here as we show XP popup instead
         } else {
             setUpdateConfirmationInfo({ key: crypto.randomUUID() });
         }
@@ -4504,7 +4507,13 @@ const App = () => {
       getAverageRating, resultsAreCapped, isDbPubsLoaded, initialSearchComplete,
       profilePage, session, userProfile, onLogout: () => supabase.auth.signOut(),
       selectedPub, existingUserRating, handleRatePub,
-      reviewPopupInfo, updateConfirmationInfo, leveledUpInfo, rankUpInfo, addPubSuccessInfo, xpGainedInfo, handleAddXP, handleRemoveXP,
+      reviewPopupInfo: isSubmittingRating ? null : reviewPopupInfo,
+      updateConfirmationInfo: isSubmittingRating ? null : updateConfirmationInfo,
+      leveledUpInfo: isSubmittingRating ? null : leveledUpInfo,
+      rankUpInfo: isSubmittingRating ? null : rankUpInfo,
+      addPubSuccessInfo: isSubmittingRating ? null : addPubSuccessInfo,
+      xpGainedInfo: isSubmittingRating ? null : xpGainedInfo,
+      handleAddXP, handleRemoveXP,
       isAvatarModalOpen, setIsAvatarModalOpen,
       handleUpdateAvatar, viewedProfile, onViewProfile: handleViewProfile, onViewPub: handleSelectPub, legalPageView, handleViewLegal, handleDataRefresh,
       installPromptEvent, setInstallPromptEvent,

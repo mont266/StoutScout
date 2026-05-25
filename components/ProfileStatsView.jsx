@@ -104,25 +104,20 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
                 console.error("Failed to read cached exchange rates", e);
             }
 
-            // 2. Fetch from API if no valid cache
+            // 2. Fetch from proxy if no valid cache
             try {
-                const apiKey = import.meta.env.VITE_EXCHANGE_RATE_API_KEY;
-                if (!apiKey) {
-                    console.warn("ExchangeRate-API key not found. Using fallback rates.");
-                    setExchangeRates(null); // Explicitly trigger fallback
-                    return;
+                const { data: responseData, error: proxyError } = await supabase.functions.invoke('get-exchange-rates');
+                
+                if (proxyError) {
+                   throw new Error(proxyError.message || 'Error fetching exchange rates');
                 }
-                const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/GBP`);
-                if (!response.ok) {
-                    throw new Error(`API request failed with status ${response.status}`);
-                }
-                const data = await response.json();
-                if (data.result === 'success' && data.conversion_rates) {
-                    const rates = data.conversion_rates;
+
+                if (responseData && responseData.result === 'success' && responseData.conversion_rates) {
+                    const rates = responseData.conversion_rates;
                     setExchangeRates(rates);
                     localStorage.setItem('stoutly-exchange-rates', JSON.stringify({ timestamp: Date.now(), rates }));
                 } else {
-                    throw new Error(data['error-type'] || 'Invalid API response');
+                    throw new Error(responseData?.['error-type'] || 'Invalid API response');
                 }
             } catch (error) {
                 console.error("Failed to fetch live exchange rates, using fallbacks:", error);
