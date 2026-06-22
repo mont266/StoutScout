@@ -22,7 +22,7 @@ const CARD_ELEMENT_OPTIONS = {
     },
 };
 
-const DonationForm = ({ userProfile, onSuccess, userTrophies, allTrophies, onLoginRequest }) => {
+const DonationForm = ({ userProfile, userLocation, onSuccess, userTrophies, allTrophies, onLoginRequest }) => {
     const stripe = useStripe();
     const elements = useElements();
     
@@ -38,12 +38,51 @@ const DonationForm = ({ userProfile, onSuccess, userTrophies, allTrophies, onLog
     const amountRef = useRef(amount);
     const currencyCodeRef = useRef('');
     const previouslyHadTrophyRef = useRef(false);
+    
+    const [nearbyAvgPrice, setNearbyAvgPrice] = useState(null);
 
     const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
 
     useEffect(() => {
         amountRef.current = amount;
     }, [amount]);
+
+    useEffect(() => {
+        if (!userLocation) return;
+        let isMounted = true;
+        const fetchAvg = async () => {
+            try {
+                const { data, error } = await supabase.rpc('get_pubs_in_radius', {
+                    lat_param: userLocation.lat,
+                    lng_param: userLocation.lng,
+                    radius_meters: 3218, // 2 miles
+                    limit_count: 100
+                });
+                
+                // If it successfully returns pubs
+                if (data && data.length > 0) {
+                    const pubIds = data.map(p => p.id);
+                    // Fetch recent ratings for exact price
+                    const { data: ratingsData } = await supabase
+                        .from('ratings')
+                        .select('exact_price')
+                        .in('pub_id', pubIds)
+                        .not('exact_price', 'is', null)
+                        .gt('exact_price', 0);
+                        
+                    if (ratingsData && ratingsData.length > 0) {
+                        const sum = ratingsData.reduce((acc, r) => acc + Number(r.exact_price), 0);
+                        const avg = sum / ratingsData.length;
+                        if (isMounted) setNearbyAvgPrice(avg.toFixed(2));
+                    }
+                }
+            } catch (e) {
+                console.error("Error fetching nearby avg price:", e);
+            }
+        };
+        fetchAvg();
+        return () => { isMounted = false; };
+    }, [userLocation]);
 
     useEffect(() => {
         previouslyHadTrophyRef.current = userProfile && userTrophies && userTrophies.some(t => t.trophy_id === PATRON_TROPHY_ID);
@@ -310,7 +349,7 @@ const DonationForm = ({ userProfile, onSuccess, userTrophies, allTrophies, onLog
                         </button>
                     ))}
                 </div>
-                 <div className="relative mt-3">
+                <div className="relative mt-3">
                     <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500 dark:text-gray-400 pointer-events-none">
                         {currencyInfo.symbol}
                     </span>
@@ -324,6 +363,12 @@ const DonationForm = ({ userProfile, onSuccess, userTrophies, allTrophies, onLog
                         className="w-full pl-7 pr-3 py-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                 </div>
+                {nearbyAvgPrice && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 flex items-center">
+                        <i className="fas fa-beer text-amber-500 mr-1.5"></i>
+                        Pssst. The average price of a pint near you is {currencyInfo.symbol}{nearbyAvgPrice}.
+                    </p>
+                )}
             </div>
 
             {showPaymentDetails && (

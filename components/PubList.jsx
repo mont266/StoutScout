@@ -5,7 +5,7 @@ import { getCurrencyInfo, getPriceRangeFromStars, getDisplayPrice } from '../uti
 import CoachMark from './CoachMark.jsx';
 import CertifiedBadge from './CertifiedBadge.jsx';
 
-const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, resultsAreCapped, searchRadius, isInitialLoading, isRefreshing, onOpenScoreExplanation, geocodingPubIds }) => {
+const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, getDistance, distanceUnit, resultsAreCapped, searchRadius, isInitialLoading, isRefreshing, onOpenScoreExplanation, geocodingPubIds, savedPubs }) => {
   const selectedItemRef = useRef(null);
   const listRef = useRef(null);
   const [showCoachMark, setShowCoachMark] = useState(false);
@@ -157,6 +157,7 @@ const PubList = ({ pubs, selectedPubId, onSelectPub, filter, getAverageRating, g
                           <span className={`text-lg font-bold w-6 text-center ${index < 3 && !isClosed ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'}`}>{index + 1}</span>
                           <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
+                                {savedPubs?.has(pub.id) && <i className="fas fa-bookmark text-amber-500 fa-sm mt-0.5"></i>}
                                 {isCertified && !isClosed && <CertifiedBadge certifiedSince={pub.certified_since} showTooltip={false} className="w-5 h-5" />}
                                 {sellsGuinnessZero && !isClosed && <span className="flex-shrink-0 text-xs font-bold bg-black text-white px-1.5 py-0.5 rounded-md border-2 border-blue-500" title="Sells Guinness 0.0">0.0</span>}
                                 <p className={`font-semibold text-gray-900 dark:text-white truncate ${isClosed ? 'line-through' : ''}`}>{pub.name}</p>

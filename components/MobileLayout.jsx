@@ -277,6 +277,8 @@ const MobileLayout = (props) => {
                             isRefreshing={isRefreshing}
                             filterGuinnessZero={filterGuinnessZero}
                             onFilterGuinnessZeroChange={onFilterGuinnessZeroChange}
+                            filterSavedPubs={props.filterSavedPubs}
+                            setFilterSavedPubs={props.setFilterSavedPubs}
                             onSearchClick={() => setIsSearchExpanded(true)}
                         />
                          <MapComponent
@@ -357,6 +359,7 @@ const MobileLayout = (props) => {
                                         isRefreshing={isRefreshing}
                                         onOpenScoreExplanation={onOpenScoreExplanation}
                                         geocodingPubIds={geocodingPubIds}
+                                        savedPubs={props.savedPubs}
                                     />
                                 </div>
                             </div>

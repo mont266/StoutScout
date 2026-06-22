@@ -26,6 +26,9 @@ const PubCrawlDetailView = ({ crawl, forceReadOnly, onBack, onGiveFeedback, onSe
     const [editedName, setEditedName] = useState(crawl.name);
     
     const [stops, setStops] = useState(crawl.stops);
+    const [isRouteEdited, setIsRouteEdited] = useState(false);
+    const [isSavingRoute, setIsSavingRoute] = useState(false);
+    
     const dragItem = useRef(null);
     const dragOverItem = useRef(null);
     const [dragging, setDragging] = useState(false);
@@ -37,8 +40,10 @@ const PubCrawlDetailView = ({ crawl, forceReadOnly, onBack, onGiveFeedback, onSe
     const mapRef = useRef(null);
 
     useEffect(() => {
-        setStops(crawl.stops);
-    }, [crawl.stops]);
+        if (!isRouteEdited) {
+            setStops(crawl.stops);
+        }
+    }, [crawl.stops, isRouteEdited]);
     
     useEffect(() => {
         const fetchRoute = async () => {
@@ -108,10 +113,7 @@ const PubCrawlDetailView = ({ crawl, forceReadOnly, onBack, onGiveFeedback, onSe
         setDragging(false);
         dragItem.current = null;
         dragOverItem.current = null;
-        const reorderSuccess = await onReorderStops(crawl.id, stops);
-        if (!reorderSuccess) {
-            setStops(crawl.stops);
-        }
+        setIsRouteEdited(true);
     };
 
     const handleMoveUp = async (index) => {
@@ -119,10 +121,7 @@ const PubCrawlDetailView = ({ crawl, forceReadOnly, onBack, onGiveFeedback, onSe
         const newStops = [...stops];
         [newStops[index - 1], newStops[index]] = [newStops[index], newStops[index - 1]];
         setStops(newStops);
-        const reorderSuccess = await onReorderStops(crawl.id, newStops);
-        if (!reorderSuccess) {
-             setStops(crawl.stops);
-        }
+        setIsRouteEdited(true);
     };
 
     const handleMoveDown = async (index) => {
@@ -130,9 +129,18 @@ const PubCrawlDetailView = ({ crawl, forceReadOnly, onBack, onGiveFeedback, onSe
         const newStops = [...stops];
         [newStops[index + 1], newStops[index]] = [newStops[index], newStops[index + 1]];
         setStops(newStops);
-        const reorderSuccess = await onReorderStops(crawl.id, newStops);
-        if (!reorderSuccess) {
-             setStops(crawl.stops);
+        setIsRouteEdited(true);
+    };
+
+    const handleSaveRoute = async () => {
+        setIsSavingRoute(true);
+        const reorderSuccess = await onReorderStops(crawl.id, stops);
+        setIsSavingRoute(false);
+        if (reorderSuccess) {
+            setIsRouteEdited(false);
+        } else {
+            setStops(crawl.stops);
+            setIsRouteEdited(false);
         }
     };
 
@@ -413,6 +421,27 @@ const PubCrawlDetailView = ({ crawl, forceReadOnly, onBack, onGiveFeedback, onSe
                             <span>Add Stop</span>
                         </button>
                     )}
+                </div>
+            )}
+            {isRouteEdited && (
+                <div className="mb-4 flex gap-2">
+                    <button 
+                        onClick={handleSaveRoute}
+                        disabled={isSavingRoute}
+                        className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        {isSavingRoute ? 'Saving...' : 'Save Route Order'}
+                    </button>
+                    <button 
+                        onClick={() => {
+                            setStops(crawl.stops);
+                            setIsRouteEdited(false);
+                        }}
+                        disabled={isSavingRoute}
+                        className="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
                 </div>
             )}
             <ul className="space-y-2">

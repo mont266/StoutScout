@@ -10,6 +10,9 @@ import DonationForm from './DonationForm.jsx';
 import { Capacitor } from '@capacitor/core';
 import ConfirmationModal from './ConfirmationModal.jsx';
 import PublicMapStatsModal from './PublicMapStatsModal.jsx';
+import GiveawayAdminPage from './GiveawayAdminPage.jsx';
+import MyWinningsModal from './MyWinningsModal.jsx';
+import GiveawayBanner from './GiveawayBanner.jsx';
 
 // Reusable components for the new settings layout
 const SettingsSection = ({ title, children, id, titleColor = 'text-gray-800 dark:text-white' }) => (
@@ -52,17 +55,33 @@ const DevSubheading = ({ children }) => (
 );
 
 
-const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, onLogout, handleViewLegal, onDataRefresh, installPromptEvent, setInstallPromptEvent, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode, stPaddysModeEnabled, setStPaddysModeEnabled, onViewModeration, onTestTrophyPopup, onViewChangelog, onManageChangelog, hasUnreadChangelog, handleDonationSuccess, onTestDonationPopup, onDeleteAccountRequest, handleTabChange, onSubTabChange, onProfileUpdate }) => {
+const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, onLogout, handleViewLegal, onDataRefresh, installPromptEvent, setInstallPromptEvent, setAlertInfo, onMarketingConsentChange, showAllDbPubs, onToggleShowAllDbPubs, setConfettiState, onLoginRequest, handleChangePassword, isChangingPassword, scrollToSection, onScrollComplete, userTrophies, allTrophies, systemFlags, localStPaddysOverride, onToggleGlobalStPaddysMode, onToggleLocalStPaddysMode, stPaddysModeEnabled, setStPaddysModeEnabled, onViewModeration, onTestTrophyPopup, onViewChangelog, onManageChangelog, hasUnreadChangelog, handleDonationSuccess, onTestDonationPopup, onDeleteAccountRequest, handleTabChange, onSubTabChange, onProfileUpdate, userLocation, onSimulateWinnerPopup, isMyWinningsOpen, setIsMyWinningsOpen }) => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [confirmation, setConfirmation] = useState({ isOpen: false });
   const [isUpdatingMapPrivacy, setIsUpdatingMapPrivacy] = useState(false);
   const [isPublicMapStatsModalOpen, setIsPublicMapStatsModalOpen] = useState(false);
+  const [isGiveawayAdminOpen, setIsGiveawayAdminOpen] = useState(false);
+  const [hasWinnings, setHasWinnings] = useState(false);
   const isDesktop = useIsDesktop();
   
   const isNativeIos = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
 
   const isNative = Capacitor.isNativePlatform();
+
+  useEffect(() => {
+    if (session && userProfile) {
+        const checkWinnings = async () => {
+            try {
+                const { count } = await supabase.from('giveaway_prizes').select('*', { count: 'exact', head: true }).eq('winner_id', userProfile.id);
+                setHasWinnings(count > 0);
+            } catch (err) {
+                console.error("Error checking winnings:", err);
+            }
+        };
+        checkWinnings();
+    }
+  }, [session, userProfile]);
 
   const handleThemeChange = (theme) => {
     handleSettingsChange({ ...settings, theme });
@@ -152,8 +171,18 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
       {isContactModalOpen && <ContactModal userProfile={userProfile} session={session} onClose={() => setIsContactModalOpen(false)} />}
       {isFeedbackModalOpen && <FeedbackModal userProfile={userProfile} onClose={() => setIsFeedbackModalOpen(false)} />}
       {confirmation.isOpen && <ConfirmationModal {...confirmation} onClose={() => setConfirmation({ isOpen: false })} />}
+      
+      {isGiveawayAdminOpen ? (
+          <div className="h-full overflow-y-auto">
+              <GiveawayAdminPage onClose={() => setIsGiveawayAdminOpen(false)} userProfile={userProfile} />
+          </div>
+      ) : isMyWinningsOpen ? (
+          <MyWinningsModal isOpen={isMyWinningsOpen} onClose={() => setIsMyWinningsOpen(false)} userProfile={userProfile} />
+      ) : (
       <div className="h-full overflow-y-auto">
         <div className="p-4 sm:p-6 space-y-6 max-w-3xl mx-auto">
+          
+          {session && <GiveawayBanner userProfile={userProfile} isMini={true} onClick={() => handleTabChange('profile')} />}
 
           {/* Install App Section */}
           {(installPromptEvent || isAndroidWebApp || isIosWebApp) && (
@@ -257,21 +286,6 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                 </label>
             </SettingsItem>
 
-            <SettingsItem icon="fa-map-pin" label="Show all my pins">
-                <label htmlFor="show-user-rated-pubs-toggle" className="relative cursor-pointer">
-                    <input
-                        id="show-user-rated-pubs-toggle" type="checkbox" className="sr-only peer"
-                        checked={settings.showUserRatedPubs}
-                        onChange={(e) => {
-                            handleSettingsChange({ ...settings, showUserRatedPubs: e.target.checked });
-                            trackEvent('change_setting', { setting_name: 'show_user_rated_pubs', value: e.target.checked });
-                        }}
-                    />
-                    <div className="block w-11 h-6 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
-                    <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
-                </label>
-            </SettingsItem>
-
             {(systemFlags.st_paddys_mode || localStPaddysOverride) && (
                 <SettingsItem icon="fa-clover" label="Enable St. Paddy's Theme">
                     <label htmlFor="user-st-paddy-toggle" className="relative cursor-pointer">
@@ -297,7 +311,7 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                     <label className="relative cursor-pointer">
                         <input
                             type="checkbox" className="sr-only peer"
-                            checked={userProfile.is_map_public || false}
+                            checked={userProfile?.is_map_public || false}
                             onChange={(e) => handleToggleMapPrivacy(e.target.checked)}
                             disabled={isUpdatingMapPrivacy}
                         />
@@ -305,18 +319,18 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                         <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
                     </label>
                 </SettingsItem>
-                {userProfile.is_map_public && (
+                {userProfile?.is_map_public && (
                     <div className="px-4 pb-4">
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                             Your interactive map is public! Share this link with your friends:
                         </p>
                         <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-2 rounded-md border border-gray-200 dark:border-gray-700">
                             <span className="text-sm text-gray-800 dark:text-gray-200 truncate flex-grow">
-                                stoutly.co.uk/map/{userProfile.username}
+                                stoutly.co.uk/map/{userProfile?.username}
                             </span>
                             <button 
                                 onClick={() => {
-                                    navigator.clipboard.writeText(`https://stoutly.co.uk/map/${userProfile.username}`);
+                                    navigator.clipboard.writeText(`https://stoutly.co.uk/map/${userProfile?.username}`);
                                     setAlertInfo({ isOpen: true, title: 'Copied!', message: 'Link copied to clipboard.', theme: 'success' });
                                 }}
                                 className="ml-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 p-1"
@@ -326,7 +340,7 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                             </button>
                             <button 
                                 onClick={() => {
-                                    window.open(`https://stoutly.co.uk/map/${userProfile.username}`, '_blank', 'noopener,noreferrer');
+                                    window.open(`https://stoutly.co.uk/map/${userProfile?.username}`, '_blank', 'noopener,noreferrer');
                                 }}
                                 className="ml-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 p-1"
                                 title="Open in browser"
@@ -350,6 +364,9 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
           <SettingsSection title="Account">
             {session ? (
               <>
+                {hasWinnings && (
+                    <SettingsItem icon="fa-gift" label="My Winnings" onClick={() => setIsMyWinningsOpen(true)} />
+                )}
                 <SettingsItem icon="fa-key" label="Change Password">
                   <button
                     onClick={handleChangePassword}
@@ -363,7 +380,7 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                     <label className="relative cursor-pointer">
                         <input
                             type="checkbox" className="sr-only peer"
-                            checked={userProfile.accepts_marketing}
+                            checked={userProfile?.accepts_marketing || false}
                             onChange={(e) => onMarketingConsentChange(e.target.checked)}
                         />
                         <div className="block w-11 h-6 rounded-full transition-colors bg-gray-300 peer-checked:bg-green-500 dark:bg-gray-600"></div>
@@ -390,6 +407,7 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
               </p>
               <DonationForm 
                   userProfile={userProfile} 
+                  userLocation={userLocation}
                   onSuccess={handleDonationSuccess}
                   userTrophies={userTrophies}
                   allTrophies={allTrophies}
@@ -415,6 +433,7 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
           {userProfile?.is_developer && (
             <SettingsSection title="Developer Tools" titleColor="text-amber-500 dark:text-amber-400">
                 <DevSubheading>Admin Panels</DevSubheading>
+                <SettingsItem icon="fa-gift" label="Manage Giveaways" onClick={() => setIsGiveawayAdminOpen(true)} />
                 <SettingsItem
                   icon="fa-shield-alt"
                   label="Moderation Center"
@@ -429,6 +448,11 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
                 />
                 <SettingsItem icon="fa-feather-alt" label="Social Content Hub" onClick={() => window.open('https://social.stoutly.co.uk', '_blank')} />
                 <SettingsItem icon="fa-list-alt" label="Manage Changelog" onClick={onManageChangelog} />
+
+                <DevSubheading>Popups</DevSubheading>
+                <SettingsItem icon="fa-trophy" label="Simulate Trophy Popup" onClick={onTestTrophyPopup} />
+                <SettingsItem icon="fa-heart" label="Simulate Donation Banner" onClick={onTestDonationPopup} />
+                <SettingsItem icon="fa-gift" label="Simulate Winner Popup" onClick={onSimulateWinnerPopup} />
 
                 <DevSubheading>Global Feature Flags</DevSubheading>
                 <SettingsItem icon="fa-clover" label="St. Paddy's Mode (Global)">
@@ -516,6 +540,7 @@ const SettingsPage = ({ settings, handleSettingsChange, userProfile, session, on
 
         </div>
       </div>
+      )}
       <PublicMapStatsModal
           isOpen={isPublicMapStatsModalOpen}
           onClose={() => setIsPublicMapStatsModalOpen(false)}

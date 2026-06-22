@@ -197,8 +197,38 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
             };
         }
 
-        // Sum all amounts from ratings. If amount_drank is 0 or null, it defaults to 1 per visit.
-        const totalPintsFromRatings = userRatings ? userRatings.reduce((sum, r) => sum + (r.rating.amount_drank ? r.rating.amount_drank : 1), 0) : 0;
+        const parseAmount = (amount) => {
+            if (amount == null || amount === 0 || amount === '0' || amount === '') return 1;
+            return Number(amount);
+        };
+
+        let totalPintsConsumed = 0;
+        let totalSpentInGbp = 0;
+        let pricedRatingsCount = 0;
+
+        if (userRatings && userRatings.length > 0) {
+            userRatings.forEach(r => {
+                const amount = parseAmount(r.rating.amount_drank);
+                totalPintsConsumed += amount;
+
+                if (r.rating.exact_price != null && r.rating.exact_price > 0) {
+                    pricedRatingsCount += amount;
+                    const currency = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
+                    let cost = r.rating.exact_price * amount;
+                    if (exchangeRates) {
+                        const rateFromGbp = exchangeRates[currency.code];
+                        if (rateFromGbp) {
+                            totalSpentInGbp += cost / rateFromGbp;
+                        } else {
+                            totalSpentInGbp += cost;
+                        }
+                    } else {
+                        const rateToGbp = FALLBACK_RATES_TO_GBP[currency.code] || 1;
+                        totalSpentInGbp += cost * rateToGbp;
+                    }
+                }
+            });
+        }
         
         // Use userRatings.length for averages IF we want averages weighted by pint count? 
         // No, average quality of visits is usually per rating visit. Let's keep totalPints for visits.
@@ -210,58 +240,34 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
         const averagePriceRaw = totalPints > 0 ? userRatings.reduce((sum, r) => sum + r.rating.price, 0) / totalPints : 0;
         const averagePrice = Math.round(averagePriceRaw * 10) / 10;
 
-        let pricedRatingsCount = 0;
-        let totalSpentInGbp = userRatings ? userRatings.reduce((sum, r) => {
-            const amountForSpent = r.rating.amount_drank ? r.rating.amount_drank : 1;
-            if (r.rating.exact_price > 0) {
-                pricedRatingsCount += amountForSpent;
-                const currency = getCurrencyInfo({ country_code: r.pubCountryCode, country_name: r.pubCountryName });
-                let cost = r.rating.exact_price * amountForSpent;
-                if (exchangeRates) {
-                    const rateFromGbp = exchangeRates[currency.code];
-                    if (rateFromGbp) {
-                        sum += cost / rateFromGbp;
-                    } else {
-                        sum += cost;
-                    }
-                } else {
-                    const rateToGbp = FALLBACK_RATES_TO_GBP[currency.code] || 1;
-                    sum += cost * rateToGbp;
-                }
-            }
-            return sum;
-        }, 0) : 0;
-
         let checkInsCount = 0;
-        let totalPintsConsumed = totalPintsFromRatings; // Start with total from ratings
 
         if (userCheckIns && userCheckIns.length > 0) {
             checkInsCount = userCheckIns.length;
-            totalSpentInGbp = userCheckIns.reduce((sum, c) => {
-                const amountForCheckIn = c.amount_drank ? c.amount_drank : 1;
-                totalPintsConsumed += amountForCheckIn;
+            userCheckIns.forEach(c => {
+                const amount = parseAmount(c.amount_drank);
+                totalPintsConsumed += amount;
                 
                 let priceToUse = c.price;
                 
-                if (priceToUse > 0) {
-                    let cost = priceToUse * amountForCheckIn;
-                    pricedRatingsCount += amountForCheckIn;
+                if (priceToUse != null && priceToUse > 0) {
+                    pricedRatingsCount += amount;
+                    let cost = priceToUse * amount;
                     const currPub = c.pub || {};
                     const currency = getCurrencyInfo({ country_code: currPub.country_code, country_name: currPub.country_name });
                     if (exchangeRates) {
                         const rateFromGbp = exchangeRates[currency.code];
                         if (rateFromGbp) {
-                            sum += cost / rateFromGbp;
+                            totalSpentInGbp += cost / rateFromGbp;
                         } else {
-                            sum += cost;
+                            totalSpentInGbp += cost;
                         }
                     } else {
                         const rateToGbp = FALLBACK_RATES_TO_GBP[currency.code] || 1;
-                        sum += cost * rateToGbp;
+                        totalSpentInGbp += cost * rateToGbp;
                     }
                 }
-                return sum;
-            }, totalSpentInGbp);
+            });
         }
 
         const averagePricePaidInGbp = pricedRatingsCount > 0 ? totalSpentInGbp / pricedRatingsCount : 0;
@@ -411,7 +417,7 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
                             {stats.totalSpentInGbp > 0 ? (
                                 <>
                                     <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                                        {displayedSymbol}{displayedAmount.toFixed(2)}
+                                        {displayedSymbol}{displayedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">Total Spent</p>
                                 </>
@@ -425,7 +431,7 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
                         {stats.averagePricePaidInGbp > 0 && (
                              <div className={`text-center sm:text-left transition-all duration-300 ${!isSpentVisible ? 'blur-md' : ''}`}>
                                 <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                                    {displayedSymbol}{(stats.averagePricePaidInGbp * displayCurrencies[displayCurrency].rate).toFixed(2)}
+                                    {displayedSymbol}{(stats.averagePricePaidInGbp * displayCurrencies[displayCurrency].rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">Avg. Price Paid</p>
                             </div>
@@ -557,7 +563,7 @@ const ProfileStatsView = ({ userRatings, onViewPub, rankData, userProfile, level
                                         <div className="mt-auto space-y-1 text-sm">
                                             <div className="flex justify-between items-center">
                                                 <span className="font-semibold text-xs text-gray-600 dark:text-gray-300">Price Paid</span>
-                                                <span className="font-bold text-lg text-green-600 dark:text-green-400">{currency.symbol}{pint.rating.exact_price.toFixed(2)}</span>
+                                                <span className="font-bold text-lg text-green-600 dark:text-green-400">{currency.symbol}{pint.rating.exact_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                             </div>
                                             <div className="flex justify-between items-center">
                                                 <span className="font-semibold text-xs text-gray-600 dark:text-gray-300">Quality</span>

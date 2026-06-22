@@ -13,18 +13,14 @@ const PublicMapStatsModal = ({ isOpen, onClose, userProfile }) => {
             setIsLoading(true);
             setError(null);
             try {
-                const { data, error } = await supabase
+                const { error, count } = await supabase
                     .from('public_map_views')
-                    .select('visitor_id')
+                    .select('*', { count: 'exact', head: true })
                     .eq('profile_id', userProfile.id);
 
                 if (error) throw error;
 
-                const total = data.length;
-                const uniqueIds = new Set(data.map(view => view.visitor_id));
-                const unique = uniqueIds.size;
-
-                setStats({ total, unique });
+                setStats({ total: count, unique: 0 });
             } catch (err) {
                 console.error('Error fetching map stats:', err);
                 setError('Failed to load stats.');
@@ -60,18 +56,10 @@ const PublicMapStatsModal = ({ isOpen, onClose, userProfile }) => {
                             <p>{error}</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm border border-gray-100 dark:border-gray-600/50">
-                                <i className="fas fa-eye text-amber-500 text-2xl mb-2"></i>
-                                <span className="text-3xl font-black text-gray-900 dark:text-white mb-1">{stats.total}</span>
-                                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Views</span>
-                            </div>
-                            
-                            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm border border-gray-100 dark:border-gray-600/50">
-                                <i className="fas fa-users text-blue-500 text-2xl mb-2"></i>
-                                <span className="text-3xl font-black text-gray-900 dark:text-white mb-1">{stats.unique}</span>
-                                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Unique Viewers</span>
-                            </div>
+                        <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm border border-gray-100 dark:border-gray-600/50">
+                            <i className="fas fa-eye text-amber-500 text-3xl mb-3"></i>
+                            <span className="text-4xl font-black text-gray-900 dark:text-white mb-2">{stats.total}</span>
+                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Profile Views</span>
                         </div>
                     )}
                     

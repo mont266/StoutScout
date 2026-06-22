@@ -129,13 +129,16 @@ const CheckInCard = ({ checkin, onViewProfile, onViewImage, onViewPub, currentUs
                             ) : (
                                 <span>unknown pub</span>
                             )}
-                            <span className="mx-1">•</span>{formatTimeAgo(new Date(checkin.created_at).getTime())}
                         </div>
                     </div>
                 </div>
-                {isOwner && (
-                    <div className="relative" ref={menuRef}>
-                        <button 
+                <div className="flex-shrink-0 flex items-center gap-2">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatTimeAgo(new Date(checkin.created_at).getTime())}
+                    </div>
+                    {isOwner && (
+                        <div className="relative" ref={menuRef}>
+                            <button 
                             onClick={() => setShowMenu(!showMenu)}
                             className="text-gray-400 hover:text-amber-500 transition-colors bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-full w-8 h-8 flex items-center justify-center p-0 flex-shrink-0"
                             title="Menu"
@@ -170,20 +173,21 @@ const CheckInCard = ({ checkin, onViewProfile, onViewImage, onViewPub, currentUs
                         )}
                     </div>
                 )}
+                </div>
             </div>
 
             {checkin.image_url && (
                 <div 
-                    className="mt-3 relative w-full aspect-video rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-900 cursor-pointer group"
+                    className="mt-3 relative w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-900 cursor-pointer group flex justify-center"
                     onClick={() => onViewImage && onViewImage({ image_url: checkin.image_url, user: checkin.user })}
                 >
                     <img 
                         src={checkin.image_url} 
                         alt="Check-in photo"
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        className="max-h-[500px] w-auto h-auto object-contain"
                         loading="lazy"
                     />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300"></div>
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none"></div>
                 </div>
             )}
 

@@ -8,6 +8,7 @@ import Avatar from './Avatar.jsx';
 import ScrollToTopButton from './ScrollToTopButton.jsx';
 import useIsDesktop from '../hooks/useIsDesktop.js';
 import CreatePostInput from './CreatePostInput.jsx';
+import ConfirmationModal from './ConfirmationModal.jsx';
 
 const PAGE_SIZE = 20; // Used when filtering to a single content type
 const RATINGS_PER_PAGE_MIXED = 15;
@@ -32,7 +33,7 @@ const PULL_THRESHOLD = 80;
 
 const EMPTY_SET = new Set();
 
-const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFriendAction }) => {
+const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFriendAction, setConfirmation }) => {
     const { friendship_status, friendship_id, action_user_id } = targetUser;
     
     const [status, setStatus] = useState(friendship_status);
@@ -61,13 +62,40 @@ const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFrien
         setStatus('declined');
     };
 
+    const handleCancelRequest = async () => {
+        if (setConfirmation) {
+            setConfirmation({
+                isOpen: true,
+                title: 'Cancel Request',
+                message: `Are you sure you want to cancel the friend request?`,
+                onConfirm: async () => {
+                    await onFriendAction(friendshipId, 'declined');
+                    setStatus('declined');
+                    setConfirmation({ isOpen: false });
+                },
+                confirmText: 'Cancel Request',
+                theme: 'red'
+            });
+        } else if (window.confirm(`Are you sure you want to cancel the friend request?`)) {
+            await onFriendAction(friendshipId, 'declined');
+            setStatus('declined');
+        }
+    };
+
     if (status === 'accepted') {
         return <button disabled className="bg-green-600 text-white font-bold py-2 px-3 rounded-lg text-xs cursor-not-allowed"><i className="fas fa-user-check"></i> Friends</button>;
     }
 
     if (status === 'pending') {
         if (localActionUserId === loggedInUser.id) {
-            return <button disabled className="bg-gray-400 dark:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg text-xs cursor-not-allowed">Request Sent</button>;
+            return (
+                <button 
+                    onClick={handleCancelRequest} 
+                    className="bg-gray-400 dark:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-red-500 transition-colors text-xs flex items-center justify-center min-w-[90px]"
+                >
+                    <span>Cancel Request</span>
+                </button>
+            );
         } else {
             return (
                 <div className="flex gap-2">
@@ -81,7 +109,7 @@ const SearchResultAction = ({ loggedInUser, targetUser, onFriendRequest, onFrien
     return <button onClick={handleAddFriend} className="bg-blue-500 text-white font-bold py-2 px-3 rounded-lg hover:bg-blue-600 transition-colors text-xs"><i className="fas fa-user-plus"></i> Add</button>;
 };
 
-const UserSearch = ({ onBack, onViewProfile, userProfile, onFriendRequest, onFriendAction }) => {
+const UserSearch = ({ onBack, onViewProfile, userProfile, onFriendRequest, onFriendAction, setConfirmation }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [results, setResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -170,6 +198,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, u
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [hasMore, setHasMore] = useState(true);
+    const [confirmation, setConfirmation] = useState({ isOpen: false });
     const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
     const filterMenuRef = useRef(null);
     const offsetsRef = useRef({ rating: 0, post: 0, checkin: 0 });
@@ -197,7 +226,8 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, u
     
         const friendIds = friendships
             .filter(f => f.status === 'accepted')
-            .map(f => f.user_id_1 === userProfile.id ? f.user_id_2 : f.user_id_1);
+            .map(f => f.user_id_1 === userProfile?.id ? f.user_id_2 : f.user_id_1)
+            .filter(Boolean);
     
         if (friendIds.length === 0) {
             setFeedItems([]);
@@ -546,7 +576,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, u
     const activeFilterLabel = filterOptions.find(opt => opt.sortBy === filter.sortBy && opt.timePeriod === filter.timePeriod)?.label || 'Newest';
 
     if (view === 'search') {
-        return <UserSearch onBack={() => setView('feed')} onViewProfile={onViewProfile} userProfile={userProfile} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} />;
+        return <UserSearch onBack={() => setView('feed')} onViewProfile={onViewProfile} userProfile={userProfile} onFriendRequest={onFriendRequest} onFriendAction={onFriendAction} setConfirmation={setConfirmation} />;
     }
 
     if (!hasFriends && !loading) {
@@ -826,6 +856,7 @@ const FriendsFeed = ({ onViewProfile, userLikes, onToggleLike, onLoginRequest, u
                 </div>
             </div>
             <ScrollToTopButton show={showScrollTop} onClick={handleScrollToTop} isDesktop={isDesktop} />
+            {confirmation.isOpen && <ConfirmationModal {...confirmation} onClose={() => setConfirmation({ isOpen: false })} />}
         </div>
     );
 };

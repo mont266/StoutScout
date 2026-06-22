@@ -8,6 +8,7 @@ import CrownIcon from './CrownIcon.jsx';
 import ProfileAvatar from './ProfileAvatar.jsx';
 import ImageModal from './ImageModal.jsx';
 import ReportImageModal from './ReportImageModal.jsx';
+import GiveawayBanner from './GiveawayBanner.jsx';
 import { trackEvent } from '../analytics.js';
 import BanUserModal from './BanUserModal.jsx';
 import ConfirmationModal from './ConfirmationModal.jsx';
@@ -245,7 +246,7 @@ const SocialLinks = ({ handles, className = '' }) => {
     );
 };
 
-const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendRequest, onFriendAction }) => {
+const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendRequest, onFriendAction, setConfirmation }) => {
     const [status, setStatus] = useState('loading');
     const [friendshipId, setFriendshipId] = useState(null);
 
@@ -293,8 +294,39 @@ const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendReque
         } else if (action === 'decline' && friendshipId) {
             onFriendAction(friendshipId, 'declined');
             setStatus('add'); // Optimistic update
+        } else if (action === 'cancel_request' && friendshipId) {
+            if (setConfirmation) {
+                setConfirmation({
+                    isOpen: true,
+                    title: 'Cancel Request',
+                    message: `Are you sure you want to cancel the friend request?`,
+                    onConfirm: () => {
+                        onFriendAction(friendshipId, 'declined');
+                        setStatus('add'); // Optimistic update
+                        setConfirmation({ isOpen: false });
+                    },
+                    confirmText: 'Cancel Request',
+                    theme: 'red'
+                });
+            } else if (window.confirm(`Are you sure you want to cancel the friend request?`)) {
+                onFriendAction(friendshipId, 'declined');
+                setStatus('add'); // Optimistic update
+            }
         } else if (action === 'unfriend' && friendshipId) {
-            if (window.confirm(`Are you sure you want to remove ${targetUser.username} as a friend?`)) {
+            if (setConfirmation) {
+                setConfirmation({
+                    isOpen: true,
+                    title: 'Remove Friend',
+                    message: `Are you sure you want to remove ${targetUser.username} as a friend?`,
+                    onConfirm: () => {
+                        onFriendAction(friendshipId, 'declined'); // 'declined' effectively deletes the friendship
+                        setStatus('add'); // Optimistic update
+                        setConfirmation({ isOpen: false });
+                    },
+                    confirmText: 'Remove Friend',
+                    theme: 'red'
+                });
+            } else if (window.confirm(`Are you sure you want to remove ${targetUser.username} as a friend?`)) {
                 onFriendAction(friendshipId, 'declined'); // 'declined' effectively deletes the friendship
                 setStatus('add'); // Optimistic update
             }
@@ -307,7 +339,15 @@ const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendReque
         case 'add':
             return <button onClick={() => handleAction('add')} className="w-full bg-blue-500 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"><i className="fas fa-user-plus"></i><span>Add Friend</span></button>;
         case 'request_sent':
-            return <button disabled className="w-full bg-gray-400 dark:bg-gray-600 text-white font-bold py-2.5 px-4 rounded-lg cursor-not-allowed flex items-center justify-center space-x-2"><i className="fas fa-paper-plane"></i><span>Request Sent</span></button>;
+            return (
+                <button 
+                    onClick={() => handleAction('cancel_request')} 
+                    className="w-full bg-gray-400 dark:bg-gray-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-red-500 transition-colors flex items-center justify-center space-x-2"
+                >
+                    <i className="fas fa-times"></i>
+                    <span>Cancel Request</span>
+                </button>
+            );
         case 'request_received':
             return (
                 <div className="flex gap-2">
@@ -322,7 +362,7 @@ const FriendshipButton = ({ loggedInUser, targetUser, friendships, onFriendReque
     }
 }
 
-const TrophyCabinet = ({ trophies, onOpenTrophyModal, onNavigateToSettings }) => {
+const TrophyCabinet = ({ trophies, unlockedCount, totalTrophies, onOpenTrophyModal, onNavigateToSettings }) => {
     const PATRON_TROPHY_ID = 'a8a6e3e1-5e5e-4c8f-8f8f-2e2e2e2e2e2e';
     const isNativeIos = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
 
@@ -335,7 +375,14 @@ const TrophyCabinet = ({ trophies, onOpenTrophyModal, onNavigateToSettings }) =>
     return (
         <section className="bg-white dark:bg-gray-800 p-4 lg:p-6 rounded-xl shadow-md">
             <div className="flex justify-between items-center mb-3">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Trophy Cabinet</h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                    Trophy Cabinet
+                    {totalTrophies > 0 && (
+                        <span className={`ml-2 text-xs font-bold px-2.5 py-1 rounded-full ${unlockedCount > 0 && unlockedCount === totalTrophies ? 'text-amber-700 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-500' : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700'}`}>
+                            {unlockedCount} / {totalTrophies}
+                        </span>
+                    )}
+                </h2>
                 <button onClick={onOpenTrophyModal} className="text-sm font-semibold text-amber-600 dark:text-amber-400 hover:underline">
                     View All
                 </button>
@@ -394,6 +441,146 @@ const TrophyCabinet = ({ trophies, onOpenTrophyModal, onNavigateToSettings }) =>
                     );
                 })}
             </div>
+        </section>
+    );
+};
+
+const SavedPubsSection = ({ savedPubs, dbPubs, savedPubsDetails, onViewPub, onToggleSavedPub }) => {
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const prevIsOpen = useRef(false);
+
+    useEffect(() => {
+        const handlePopState = (e) => {
+            if (isModalOpen) {
+                setIsModalOpen(false);
+            }
+        };
+
+        if (isModalOpen && !prevIsOpen.current) {
+            window.history.pushState({ modal: 'savedPubs' }, '');
+            window.addEventListener('popstate', handlePopState);
+            prevIsOpen.current = true;
+        } else if (!isModalOpen && prevIsOpen.current) {
+            prevIsOpen.current = false;
+        }
+
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+        };
+    }, [isModalOpen]);
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        if (window.history.state?.modal === 'savedPubs') {
+            window.history.back();
+        }
+    };
+
+    if (!savedPubs || savedPubs.size === 0) return null;
+
+    // First try to resolve using explicit details, then fallback to dbPubs
+    const detailsMap = new Map((savedPubsDetails || []).map(p => [p.id, p]));
+    
+    const savedPubsList = Array.from(savedPubs)
+        .map(id => {
+            const explicit = detailsMap.get(id);
+            if (explicit) return explicit;
+            const fromDbPubs = dbPubs ? dbPubs.find(p => p.id === id) : null;
+            return fromDbPubs || { id, name: "Missing Pub Details", isMissing: true };
+        });
+
+    if (savedPubsList.length === 0) return null;
+
+    const displayLimit = 3;
+    const shouldShowShowAll = savedPubsList.length > displayLimit;
+    const displayedPubs = shouldShowShowAll ? savedPubsList.slice(0, displayLimit) : savedPubsList;
+
+    const PubListItem = ({ pub }) => (
+        <div 
+            key={pub.id} 
+            onClick={() => {
+                if (pub.isMissing) return; // Can't view missing pub
+                if (isModalOpen) handleCloseModal();
+                onViewPub(pub);
+            }}
+            className={`group flex items-center bg-gray-50 dark:bg-gray-700/30 border border-gray-100 dark:border-gray-700/50 hover:border-amber-200 dark:hover:border-amber-900/50 rounded-xl p-3 ${!pub.isMissing ? 'cursor-pointer hover:shadow-sm' : 'opacity-70'} transition-all duration-200`}
+        >
+            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-800/50">
+                <i className={`fas ${pub.isMissing ? 'fa-question' : 'fa-beer'} fa-lg`}></i>
+            </div>
+            <div className="ml-4 flex-grow min-w-0 flex items-center">
+                <h4 className="font-bold text-[15px] leading-tight text-gray-900 dark:text-white truncate" title={pub.name}>{pub.name}</h4>
+            </div>
+            {onToggleSavedPub && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSavedPub(pub.id);
+                    }}
+                    className="flex-shrink-0 ml-3 w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-200 dark:hover:border-amber-800 transition-colors z-10"
+                    title="Remove from saved pubs"
+                >
+                    <i className="fas fa-bookmark text-amber-500 text-sm"></i>
+                </button>
+            )}
+            {!onToggleSavedPub && (
+                <div className="flex-shrink-0 ml-3 w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 group-hover:bg-amber-50 dark:group-hover:bg-amber-900/20 group-hover:border-amber-200 dark:group-hover:border-amber-800 transition-colors">
+                    <i className="fas fa-bookmark text-amber-500 text-sm"></i>
+                </div>
+            )}
+        </div>
+    );
+
+    return (
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 mt-4">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center">
+                    <i className="fas fa-bookmark text-amber-500 mr-2"></i>
+                    Saved Pubs
+                    <span className="ml-2 text-xs font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full">{savedPubsList.length}</span>
+                </h3>
+                {shouldShowShowAll && (
+                    <button 
+                        onClick={() => setIsModalOpen(true)}
+                        className="text-amber-600 dark:text-amber-500 hover:text-amber-700 font-bold text-sm flex items-center"
+                    >
+                        View All
+                    </button>
+                )}
+            </div>
+            <div className="flex flex-col space-y-2">
+                {displayedPubs.map(pub => (
+                    <PubListItem key={pub.id} pub={pub} />
+                ))}
+            </div>
+
+            {isModalOpen && createPortal(
+                <div className="fixed inset-0 z-[100] flex justify-center bg-black/60 backdrop-blur-sm sm:p-4">
+                    <div className="bg-white dark:bg-gray-800 w-full sm:w-full sm:max-w-md sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90vh] pt-[env(safe-area-inset-top)] sm:pt-0">
+                        {/* Header */}
+                        <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sm:rounded-t-2xl">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                                <i className="fas fa-bookmark text-amber-500 mr-2"></i>
+                                Saved Pubs
+                                <span className="ml-2 text-xs font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full">{savedPubsList.length}</span>
+                            </h2>
+                            <button
+                                onClick={handleCloseModal}
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        {/* Body */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                            {savedPubsList.map(pub => (
+                                <PubListItem key={pub.id} pub={pub} />
+                            ))}
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </section>
     );
 };
@@ -466,7 +653,7 @@ const contentFilterOptions = [
     { id: 'checkins', label: 'Check-ins', icon: 'fa-map-marker-alt' },
 ];
 
-const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onDeleteCheckin, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen, userPostLikes, onTogglePostLike, onViewProfile, onReportContent, onEditPost, onDeletePost, onOpenSharePostModal, blockList, onBlockUser, onUnblockUser, blockedUsersProfiles }) => {
+const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], userTrophies, allTrophies, onViewPub, loggedInUserProfile, levelRequirements, onAvatarChangeClick, onEditUsernameClick, onEditBioClick, onEditSocialsClick, onOpenUpdateDetailsModal, onBack, onProfileUpdate, friendships, onFriendRequest, onFriendAction, onViewFriends, onDeleteRating, onDeleteCheckin, onOpenShareProfileModal, onNavigateToSettings, pubScores, isStatsModalOpen, onSetIsStatsModalOpen, userPostLikes, onTogglePostLike, onViewProfile, onReportContent, onEditPost, onDeletePost, onOpenSharePostModal, blockList, onBlockUser, onUnblockUser, blockedUsersProfiles, savedPubs, savedPubsDetails, onToggleSavedPub, dbPubs }) => {
     const isDesktop = useIsDesktop();
     const [isBanning, setIsBanning] = useState(false);
     const [isUnbanning, setIsUnbanning] = useState(false);
@@ -862,6 +1049,11 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
                         <i className="fas fa-star text-amber-500"></i>
                         <span>Rated a pint</span>
                     </div>
+                    {r.rating.amount_drank > 0 && (
+                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            Drank: {r.rating.amount_drank} pint{r.rating.amount_drank > 1 ? 's' : ''}
+                        </p>
+                    )}
                     {r.rating.message && (
                         <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md border-l-4 border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
                             "{r.rating.message}"
@@ -1111,7 +1303,7 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
                                 
                                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                                     {isViewingOwnProfile && <button onClick={() => setIsEditActionsModalOpen(true)} className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Edit Profile</button>}
-                                    {!isViewingOwnProfile && <FriendshipButton {...{ loggedInUser: loggedInUserProfile, targetUser: userProfile, friendships, onFriendRequest, onFriendAction }} />}
+                                    {!isViewingOwnProfile && <FriendshipButton {...{ loggedInUser: loggedInUserProfile, targetUser: userProfile, friendships, onFriendRequest, onFriendAction, setConfirmation }} />}
                                     <button onClick={() => onOpenShareProfileModal(userProfile)} className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"><i className="fas fa-share-alt"></i> Share</button>
                                     {!isViewingOwnProfile && loggedInUserProfile && (
                                         blockList.has(userProfile.id)
@@ -1122,9 +1314,19 @@ const ProfilePage = ({ userProfile, userRatings, userPosts, userCheckIns = [], u
                             </div>
                         </div>
 
+                        {isViewingOwnProfile && <GiveawayBanner userProfile={userProfile} />}
+
                         <ModerationTools />
                         
-                        <TrophyCabinet trophies={trophiesForCabinet} onOpenTrophyModal={() => setIsTrophyModalOpen(true)} onNavigateToSettings={isViewingOwnProfile ? onNavigateToSettings : null} />
+                        <TrophyCabinet 
+                            trophies={trophiesForCabinet} 
+                            unlockedCount={trophiesWithStatus.filter(t => t.isUnlocked).length}
+                            totalTrophies={allTrophies?.length || 0}
+                            onOpenTrophyModal={() => setIsTrophyModalOpen(true)} 
+                            onNavigateToSettings={isViewingOwnProfile ? onNavigateToSettings : null} 
+                        />
+
+                        {isViewingOwnProfile && <SavedPubsSection savedPubs={savedPubs} savedPubsDetails={savedPubsDetails} dbPubs={dbPubs} onViewPub={onViewPub} onToggleSavedPub={onToggleSavedPub} />}
 
                         {canViewStats && (
                             <StatCard icon="fa-chart-bar" title="Profile Stats" onClick={() => onSetIsStatsModalOpen(true)}>

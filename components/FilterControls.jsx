@@ -12,7 +12,7 @@ const filters = [
 ];
 
 // Modal component for mobile filter selection
-const FilterModal = ({ isOpen, onClose, onSelectFilter, currentFilter, filterGuinnessZero, onFilterGuinnessZeroChange }) => {
+const FilterModal = ({ isOpen, onClose, onSelectFilter, currentFilter, filterGuinnessZero, onFilterGuinnessZeroChange, filterSavedPubs, onFilterSavedPubsChange }) => {
     if (!isOpen) return null;
 
     return (
@@ -60,6 +60,23 @@ const FilterModal = ({ isOpen, onClose, onSelectFilter, currentFilter, filterGui
                             <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
                         </div>
                     </label>
+                    <label htmlFor="saved-pubs-toggle-mobile" className="flex items-center justify-between cursor-pointer p-2 mt-2">
+                        <span className="flex flex-col">
+                            <span className="font-medium text-lg text-gray-700 dark:text-gray-300">Show Saved Pubs Only</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Only display your bookmarked pubs</span>
+                        </span>
+                        <div className="relative">
+                            <input
+                            id="saved-pubs-toggle-mobile"
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={filterSavedPubs}
+                            onChange={(e) => onFilterSavedPubsChange(e.target.checked)}
+                            />
+                            <div className="block w-14 h-8 rounded-full transition-colors bg-gray-300 peer-checked:bg-amber-500 dark:bg-gray-600"></div>
+                            <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
+                        </div>
+                    </label>
                 </div>
                 <div className="pb-safe"></div>
             </div>
@@ -67,7 +84,7 @@ const FilterModal = ({ isOpen, onClose, onSelectFilter, currentFilter, filterGui
     );
 };
 
-const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing, filterGuinnessZero, onFilterGuinnessZeroChange, onSearchClick }) => {
+const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing, filterGuinnessZero, onFilterGuinnessZeroChange, filterSavedPubs, setFilterSavedPubs, onSearchClick }) => {
     const isDesktop = useIsDesktop();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const filterMenuRef = useRef(null);
@@ -125,6 +142,8 @@ const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing
                         currentFilter={currentFilter}
                         filterGuinnessZero={filterGuinnessZero}
                         onFilterGuinnessZeroChange={onFilterGuinnessZeroChange}
+                        filterSavedPubs={filterSavedPubs}
+                        onFilterSavedPubsChange={setFilterSavedPubs}
                     />
                 </div>
             </>
@@ -153,8 +172,8 @@ const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing
                     ))}
                 </div>
 
-                {/* Second row: Centered Guinness 0.0 filter and right-aligned refresh button */}
-                <div className="w-full relative flex justify-center items-center h-10">
+                {/* Second row: Centered Guinness 0.0 filter, Saved filter, and right-aligned refresh button */}
+                <div className="w-full relative flex justify-center items-center h-10 space-x-2">
                     <button
                         onClick={() => onFilterGuinnessZeroChange(!filterGuinnessZero)}
                         title="Toggle: Show only pubs that sell Guinness 0.0"
@@ -166,6 +185,19 @@ const FilterControls = ({ currentFilter, onFilterChange, onRefresh, isRefreshing
                     >
                         <span className="font-bold bg-black text-white px-2 py-0.5 rounded-md text-xs leading-tight">0.0</span>
                         <span>Filter</span>
+                    </button>
+                    
+                    <button
+                        onClick={() => setFilterSavedPubs(!filterSavedPubs)}
+                        title="Toggle: Show only saved pubs"
+                        className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 ring-offset-2 dark:ring-offset-gray-900 ${
+                            filterSavedPubs
+                            ? 'bg-amber-500 text-white shadow-sm ring-amber-500' // Active state
+                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 ring-transparent' // Inactive state
+                        }`}
+                    >
+                        <i className={`${filterSavedPubs ? 'fas text-white' : 'far text-amber-500'} fa-bookmark`}></i>
+                        <span>Saved</span>
                     </button>
                     
                     <button

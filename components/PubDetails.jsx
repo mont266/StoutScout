@@ -93,7 +93,7 @@ const PintGallery = ({ ratings, onViewImage }) => {
 };
 
 
-const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportContent, highlightedRatingId, highlightedCommentId, highlightedPostId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [], onViewPub, isEditRatingFlow, userPostLikes, onTogglePostLike, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, onEditPost, onDeletePost, onOpenSharePostModal, pubScores, dbPubs, getDistance, userLocation, onDeleteRating, handleAddXP, handleRemoveXP }) => {
+const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUserRating, session, onLoginRequest, onViewProfile, loggedInUserProfile, onDataRefresh, userLikes, onToggleLike, isSubmittingRating, onOpenScoreExplanation, onOpenSuggestEditModal, commentsByRating, isCommentsLoading, onFetchComments, onAddComment, onDeleteComment, onReportContent, highlightedRatingId, highlightedCommentId, highlightedPostId, userZeroVotes, onGuinnessZeroVote, onClearGuinnessZeroVote, onOpenShareModal, onOpenShareRatingModal, setAlertInfo, top10PubIds = [], onViewPub, isEditRatingFlow, userPostLikes, onTogglePostLike, commentsByPost, isPostCommentsLoading, onFetchCommentsForPost, onAddPostComment, onDeletePostComment, onEditPost, onDeletePost, onOpenSharePostModal, pubScores, dbPubs, getDistance, userLocation, onDeleteRating, handleAddXP, handleRemoveXP, savedPubs, onToggleSavedPub }) => {
   const [localPub, setLocalPub] = useState(pub);
   const [imageToView, setImageToView] = useState(null);
   const [reportModalInfo, setReportModalInfo] = useState({ isOpen: false, rating: null });
@@ -817,6 +817,23 @@ const PubDetails = ({ pub, onClose, handleRatePub, getAverageRating, existingUse
                         title="Toggle Developer Info"
                     >
                         <i className="fas fa-code"></i>
+                    </button>
+                )}
+                {((localPub.ratings && localPub.ratings.length > 0) || localPub.pub_score != null) && (
+                    <button
+                        onClick={() => {
+                            const isSaved = savedPubs?.has(localPub.id);
+                            onToggleSavedPub(localPub.id);
+                        }}
+                        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                            savedPubs?.has(localPub.id)
+                                ? 'text-amber-500 hover:text-amber-600'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-amber-500 dark:hover:text-amber-400'
+                        }`}
+                        aria-label="Save or unsave this pub"
+                        title="Save this pub"
+                    >
+                        <i className={`${savedPubs?.has(localPub.id) ? 'fas' : 'far'} fa-bookmark fa-lg`}></i>
                     </button>
                 )}
                  <button

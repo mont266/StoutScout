@@ -329,7 +329,9 @@ const CrawlModePage = (props) => {
             onDeletePostComment: props.onDeletePostComment,
             onEditPost: props.onEditPost,
             onDeletePost: props.onDeletePost,
-            onOpenSharePostModal: props.onOpenSharePostModal
+            onOpenSharePostModal: props.onOpenSharePostModal,
+            savedPubs: props.savedPubs,
+            onToggleSavedPub: props.onToggleSavedPub
         };
         return <PubDetails {...pubDetailsProps} />;
     }

@@ -95,6 +95,7 @@ const DesktopLayout = (props) => {
         isBackfilling, onBackfillCountryData,
         onTestTrophyPopup, fetchUserTrophies, setUnlockedTrophiesToShow,
         onTestDonationPopup,
+        onSimulateWinnerPopup,
         mapRef, onMapLoad,
         activeSubTab: communitySubTab, 
         onSubTabChange: setCommunitySubTab,
@@ -184,6 +185,8 @@ const DesktopLayout = (props) => {
                         isRefreshing={isRefreshing}
                         filterGuinnessZero={filterGuinnessZero}
                         onFilterGuinnessZeroChange={onFilterGuinnessZeroChange}
+                        filterSavedPubs={props.filterSavedPubs}
+                        setFilterSavedPubs={props.setFilterSavedPubs}
                     />
                      <div className="p-2 border-t border-gray-200 dark:border-gray-700">
                         <button
@@ -209,6 +212,7 @@ const DesktopLayout = (props) => {
                             isRefreshing={isRefreshing}
                             onOpenScoreExplanation={onOpenScoreExplanation}
                             geocodingPubIds={geocodingPubIds}
+                            savedPubs={props.savedPubs}
                         />
                     </div>
                     <div className="flex-shrink-0 p-2 text-center border-t border-gray-200 dark:border-gray-700">
@@ -262,6 +266,7 @@ const DesktopLayout = (props) => {
                             installPromptEvent={installPromptEvent}
                             setInstallPromptEvent={setInstallPromptEvent}
                             onMarketingConsentChange={handleMarketingConsentChange}
+                            userLocation={props.userLocation}
                             setAlertInfo={props.setAlertInfo}
                             showAllDbPubs={showAllDbPubs}
                             onToggleShowAllDbPubs={onToggleShowAllDbPubs}
@@ -283,11 +288,13 @@ const DesktopLayout = (props) => {
                             setStPaddysModeEnabled={setStPaddysModeEnabled}
                             onTestTrophyPopup={onTestTrophyPopup}
                             onTestDonationPopup={onTestDonationPopup}
+                            onSimulateWinnerPopup={onSimulateWinnerPopup}
                             onViewChangelog={onViewChangelog}
                             onManageChangelog={onManageChangelog}
                             hasUnreadChangelog={hasUnreadChangelog}
                             onDeleteAccountRequest={onDeleteAccountRequest}
-                            
+                            isMyWinningsOpen={props.isMyWinningsOpen}
+                            setIsMyWinningsOpen={props.setIsMyWinningsOpen}
                         />
                     </div>
                 </div>

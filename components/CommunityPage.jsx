@@ -45,6 +45,14 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
         setReportModalInfo({ isOpen: false, rating: null });
     };
 
+    const handlePostSubFilterChange = (subFilter) => {
+        setPostSubFilter(subFilter);
+        if (subFilter === 'announcements') {
+            // Uncheck ratings and checkins so we ONLY see announcements
+            setContentFilters({ posts: true, ratings: false, checkins: false });
+        }
+    };
+
     const handleContentFilterChange = (key) => {
         setContentFilters(prev => {
             const next = { ...prev, [key]: !prev[key] };
@@ -158,7 +166,7 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                         onContentFilterChange={handleContentFilterChange}
                         onDeleteRating={onDeleteRating}
                         postSubFilter={postSubFilter}
-                        onPostSubFilterChange={setPostSubFilter}
+                        onPostSubFilterChange={handlePostSubFilterChange}
                         loggedInUserProfile={userProfile}
                         commentsByRating={commentsByRating}
                         isCommentsLoading={isCommentsLoading}
@@ -200,7 +208,7 @@ const CommunityPage = ({ userProfile, onViewProfile, friendships, onFriendReques
                         contentFilters={contentFilters}
                         onContentFilterChange={handleContentFilterChange}
                         postSubFilter={postSubFilter}
-                        onPostSubFilterChange={setPostSubFilter}
+                        onPostSubFilterChange={handlePostSubFilterChange}
                         loggedInUserProfile={userProfile}
                         commentsByRating={commentsByRating}
                         isCommentsLoading={isCommentsLoading}

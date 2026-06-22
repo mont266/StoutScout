@@ -104,10 +104,10 @@ const RankExplanationModal = ({ isOpen, onClose, currentLevel, userRatings, leve
                                                                     <div className="flex justify-between items-end">
                                                                         <div className="flex flex-col">
                                                                             <span className="text-[10px] uppercase font-bold text-amber-700/70 dark:text-amber-500/70 tracking-widest leading-none mb-1">Current</span>
-                                                                            <span className="text-lg font-black text-amber-900 dark:text-amber-400 leading-none">{currentValue} <span className="text-sm tracking-normal">{isXP ? 'XP' : 'Pints'}</span></span>
+                                                                            <span className="text-lg font-black text-amber-900 dark:text-amber-400 leading-none">{currentValue.toLocaleString()} <span className="text-sm tracking-normal">{isXP ? 'XP' : 'Pints'}</span></span>
                                                                         </div>
                                                                         <div className="flex flex-col text-right">
-                                                                            <span className="text-[10px] uppercase font-bold text-amber-700/70 dark:text-amber-500/70 tracking-widest leading-none mb-1">{amountNeeded} More To</span>
+                                                                            <span className="text-[10px] uppercase font-bold text-amber-700/70 dark:text-amber-500/70 tracking-widest leading-none mb-1">{amountNeeded.toLocaleString()} More To</span>
                                                                             <span className="text-[13px] sm:text-sm font-black text-amber-900 dark:text-amber-400 leading-none line-clamp-1">{nextRank.name}</span>
                                                                         </div>
                                                                     </div>

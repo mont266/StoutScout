@@ -19,6 +19,7 @@
     "@capacitor/geolocation": "^6.0.0",
     "@capacitor/splash-screen": "^6.0.0",
     "@capacitor/status-bar": "^6.0.0",
+    "@capawesome/capacitor-app-update": "^6.1.0",
     "@google/genai": "^0.15.0",
     "@stripe/react-stripe-js": "2.7.0",
     "@stripe/stripe-js": "3.3.0",
